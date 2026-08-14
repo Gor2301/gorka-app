@@ -46,6 +46,9 @@ export class ProviderFactory {
     }
     throw new Error(`Unsupported push provider: ${config.provider}`);
   }
+createPush(config: ProviderConfig): any {
+  return this.createPushProvider(config);
+}
 
   createVoiceProvider(config: ProviderConfig): any {
     if (config.provider === 'mock') {
