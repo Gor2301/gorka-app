@@ -1,0 +1,259 @@
+// src/backend/services/message-log.service.ts
+import { MessageLog, MessageEvent } from '@prisma/client';
+import { prisma } from '../database';
+
+export interface CreateMessageLogParams {
+  debtorId: string;
+  userId?: string;
+  channel: string;
+  recipient: string;
+  subject?: string;
+  content: string;
+  contentPreview: string;
+  templateId?: string;
+  templateName?: string;
+  templateVersion?: number;
+  templateSnapshot?: any;
+  status: string;
+  provider?: string;
+  metadata?: any;
+}
+
+export interface CreateMessageEventParams {
+  messageLogId: string;
+  event: string;
+  data?: any;
+  timestamp?: Date;
+}
+
+export class MessageLogService {
+  /**
+   * Create a new message log entry
+   */
+  async createMessageLog(params: CreateMessageLogParams): Promise<MessageLog> {
+    const log = await prisma.messageLog.create({
+      data: {
+        debtorId: params.debtorId,
+        userId: params.userId,
+        channel: params.channel,
+        recipient: params.recipient,
+        subject: params.subject,
+        content: params.content,
+        contentPreview: params.contentPreview,
+        templateId: params.templateId,
+        templateName: params.templateName,
+        templateVersion: params.templateVersion,
+        templateSnapshot: params.templateSnapshot,
+        status: params.status,
+        provider: params.provider,
+        metadata: params.metadata,
+      },
+    });
+
+    // Create initial event
+    await this.createEvent({
+      messageLogId: log.id,
+      event: 'queued',
+      timestamp: new Date(),
+    });
+
+    return log;
+  }
+
+  /**
+   * Update message log status
+   */
+  async updateStatus(
+    id: string,
+    status: string,
+    data?: {
+      providerMessageId?: string;
+      providerData?: any;
+      error?: string;
+      sentAt?: Date;
+      deliveredAt?: Date;
+      openedAt?: Date;
+      clickedAt?: Date;
+    }
+  ): Promise<MessageLog> {
+    return prisma.messageLog.update({
+      where: { id },
+      data: {
+        status,
+        ...data,
+      },
+    });
+  }
+
+  /**
+   * Create a message event (append-only audit)
+   */
+  async createEvent(params: CreateMessageEventParams): Promise<MessageEvent> {
+    return prisma.messageEvent.create({
+      data: {
+        messageLogId: params.messageLogId,
+        event: params.event,
+        data: params.data,
+        timestamp: params.timestamp || new Date(),
+      },
+    });
+  }
+
+  /**
+   * Get message log by ID
+   */
+  async getMessageLog(id: string): Promise<MessageLog | null> {
+    return prisma.messageLog.findUnique({
+      where: { id },
+      include: {
+        events: {
+          orderBy: { timestamp: 'asc' },
+        },
+        debtor: true,
+        user: true,
+        template: true,
+      },
+    });
+  }
+
+  /**
+   * Get messages for a debtor
+   */
+  async getMessagesByDebtor(
+    debtorId: string,
+    options?: {
+      limit?: number;
+      offset?: number;
+      channel?: string;
+      status?: string;
+    }
+  ): Promise<MessageLog[]> {
+    return prisma.messageLog.findMany({
+      where: {
+        debtorId,
+        ...(options?.channel && { channel: options.channel }),
+        ...(options?.status && { status: options.status }),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: options?.limit || 50,
+      skip: options?.offset || 0,
+      include: {
+        events: {
+          orderBy: { timestamp: 'asc' },
+        },
+        template: true,
+      },
+    });
+  }
+
+  /**
+   * Update message log with job ID (after queueing)
+   */
+  async updateJobId(id: string, jobId: string): Promise<MessageLog> {
+    return prisma.messageLog.update({
+      where: { id },
+      data: { jobId },
+    });
+  }
+
+  /**
+   * Record delivery webhook
+   */
+  async recordWebhookEvent(
+    providerMessageId: string,
+    event: string,
+    data: any
+  ): Promise<void> {
+    // Find the message log by provider message ID
+    const log = await prisma.messageLog.findFirst({
+      where: { providerMessageId },
+    });
+
+    if (!log) {
+      console.error(`Message log not found for providerMessageId: ${providerMessageId}`);
+      return;
+    }
+
+    // Create event
+    await this.createEvent({
+      messageLogId: log.id,
+      event: event,
+      data: data,
+      timestamp: new Date(),
+    });
+
+    // Update message log status based on event
+    const statusMap: Record<string, string> = {
+      delivered: 'DELIVERED',
+      opened: 'OPENED',
+      clicked: 'CLICKED',
+      hard_bounce: 'BOUNCED',
+      soft_bounce: 'BOUNCED',
+      complaint: 'COMPLAINT',
+      failed: 'FAILED',
+    };
+
+    const newStatus = statusMap[event];
+    if (newStatus) {
+      await prisma.messageLog.update({
+        where: { id: log.id },
+        data: {
+          status: newStatus,
+          ...(event === 'delivered' && { deliveredAt: new Date() }),
+          ...(event === 'opened' && { openedAt: new Date() }),
+          ...(event === 'clicked' && { clickedAt: new Date() }),
+        },
+      });
+    }
+  }
+
+  /**
+   * Get message statistics for dashboard
+   */
+  async getStatistics(options?: {
+    startDate?: Date;
+    endDate?: Date;
+    channel?: string;
+  }): Promise<{
+    total: number;
+    sent: number;
+    delivered: number;
+    failed: number;
+    bounced: number;
+    opened: number;
+    clicked: number;
+  }> {
+    const where: any = {};
+    if (options?.startDate) {
+      where.createdAt = { gte: options.startDate };
+    }
+    if (options?.endDate) {
+      where.createdAt = { ...where.createdAt, lte: options.endDate };
+    }
+    if (options?.channel) {
+      where.channel = options.channel;
+    }
+
+    const [total, sent, delivered, failed, bounced, opened, clicked] = await Promise.all([
+      prisma.messageLog.count({ where }),
+      prisma.messageLog.count({ where: { ...where, status: 'SENT' } }),
+      prisma.messageLog.count({ where: { ...where, status: 'DELIVERED' } }),
+      prisma.messageLog.count({ where: { ...where, status: 'FAILED' } }),
+      prisma.messageLog.count({ where: { ...where, status: 'BOUNCED' } }),
+      prisma.messageLog.count({ where: { ...where, status: 'OPENED' } }),
+      prisma.messageLog.count({ where: { ...where, status: 'CLICKED' } }),
+    ]);
+
+    return {
+      total,
+      sent,
+      delivered,
+      failed,
+      bounced,
+      opened,
+      clicked,
+    };
+  }
+}
+
+export const messageLogService = new MessageLogService();

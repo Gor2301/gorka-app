@@ -1,0 +1,4 @@
+firstName,lastName,phone,email,address,city,country
+Jane,Smith,+9876543210,jane@example.com,456 Oak St,Los Angeles,USA
+Bob,Johnson,+5551234567,bob@example.com,789 Pine St,Chicago,USA
+Alice,Williams,+4449876543,alice@example.com,321 Elm St,Houston,USA

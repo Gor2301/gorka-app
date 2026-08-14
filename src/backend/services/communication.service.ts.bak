@@ -1,0 +1,231 @@
+// src/backend/services/communication.service.ts
+import { prisma } from '../database';
+import { templateService, PlaceholderContext } from './template.service';
+import { messageLogService } from './message-log.service';
+import { ResendEmailAdapter } from '../adapters/resend-email.adapter';
+import { getSenderEmail } from '../config/email.config';
+import { 
+  SendMessageOptions, 
+  SendMessageResult, 
+  Channel, 
+  MessageStatus 
+} from '../../types/communication.types';
+
+// Channel adapter interface
+export interface ChannelAdapter {
+  channel: Channel;
+  sendMessage(options: {
+    recipient: string;
+    subject?: string;
+    content: { html: string; text: string };
+    sender: string;
+    metadata?: Record<string, any>;
+  }): Promise<{
+    success: boolean;
+    providerMessageId?: string;
+    error?: string;
+    data?: any;
+  }>;
+  testConnection(): Promise<{ success: boolean; error?: string }>;
+  getCapabilities(): {
+    supportsScheduling: boolean;
+    supportsAttachments: boolean;
+    supportsTracking: boolean;
+    supportsTemplates: boolean;
+    maxMessageSize: number;
+    supportedContentTypes: string[];
+  };
+}
+
+export class CommunicationService {
+  private adapters: Map<Channel, ChannelAdapter> = new Map();
+
+  /**
+   * Register a channel adapter
+   */
+  registerAdapter(channel: Channel, adapter: ChannelAdapter): void {
+    this.adapters.set(channel, adapter);
+  }
+
+  /**
+   * Get a channel adapter
+   */
+  getAdapter(channel: Channel): ChannelAdapter | undefined {
+    return this.adapters.get(channel);
+  }
+
+  /**
+   * Initialize email adapter with Resend
+   */
+  async initializeEmailAdapter(apiKey: string): Promise<void> {
+    const adapter = new ResendEmailAdapter(apiKey);
+    this.registerAdapter('email', adapter);
+    console.log(`✅ Email adapter registered (Resend)`);
+  }
+
+  /**
+   * Send a message - ALWAYS queues for worker processing
+   */
+  async sendMessage(options: SendMessageOptions): Promise<SendMessageResult> {
+    const {
+      channel,
+      recipient,
+      templateName,
+      debtorId,
+      userId,
+      context = {},
+      scheduledAt,
+      priority = 'medium',
+    } = options;
+
+    // Validate channel adapter exists
+    const adapter = this.getAdapter(channel);
+    if (!adapter) {
+      throw new Error(`No adapter registered for channel: ${channel}`);
+    }
+
+    // Get debtor data
+    const debtor = await prisma.debtor.findUnique({
+      where: { id: debtorId },
+      include: { debts: true },
+    });
+
+    if (!debtor) {
+      throw new Error(`Debtor ${debtorId} not found`);
+    }
+
+    // Check opt-out
+    if (channel === 'email' && debtor.emailOptOut) {
+      throw new Error('Debtor has opted out of emails');
+    }
+
+    // Render template
+    const templateContext: PlaceholderContext = {
+      debtor,
+      ...context,
+    };
+
+    const rendered = await templateService.renderTemplate(
+      templateName,
+      channel,
+      debtor,
+      templateContext
+    );
+
+    // Create message log entry
+    const template = await templateService.getTemplate(templateName, channel);
+    const log = await messageLogService.createMessageLog({
+      debtorId,
+      userId,
+      channel,
+      recipient,
+      subject: rendered.subject,
+      content: rendered.html,
+      contentPreview: rendered.text.slice(0, 200),
+      templateId: template?.id,
+      templateName: template?.name,
+      templateVersion: template?.version,
+      templateSnapshot: template,
+      status: 'QUEUED',
+      provider: adapter.channel,
+      metadata: {
+        priority,
+        scheduledAt: scheduledAt?.toISOString(),
+        templateMetadata: rendered.metadata,
+      },
+    });
+
+    // ✅ ALWAYS queue the message — worker handles all sending
+    await this.queueMessage(log.id, scheduledAt || new Date(), {
+      channel,
+      recipient,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
+      debtorId,
+      userId,
+      templateName,
+      priority,
+    });
+
+    return {
+      success: true,
+      messageLogId: log.id,
+      scheduled: !!scheduledAt,
+    };
+  }
+
+  /**
+   * Queue a message for later sending
+   */
+  private async queueMessage(
+    messageLogId: string,
+    scheduledAt: Date,
+    data: {
+      channel: string;
+      recipient: string;
+      subject: string;
+      html: string;
+      text: string;
+      debtorId: string;
+      userId?: string;
+      templateName: string;
+      priority: string;
+    }
+  ): Promise<void> {
+    const priorityMap = { low: 0, medium: 1, high: 2 };
+    
+    await prisma.jobQueue.create({
+      data: {
+        type: 'MESSAGE',
+        status: 'PENDING',
+        data: {
+          channel: data.channel,
+          recipient: data.recipient,
+          subject: data.subject,
+          html: data.html,
+          text: data.text,
+          debtorId: data.debtorId,
+          userId: data.userId,
+          templateName: data.templateName,
+          messageLogId,
+        },
+        scheduledAt,
+        priority: priorityMap[data.priority as keyof typeof priorityMap] || 1,
+        messageLogId,
+        maxAttempts: 3,
+      },
+    });
+
+    // Update message log with job status
+    await messageLogService.updateStatus(messageLogId, 'PENDING', {});
+  }
+
+  /**
+   * Test a channel connection
+   */
+  async testChannel(channel: Channel): Promise<{ success: boolean; error?: string }> {
+    const adapter = this.getAdapter(channel);
+    if (!adapter) {
+      return {
+        success: false,
+        error: `No adapter registered for channel: ${channel}`,
+      };
+    }
+
+    return adapter.testConnection();
+  }
+
+  /**
+   * Get channel capabilities
+   */
+  getCapabilities(channel: Channel): any | null {
+    const adapter = this.getAdapter(channel);
+    if (!adapter) {
+      return null;
+    }
+    return adapter.getCapabilities();
+  }
+}
+
+export const communicationService = new CommunicationService();

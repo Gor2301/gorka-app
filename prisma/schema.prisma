@@ -1,0 +1,305 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  password       String
+  name           String?
+  role           String   @default("AGENT")
+  status         String   @default("ACTIVE")
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  lastLoginAt    DateTime? @map("last_login_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  // Relations
+  debtors        Debtor[]
+  actions        Action[]
+  messageLogs    MessageLog[]
+  activityLogs   ActivityLog[]
+  aiFeedbacks    AiFeedback[]
+  aiRecommendations AiRecommendation[]
+  aiOutcomes     AiOutcome[]
+
+  @@map("users")
+}
+
+model Organization {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String?  @unique
+  email          String?
+  phone          String?
+  address        String?
+  website        String?
+  industry       String?
+  status         String   @default("ACTIVE")
+  settings       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  // Relations
+  users          User[]
+  debtors        Debtor[]
+  actions        Action[]
+  templates      Template[]
+  aiRecommendations AiRecommendation[]
+  aiOutcomes     AiOutcome[]
+  communicationHistory CommunicationHistory[]
+  messageLogs    MessageLog[]
+  activityLogs   ActivityLog[]
+  queueJobs      QueueJob[]
+  aiFeedbacks    AiFeedback[]
+
+  @@map("organizations")
+}
+
+model Debtor {
+  id             String   @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  dateOfBirth    DateTime? @map("date_of_birth")
+  identification Json?     @default("{}")
+  riskScore      Int      @default(0) @map("risk_score")
+  tags           String[] @default([])
+  status         String   @default("ACTIVE")
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  assignedTo     String?  @map("assigned_to")
+  assignedUser   User?    @relation(fields: [assignedTo], references: [id])
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  // Relations
+  actions        Action[]
+  messageLogs    MessageLog[]
+  communicationHistory CommunicationHistory[]
+  aiRecommendations AiRecommendation[]
+  aiOutcomes     AiOutcome[]
+
+  @@map("debtors")
+}
+
+model Action {
+  id             String   @id @default(cuid())
+  debtorId       String   @map("debtor_id")
+  debtor         Debtor   @relation(fields: [debtorId], references: [id])
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  type           String
+  status         String   @default("PENDING")
+  title          String
+  description    String?
+  dueDate        DateTime? @map("due_date")
+  assignedTo     String?  @map("assigned_to")
+  assignedUser   User?    @relation(fields: [assignedTo], references: [id])
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  completedAt    DateTime? @map("completed_at")
+  metadata       Json     @default("{}")
+
+  @@index([debtorId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("actions")
+}
+
+model Template {
+  id             String   @id @default(cuid())
+  name           String
+  subject        String?
+  content        String
+  channel        String
+  type           String   @default("CUSTOM")
+  description    String?
+  variables      String[] @default([])
+  status         String   @default("ACTIVE")
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("templates")
+}
+
+model CommunicationHistory {
+  id             String   @id @default(cuid())
+  debtorId       String   @map("debtor_id")
+  debtor         Debtor   @relation(fields: [debtorId], references: [id])
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  channel        String
+  type           String
+  subject        String?
+  content        String?
+  status         String   @default("PENDING")
+  sentAt         DateTime? @map("sent_at")
+  deliveredAt    DateTime? @map("delivered_at")
+  readAt         DateTime? @map("read_at")
+  errorMessage   String?  @map("error_message")
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([debtorId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("communication_history")
+}
+
+model MessageLog {
+  id             String   @id @default(cuid())
+  debtorId       String   @map("debtor_id")
+  debtor         Debtor   @relation(fields: [debtorId], references: [id])
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String?  @map("user_id")
+  user           User?    @relation(fields: [userId], references: [id])
+  channel        String
+  direction      String   @default("OUTBOUND")
+  subject        String?
+  content        String?
+  status         String   @default("SENT")
+  provider       String?
+  providerId     String?  @map("provider_id")
+  metadata       Json     @default("{}")
+  sentAt         DateTime @default(now()) @map("sent_at")
+  deliveredAt    DateTime? @map("delivered_at")
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([debtorId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("message_logs")
+}
+
+model ActivityLog {
+  id             String   @id @default(cuid())
+  userId         String?  @map("user_id")
+  user           User?    @relation(fields: [userId], references: [id])
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  action         String
+  entityType     String?  @map("entity_type")
+  entityId       String?  @map("entity_id")
+  details        Json     @default("{}")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+model AiRecommendation {
+  id             String   @id @default(cuid())
+  debtorId       String   @map("debtor_id")
+  debtor         Debtor   @relation(fields: [debtorId], references: [id])
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  agentId        String?  @map("agent_id")
+  agent          User?    @relation(fields: [agentId], references: [id])
+  channel        String
+  tone           String
+  rationale      String
+  emailSubject   String?  @map("email_subject")
+  emailBody      String?  @map("email_body")
+  status         String   @default("PENDING")
+  modelVersion   String?  @map("model_version")
+  promptVersion  String?  @map("prompt_version")
+  contextHash    String?  @map("context_hash")
+  generatedAt    DateTime @default(now()) @map("generated_at")
+  acceptedAt     DateTime? @map("accepted_at")
+  rejectedAt     DateTime? @map("rejected_at")
+  sentAt         DateTime? @map("sent_at")
+  expiresAt      DateTime? @map("expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  outcomes       AiOutcome[]
+  feedbacks      AiFeedback[]
+
+  @@index([debtorId])
+  @@index([status])
+  @@index([generatedAt])
+  @@map("ai_recommendations")
+}
+
+model AiOutcome {
+  id             String   @id @default(cuid())
+  recommendationId String? @map("recommendation_id")
+  recommendation AiRecommendation? @relation(fields: [recommendationId], references: [id])
+  debtorId       String   @map("debtor_id")
+  debtor         Debtor   @relation(fields: [debtorId], references: [id])
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  agentId        String?  @map("agent_id")
+  agent          User?    @relation(fields: [agentId], references: [id])
+  outcomeStatus  String   @map("outcome_status")
+  amount         Float?
+  promiseDate    DateTime? @map("promise_date")
+  agentNotes     String?  @map("agent_notes")
+  agentRating    Int?     @map("agent_rating")
+  recordedAt     DateTime @default(now()) @map("recorded_at")
+
+  @@index([debtorId])
+  @@map("ai_outcomes")
+}
+
+model AiFeedback {
+  id             String   @id @default(cuid())
+  recommendationId String @map("recommendation_id")
+  recommendation AiRecommendation @relation(fields: [recommendationId], references: [id])
+  agentId        String?  @map("agent_id")
+  agent          User?    @relation(fields: [agentId], references: [id])
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  rating         Int
+  comment        String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("ai_feedback")
+}
+
+model QueueJob {
+  id             String   @id @default(cuid())
+  queueName      String   @map("queue_name")
+  data           Json
+  status         String   @default("PENDING")
+  attempts       Int      @default(0)
+  maxAttempts    Int      @default(3) @map("max_attempts")
+  scheduledAt    DateTime? @map("scheduled_at")
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  failedAt       DateTime? @map("failed_at")
+  errorMessage   String?  @map("error_message")
+  organizationId String?  @map("organization_id")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@map("queue_jobs")
+}

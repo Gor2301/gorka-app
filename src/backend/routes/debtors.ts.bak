@@ -1,0 +1,56 @@
+import { Router } from 'express';
+import { prisma } from '../database';
+import { logger } from '../config/logger';
+
+const router = Router();
+
+// GET /api/debtors - List all debtors
+router.get('/', async (req, res) => {
+  try {
+    const debtors = await prisma.debtor.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        messageLogs: {
+          take: 5,
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+    
+    res.json({ success: true, data: debtors });
+  } catch (error) {
+    logger.error('Error fetching debtors:', error);
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// GET /api/debtors/:id - Get single debtor with full history
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const debtor = await prisma.debtor.findUnique({
+      where: { id },
+      include: {
+        messageLogs: {
+          orderBy: { createdAt: 'desc' },
+        },
+        debts: {
+          where: { status: 'PENDING' }
+        }
+      }
+    });
+    
+    if (!debtor) {
+      return res.status(404).json({ success: false, error: 'Debtor not found' });
+    }
+    
+    res.json({ success: true, data: debtor });
+  } catch (error) {
+    logger.error('Error fetching debtor:', error);
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+export default router;

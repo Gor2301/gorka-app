@@ -1,0 +1,277 @@
+// src/backend/workers/message-worker.ts
+import { prisma } from '../database';
+import { communicationService } from '../services/communication.service';
+import { messageLogService } from '../services/message-log.service';
+import { getSenderEmail } from '../config/email.config';
+
+interface MessageJobData {
+  channel: string;
+  recipient: string;
+  subject: string;
+  html: string;
+  text: string;
+  debtorId: string;
+  userId?: string;
+  templateName: string;
+  messageLogId: string;
+}
+
+export class MessageWorker {
+  private isRunning: boolean = false;
+  private interval: NodeJS.Timeout | null = null;
+  private pollInterval: number = 5000; // 5 seconds
+
+  /**
+   * Start the worker
+   */
+  start(): void {
+    if (this.isRunning) {
+      console.log('⚠️ Message worker is already running');
+      return;
+    }
+
+    this.isRunning = true;
+    console.log(`✅ Message worker started (polling every ${this.pollInterval}ms)`);
+    
+    this.interval = setInterval(async () => {
+      await this.processPendingMessages();
+    }, this.pollInterval);
+  }
+
+  /**
+   * Stop the worker
+   */
+  stop(): void {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+    this.isRunning = false;
+    console.log('⏹️ Message worker stopped');
+  }
+
+  /**
+   * Process pending messages from the queue
+   */
+  private async processPendingMessages(): Promise<void> {
+    try {
+      // Find pending messages
+      const jobs = await prisma.jobQueue.findMany({
+        where: {
+          type: 'MESSAGE',
+          status: 'PENDING',
+          scheduledAt: {
+            lte: new Date(),
+          },
+          attempts: {
+            lt: 3, // Max 3 attempts
+          },
+        },
+        orderBy: {
+          priority: 'desc',
+        },
+        take: 10, // Process in batches
+      });
+
+      if (jobs.length === 0) {
+        return; // No jobs to process
+      }
+
+      console.log(`📬 Processing ${jobs.length} message(s) from queue...`);
+
+      for (const job of jobs) {
+        await this.processJob(job);
+      }
+    } catch (error) {
+      console.error('❌ Error processing messages:', error);
+    }
+  }
+
+  /**
+   * Process a single job
+   */
+  private async processJob(job: any): Promise<void> {
+    try {
+      // Lock the job
+      await prisma.jobQueue.update({
+        where: { id: job.id },
+        data: {
+          status: 'PROCESSING',
+          lockedAt: new Date(),
+          attempts: job.attempts + 1,
+        },
+      });
+
+      const data = job.data as MessageJobData;
+      
+      console.log(`📧 Sending email to ${data.recipient} (attempt ${job.attempts + 1}/${job.maxAttempts})...`);
+
+      // Get the channel adapter
+      const adapter = communicationService.getAdapter(data.channel as any);
+      if (!adapter) {
+        throw new Error(`No adapter registered for channel: ${data.channel}`);
+      }
+
+      // Send the email
+      const result = await adapter.sendMessage({
+        recipient: data.recipient,
+        subject: data.subject,
+        content: {
+          html: data.html,
+          text: data.text,
+        },
+        sender: getSenderEmail(),
+        metadata: {
+          debtorId: data.debtorId,
+          templateName: data.templateName,
+          messageLogId: data.messageLogId,
+        },
+      });
+
+      if (result.success) {
+        // Update job status
+        await prisma.jobQueue.update({
+          where: { id: job.id },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+          },
+        });
+
+        // Update message log
+        await messageLogService.updateStatus(data.messageLogId, 'SENT', {
+          providerMessageId: result.providerMessageId,
+          sentAt: new Date(),
+        });
+
+        // Create sent event
+        await messageLogService.createEvent({
+          messageLogId: data.messageLogId,
+          event: 'sent',
+          data: result,
+        });
+
+        // Update debtor stats
+        if (data.channel === 'email') {
+          await prisma.debtor.update({
+            where: { id: data.debtorId },
+            data: {
+              emailSentCount: { increment: 1 },
+              lastEmailSentAt: new Date(),
+            },
+          });
+        }
+
+        // ✅ FIXED: Create interaction record with conditional userId
+        if (data.userId) {
+          await prisma.interaction.create({
+            data: {
+              debtorId: data.debtorId,
+              userId: data.userId,
+              type: data.channel === 'email' ? 'EMAIL' : data.channel.toUpperCase(),
+              note: `${data.channel} sent: ${data.subject}`,
+              messageLogId: data.messageLogId,
+              isAutomated: false,
+              outcome: 'SENT',
+            },
+          });
+        } else {
+          await prisma.interaction.create({
+            data: {
+              debtorId: data.debtorId,
+              type: data.channel === 'email' ? 'EMAIL' : data.channel.toUpperCase(),
+              note: `${data.channel} sent: ${data.subject} (system)`,
+              messageLogId: data.messageLogId,
+              isAutomated: true,
+              outcome: 'SENT',
+            },
+          });
+        }
+
+        console.log(`✅ Email sent to ${data.recipient} (${result.providerMessageId})`);
+      } else {
+        // Handle failure
+        const attempts = job.attempts + 1;
+        const maxAttempts = job.maxAttempts || 3;
+
+        if (attempts >= maxAttempts) {
+          // Mark as failed
+          await prisma.jobQueue.update({
+            where: { id: job.id },
+            data: {
+              status: 'FAILED',
+              lastError: result.error || 'Unknown error',
+              completedAt: new Date(),
+            },
+          });
+
+          // Update message log
+          await messageLogService.updateStatus(data.messageLogId, 'FAILED', {
+            error: result.error || 'Unknown error',
+          });
+
+          // Create failed event
+          await messageLogService.createEvent({
+            messageLogId: data.messageLogId,
+            event: 'failed',
+            data: { error: result.error },
+          });
+
+          console.log(`❌ Email to ${data.recipient} failed permanently: ${result.error}`);
+        } else {
+          // Retry later with exponential backoff
+          const delayMs = this.getBackoffDelay(attempts);
+          const retryAt = new Date(Date.now() + delayMs);
+
+          await prisma.jobQueue.update({
+            where: { id: job.id },
+            data: {
+              status: 'PENDING',
+              lockedAt: null,
+              lastError: result.error || 'Retry scheduled',
+              scheduledAt: retryAt,
+            },
+          });
+
+          console.log(`🔄 Retrying email to ${data.recipient} in ${delayMs}ms (attempt ${attempts}/${maxAttempts})`);
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Update job with error
+      await prisma.jobQueue.update({
+        where: { id: job.id },
+        data: {
+          status: 'FAILED',
+          lastError: errorMessage,
+          completedAt: new Date(),
+        },
+      });
+
+      console.error(`❌ Error processing job ${job.id}:`, errorMessage);
+    }
+  }
+
+  /**
+   * Calculate backoff delay for retries
+   */
+  private getBackoffDelay(attempt: number): number {
+    // Exponential backoff: 1s, 5s, 30s
+    const delays = [1000, 5000, 30000];
+    return delays[attempt - 1] || 60000; // Default 1 minute
+  }
+
+  /**
+   * Get worker status
+   */
+  getStatus(): { isRunning: boolean; pollInterval: number } {
+    return {
+      isRunning: this.isRunning,
+      pollInterval: this.pollInterval,
+    };
+  }
+}
+
+// Singleton instance
+export const messageWorker = new MessageWorker();

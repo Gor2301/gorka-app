@@ -1,0 +1,499 @@
+// src/backend/services/CommunicationService.ts
+import { PrismaClient } from '@prisma/client';
+import { Resend } from 'resend';
+
+const prisma = new PrismaClient();
+
+// ============================================
+// CONFIG: Load from environment
+// ============================================
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@test.com';
+
+console.log('🔑 CommunicationService loaded:');
+console.log('   RESEND_API_KEY:', RESEND_API_KEY ? '✅ SET' : '❌ NOT SET');
+console.log('   FROM_EMAIL:', FROM_EMAIL);
+
+// Initialize Resend if API key exists
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+console.log('   Resend instance:', resend ? '✅ CREATED' : '❌ NULL');
+
+export interface CommunicationPayload {
+  type: 'EMAIL' | 'SMS' | 'PUSH' | 'WHATSAPP';
+  to: string;
+  subject?: string;
+  body: string;
+  status?: 'PENDING' | 'SENT' | 'FAILED';
+  metadata?: any;
+  userId?: string;
+  templateId?: string;
+  debtorId?: string;
+}
+
+export class CommunicationService {
+
+  // ============================================
+  // HELPERS: Get default organization and user
+  // ============================================
+  private async getDefaultOrganizationId(): Promise<string> {
+    const org = await prisma.organization.findFirst();
+    if (!org) {
+      throw new Error('No organization found. Please create an organization first.');
+    }
+    return org.id;
+  }
+
+  private async getDefaultUserId(): Promise<string> {
+    const user = await prisma.user.findFirst({
+      where: { role: 'ADMIN' }
+    });
+    if (!user) {
+      throw new Error('No admin user found.');
+    }
+    return user.id;
+  }
+
+  // ============================================
+  // MAIN: Send Communication
+  // ============================================
+  async sendCommunication(data: CommunicationPayload) {
+    try {
+      // 1. Render template if templateId provided
+      let renderedBody = data.body || '';
+      let renderedSubject = data.subject || '';
+
+      if (data.templateId) {
+        const template = await prisma.template.findUnique({
+          where: { id: data.templateId }
+        });
+
+        if (template) {
+          renderedBody = this.renderTemplate(template.content, data.metadata || {});
+          renderedSubject = template.subject ? this.renderTemplate(template.subject, data.metadata || {}) : renderedSubject;
+        }
+      }
+
+      // 2. Get or create a debtor for the message log
+      let debtorId = data.debtorId;
+
+      if (!debtorId) {
+        // First check if debtor exists
+        let dummyDebtor = await prisma.debtor.findFirst({
+          where: { email: 'test@example.com' }
+        });
+
+        if (!dummyDebtor) {
+          const org = await prisma.organization.findFirst();
+          if (!org) {
+            throw new Error('No organization found. Please create an organization first.');
+          }
+
+          const adminUser = await prisma.user.findFirst({
+            where: { role: 'ADMIN' }
+          });
+
+          if (!adminUser) {
+            throw new Error('No admin user found. Please create an admin user first.');
+          }
+
+          dummyDebtor = await prisma.debtor.create({
+            data: {
+              name: 'Test Debtor',
+              email: 'test@example.com',
+              organizationId: org.id,
+              createdBy: adminUser.id,
+            }
+          });
+        }
+        debtorId = dummyDebtor.id;
+      }
+
+      // 3. Create log entry
+      const log = await prisma.messageLog.create({
+        data: {
+          channel: data.type,
+          recipient: data.to,
+          subject: renderedSubject || null,
+          content: renderedBody,
+          contentPreview: (renderedBody || '').substring(0, 100),
+          status: 'PENDING',
+          metadata: data.metadata || {},
+          userId: data.userId || null,
+          templateId: data.templateId || null,
+          debtorId: debtorId,
+          createdAt: new Date(),
+        }
+      });
+
+      // 4. Send based on channel
+      try {
+        let result;
+
+        console.log(`📤 Sending ${data.type} to ${data.to}...`);
+
+        switch (data.type) {
+          case 'EMAIL':
+            result = await this.sendEmail({
+              to: data.to,
+              subject: renderedSubject || '',
+              body: renderedBody,
+            });
+            break;
+          case 'SMS':
+            result = await this.sendSms(data.to, renderedBody);
+            break;
+          case 'PUSH':
+            result = await this.sendPush(data.to, renderedBody);
+            break;
+          case 'WHATSAPP':
+            result = await this.sendWhatsApp(data.to, renderedBody);
+            break;
+          default:
+            throw new Error(`Unsupported channel: ${data.type}`);
+        }
+
+        console.log(`✅ ${data.type} sent successfully:`, result);
+
+        // 5. Update log to SENT
+        await prisma.messageLog.update({
+          where: { id: log.id },
+          data: {
+            status: 'SENT',
+            sentAt: new Date(),
+            provider: result.provider || null,
+            providerMessageId: result.providerMessageId || null,
+            providerData: result.providerData || {},
+          }
+        });
+
+        // 6. Create MessageEvent
+        await prisma.messageEvent.create({
+          data: {
+            messageLogId: log.id,
+            event: 'SENT',
+            timestamp: new Date(),
+          }
+        });
+
+        // 7. Update debtor stats if debtorId provided
+        if (data.debtorId) {
+          await this.updateDebtorStats(data.debtorId, data.type);
+        }
+
+        return {
+          success: true,
+          id: log.id,
+          status: 'SENT',
+          providerMessageId: result.providerMessageId
+        };
+
+      } catch (error) {
+        console.error(`❌ Failed to send ${data.type}:`, error);
+        
+        // Update log to FAILED
+        await prisma.messageLog.update({
+          where: { id: log.id },
+          data: {
+            status: 'FAILED',
+            error: String(error),
+            metadata: { ...(log.metadata as any || {}), error: String(error) }
+          }
+        });
+
+        // Create MessageEvent
+        await prisma.messageEvent.create({
+          data: {
+            messageLogId: log.id,
+            event: 'FAILED',
+            data: { error: String(error) },
+            timestamp: new Date(),
+          }
+        });
+
+        return {
+          success: false,
+          id: log.id,
+          status: 'FAILED',
+          error: String(error)
+        };
+      }
+    } catch (error) {
+      console.error('Communication error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // EMAIL: Send via Resend
+  // ============================================
+  private async sendEmail(params: { to: string; subject: string; body: string }) {
+    console.log('📧 sendEmail called:');
+    console.log('   RESEND_API_KEY:', RESEND_API_KEY ? '✅ HAS KEY' : '❌ NO KEY');
+    console.log('   resend instance:', resend ? '✅ EXISTS' : '❌ NULL');
+    console.log('   FROM_EMAIL:', FROM_EMAIL);
+    console.log('   TO:', params.to);
+    console.log('   SUBJECT:', params.subject);
+
+    if (!resend) {
+      console.log('📡 [MOCK] Email would be sent to:', params.to);
+      console.log('📥 Subject:', params.subject);
+      console.log('📄 Body:', params.body.substring(0, 100));
+      return {
+        provider: 'mock',
+        providerMessageId: `mock-${Date.now()}`,
+        providerData: { mock: true }
+      };
+    }
+
+    try {
+      console.log('📤 Sending via Resend...');
+      const result = await resend.emails.send({
+        from: FROM_EMAIL,
+        to: [params.to],
+        subject: params.subject,
+        html: params.body,
+      });
+
+      console.log('✅ Resend result:', result);
+      
+      return {
+        provider: 'resend',
+        providerMessageId: result.data?.id || null,
+        providerData: result.data || {},
+      };
+    } catch (error) {
+      console.error('❌ Resend error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // SMS: Placeholder (ready for integration)
+  // ============================================
+  private async sendSms(to: string, body: string) {
+    console.log('📱 [MOCK] SMS would be sent to:', to);
+    console.log('📄 Body:', body.substring(0, 100));
+    return {
+      provider: 'mock-sms',
+      providerMessageId: `mock-sms-${Date.now()}`,
+      providerData: { mock: true }
+    };
+  }
+
+  // ============================================
+  // PUSH: Placeholder (ready for integration)
+  // ============================================
+  private async sendPush(to: string, body: string) {
+    console.log('📲 [MOCK] Push would be sent to:', to);
+    console.log('📄 Body:', body.substring(0, 100));
+    return {
+      provider: 'mock-push',
+      providerMessageId: `mock-push-${Date.now()}`,
+      providerData: { mock: true }
+    };
+  }
+
+  // ============================================
+  // WHATSAPP: Placeholder (ready for integration)
+  // ============================================
+  private async sendWhatsApp(to: string, body: string) {
+    console.log('💬 [MOCK] WhatsApp would be sent to:', to);
+    console.log('📄 Body:', body.substring(0, 100));
+    return {
+      provider: 'mock-whatsapp',
+      providerMessageId: `mock-whatsapp-${Date.now()}`,
+      providerData: { mock: true }
+    };
+  }
+
+  // ============================================
+  // TEMPLATE: Render with placeholders
+  // ============================================
+  private renderTemplate(content: string, data: Record<string, any>): string {
+    let rendered = content || '';
+
+    Object.entries(data).forEach(([key, value]) => {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      rendered = rendered.replace(regex, String(value || ''));
+    });
+
+    return rendered;
+  }
+
+  // ============================================
+  // DEBTOR: Update stats
+  // ============================================
+  private async updateDebtorStats(debtorId: string, channel: string) {
+    const now = new Date();
+
+    if (channel === 'EMAIL') {
+      await prisma.debtor.update({
+        where: { id: debtorId },
+        data: {
+          emailSentCount: { increment: 1 },
+          lastEmailSentAt: now,
+        }
+      });
+    } else if (channel === 'SMS') {
+      await prisma.debtor.update({
+        where: { id: debtorId },
+        data: {
+          smsSentCount: { increment: 1 },
+          lastSmsSentAt: now,
+        }
+      });
+    }
+  }
+
+  // ============================================
+  // GET: Communications with filters
+  // ============================================
+  async getCommunications(filters?: {
+    type?: string;
+    status?: string;
+    from?: Date;
+    to?: Date;
+    userId?: string;
+    debtorId?: string;
+  }) {
+    const where: any = {};
+
+    if (filters?.type) where.channel = filters.type;
+    if (filters?.status) where.status = filters.status;
+    if (filters?.userId) where.userId = filters.userId;
+    if (filters?.debtorId) where.debtorId = filters.debtorId;
+    if (filters?.from || filters?.to) {
+      where.createdAt = {};
+      if (filters.from) where.createdAt.gte = filters.from;
+      if (filters.to) where.createdAt.lte = filters.to;
+    }
+
+    return await prisma.messageLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true }
+        },
+        template: {
+          select: { id: true, name: true }
+        },
+        debtor: {
+          select: { id: true, name: true, email: true, phone: true }
+        },
+        events: {
+          orderBy: { timestamp: 'desc' }
+        }
+      }
+    });
+  }
+
+  // ============================================
+  // STATS: Communication statistics
+  // ============================================
+  async getStats() {
+    const [total, sent, failed, pending, byType] = await Promise.all([
+      prisma.messageLog.count(),
+      prisma.messageLog.count({ where: { status: 'SENT' } }),
+      prisma.messageLog.count({ where: { status: 'FAILED' } }),
+      prisma.messageLog.count({ where: { status: 'PENDING' } }),
+      prisma.messageLog.groupBy({
+        by: ['channel'],
+        _count: true
+      })
+    ]);
+
+    return {
+      total,
+      sent,
+      failed,
+      pending,
+      byType: byType.reduce((acc, curr) => {
+        acc[curr.channel] = curr._count;
+        return acc;
+      }, {} as Record<string, number>)
+    };
+  }
+
+  // ============================================
+  // DELETE: Remove communication
+  // ============================================
+  async deleteCommunication(id: string) {
+    await prisma.messageEvent.deleteMany({
+      where: { messageLogId: id }
+    });
+
+    return await prisma.messageLog.delete({
+      where: { id }
+    });
+  }
+
+  // ============================================
+  // WEBHOOK: Handle delivery status from provider
+  // ============================================
+  async handleWebhook(data: {
+    provider: string;
+    providerMessageId: string;
+    event: string;
+    timestamp: Date;
+    metadata?: any;
+  }) {
+    const messageLog = await prisma.messageLog.findFirst({
+      where: {
+        providerMessageId: data.providerMessageId
+      }
+    });
+
+    if (!messageLog) {
+      console.warn('Webhook: Message not found:', data.providerMessageId);
+      return { success: false, error: 'Message not found' };
+    }
+
+    let status = messageLog.status;
+    if (data.event === 'delivered') status = 'SENT';
+    else if (data.event === 'opened') status = 'SENT';
+    else if (data.event === 'clicked') status = 'SENT';
+    else if (data.event === 'bounced') status = 'FAILED';
+    else if (data.event === 'complained') status = 'FAILED';
+    else if (data.event === 'rejected') status = 'FAILED';
+
+    await prisma.messageLog.update({
+      where: { id: messageLog.id },
+      data: {
+        status,
+        providerData: { ...(messageLog.providerData as any || {}), webhook: data },
+        ...(status === 'SENT' && !messageLog.sentAt ? { sentAt: data.timestamp } : {}),
+      }
+    });
+
+    await prisma.messageEvent.create({
+      data: {
+        messageLogId: messageLog.id,
+        event: data.event,
+        data: data.metadata || {},
+        timestamp: data.timestamp,
+      }
+    });
+
+    if (data.event === 'delivered') {
+      await prisma.messageLog.update({
+        where: { id: messageLog.id },
+        data: { deliveredAt: data.timestamp }
+      });
+    } else if (data.event === 'opened') {
+      await prisma.messageLog.update({
+        where: { id: messageLog.id },
+        data: { openedAt: data.timestamp }
+      });
+    } else if (data.event === 'clicked') {
+      await prisma.messageLog.update({
+        where: { id: messageLog.id },
+        data: { clickedAt: data.timestamp }
+      });
+    }
+
+    return { success: true, id: messageLog.id };
+  }
+}
+
+export const communicationService = new CommunicationService();

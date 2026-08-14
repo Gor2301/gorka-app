@@ -1,0 +1,75 @@
+import { Router } from 'express';
+import TemplateService from '../services/template.service';
+
+const router = Router();
+
+// GET all templates
+router.get('/', async (req, res) => {
+  try {
+    const { organizationId } = req.query;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, error: 'Organization ID required' });
+    }
+    const templates = await TemplateService.getTemplates(organizationId as string);
+    res.json({ success: true, data: templates });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch templates' });
+  }
+});
+
+// GET template by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { organizationId } = req.query;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, error: 'Organization ID required' });
+    }
+    const template = await TemplateService.getTemplateById(id, organizationId as string);
+    res.json({ success: true, data: template });
+  } catch (error: any) {
+    res.status(404).json({ success: false, error: error.message || 'Template not found' });
+  }
+});
+
+// POST create template
+router.post('/', async (req, res) => {
+  try {
+    const template = await TemplateService.createTemplate(req.body);
+    res.json({ success: true, data: template });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message || 'Failed to create template' });
+  }
+});
+
+// PUT update template
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { organizationId, ...data } = req.body;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, error: 'Organization ID required' });
+    }
+    const template = await TemplateService.updateTemplate(id, organizationId, data);
+    res.json({ success: true, data: template });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message || 'Failed to update template' });
+  }
+});
+
+// DELETE template
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { organizationId } = req.body;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, error: 'Organization ID required' });
+    }
+    await TemplateService.deleteTemplate(id, organizationId);
+    res.json({ success: true, message: 'Template deleted' });
+  } catch (error: any) {
+    res.status(404).json({ success: false, error: error.message || 'Template not found' });
+  }
+});
+
+export default router;

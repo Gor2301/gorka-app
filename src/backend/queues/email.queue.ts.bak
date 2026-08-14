@@ -1,0 +1,97 @@
+import { Queue, Worker } from 'bullmq';
+import { Resend } from 'resend';
+import redis from '../config/redis';
+import { logger } from '../config/logger';
+import { prisma } from '../database';
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Create queue
+export const emailQueue = new Queue('email-queue', {
+  connection: redis,
+});
+
+// Create worker that actually sends emails
+export const emailWorker = new Worker(
+  'email-queue',
+  async (job) => {
+    const { to, subject, content, messageLogId, debtorId } = job.data;
+    
+    logger.info(`📧 Processing email job ${job.id} to ${to}`);
+    
+    try {
+      // Send email using Resend
+      const { data, error } = await resend.emails.send({
+        from: process.env.FROM_EMAIL || 'onboarding@resend.dev',
+        to: [to],
+        subject: subject || 'No Subject',
+        html: content || '<p>No content</p>',
+      });
+
+      if (error) {
+        logger.error(`❌ Resend error:`, error);
+        
+        // Update message log to FAILED
+        if (messageLogId) {
+          await prisma.messageLog.update({
+            where: { id: messageLogId },
+            data: {
+              status: 'FAILED',
+              error: JSON.stringify(error),
+            },
+          });
+        }
+        
+        throw new Error(error.message);
+      }
+
+      logger.info(`✅ Email sent successfully to ${to}`, { messageId: data?.id });
+
+      // Update message log to SENT
+      if (messageLogId) {
+        await prisma.messageLog.update({
+          where: { id: messageLogId },
+          data: {
+            status: 'SENT',
+            sentAt: new Date(),
+            provider: 'resend',
+            providerMessageId: data?.id || null,
+          },
+        });
+      }
+
+      return { success: true, messageId: data?.id };
+    } catch (error) {
+      logger.error(`❌ Failed to send email to ${to}:`, error);
+      
+      // Update message log to FAILED
+      if (messageLogId) {
+        await prisma.messageLog.update({
+          where: { id: messageLogId },
+          data: {
+            status: 'FAILED',
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+      }
+      
+      throw error;
+    }
+  },
+  {
+    connection: redis,
+    concurrency: 5,
+  }
+);
+
+// Worker event handlers
+emailWorker.on('completed', (job) => {
+  logger.info(`✅ Job ${job.id} completed successfully`);
+});
+
+emailWorker.on('failed', (job, err) => {
+  logger.error(`❌ Job ${job?.id} failed:`, err);
+});
+
+logger.info('📧 Email queue worker initialized with Resend');

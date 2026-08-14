@@ -1,0 +1,130 @@
+import { prisma } from '../database';
+import { logger } from '../config/logger';
+import { AppError } from '../errors/AppError';
+import { ErrorCodes } from '../errors/errorCodes';
+
+export class TemplateService {
+  /**
+   * Get all templates for an organization
+   */
+  async getTemplates(organizationId: string, filters?: { channel?: string; category?: string; isActive?: boolean }) {
+    const where: any = { organizationId };
+    if (filters?.channel) where.channel = filters.channel;
+    if (filters?.category) where.category = filters.category;
+    if (filters?.isActive !== undefined) where.isActive = filters.isActive;
+
+    return prisma.template.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } }
+      }
+    });
+  }
+
+  /**
+   * Get a template by ID
+   */
+  async getTemplateById(id: string, organizationId: string) {
+    const template = await prisma.template.findFirst({
+      where: { id, organizationId },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } }
+      }
+    });
+
+    if (!template) {
+      throw new AppError('Template not found', 404, ErrorCodes.GENERAL_003);
+    }
+
+    return template;
+  }
+
+  /**
+   * Create a new template
+   */
+  async createTemplate(data: {
+    organizationId: string;
+    createdById: string;
+    name: string;
+    subject?: string;
+    content: string;
+    channel?: string;
+    category?: string;
+    tags?: string[];
+    isActive?: boolean;
+  }) {
+    return prisma.template.create({
+      data: {
+        name: data.name,
+        subject: data.subject || '',
+        content: data.content,
+        channel: data.channel || 'EMAIL',
+        category: data.category || null,
+        tags: data.tags || [],
+        isActive: data.isActive !== undefined ? data.isActive : true,
+        organizationId: data.organizationId,
+        createdById: data.createdById
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } }
+      }
+    });
+  }
+
+  /**
+   * Update a template
+   */
+  async updateTemplate(id: string, organizationId: string, data: {
+    name?: string;
+    subject?: string;
+    content?: string;
+    channel?: string;
+    category?: string;
+    tags?: string[];
+    isActive?: boolean;
+  }) {
+    // Check if exists
+    const existing = await prisma.template.findFirst({
+      where: { id, organizationId }
+    });
+
+    if (!existing) {
+      throw new AppError('Template not found', 404, ErrorCodes.GENERAL_003);
+    }
+
+    return prisma.template.update({
+      where: { id },
+      data: {
+        name: data.name || existing.name,
+        subject: data.subject !== undefined ? data.subject : existing.subject,
+        content: data.content || existing.content,
+        channel: data.channel || existing.channel,
+        category: data.category !== undefined ? data.category : existing.category,
+        tags: data.tags || existing.tags,
+        isActive: data.isActive !== undefined ? data.isActive : existing.isActive
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } }
+      }
+    });
+  }
+
+  /**
+   * Delete a template
+   */
+  async deleteTemplate(id: string, organizationId: string) {
+    const existing = await prisma.template.findFirst({
+      where: { id, organizationId }
+    });
+
+    if (!existing) {
+      throw new AppError('Template not found', 404, ErrorCodes.GENERAL_003);
+    }
+
+    await prisma.template.delete({ where: { id } });
+    return { success: true };
+  }
+}
+
+export default new TemplateService();
