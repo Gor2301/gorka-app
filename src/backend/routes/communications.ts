@@ -116,7 +116,7 @@ router.post('/sms', authenticateToken, requireTenant, async (req, res) => {
     }
 
     const cleanTo = to.replace(/[^0-9]/g, '');
-    const token = 'apit-2XC9bQdPtHfdnfsil7jgsTLz6N3qPSpI-DQFEw';
+    const token = process.env.MOCEAN_TOKEN;
     const fromNumber = from || 'MOCEAN';
 
     console.log(`📤 Sending SMS to: ${cleanTo}`);
@@ -193,7 +193,7 @@ router.get('/sms/health', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': 'Bearer apit-2XC9bQdPtHfdnfsil7jgsTLz6N3qPSpI-DQFEw'
+        'Authorization': `Bearer ${process.env.MOCEAN_TOKEN}`
       },
       body: new URLSearchParams({
         'mocean-from': 'MOCEAN',

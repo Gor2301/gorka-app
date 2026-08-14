@@ -33,7 +33,7 @@ export class CommunicationService {
       const config: ProviderConfig = {
         provider: 'mocean',
         credentials: {
-          token: process.env.MOCEAN_TOKEN || 'apit-2XC9bQdPtHfdnfsil7jgsTLz6N3qPSpI-DQFEw',
+          token: process.env.MOCEAN_TOKEN,
           from: params.from || 'MOCEAN'
         }
       };
@@ -113,7 +113,7 @@ export class CommunicationService {
       const config: ProviderConfig = {
         provider: 'mocean',
         credentials: {
-          token: process.env.MOCEAN_TOKEN || 'apit-2XC9bQdPtHfdnfsil7jgsTLz6N3qPSpI-DQFEw'
+          token: process.env.MOCEAN_TOKEN,
         }
       };
 
