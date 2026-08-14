@@ -29,7 +29,7 @@ export class PushService {
 
   async sendPush(params: SendPushParams): Promise<SendPushResult> {
     try {
-      const provider = this.providerFactory.createPush('mock', {});
+      const provider = this.providerFactory.createPush({ provider: 'mock' });
 
       const result = await provider.send({
         userId: params.userId,
