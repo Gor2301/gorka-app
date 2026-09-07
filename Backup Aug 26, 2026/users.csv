@@ -1,0 +1,9 @@
+id,email,passwordHash,password,name,role,organizationId,createdAt,updatedAt,isActive,lastLogin
+cmt7395t1000010j3o883tgbj,agaent3@gorka.click,$2a$10$krU33vpZFeAxzuUZCe8OHOdXo6/DZrcGz/tunaSypZ1F9lTLNLHES,$2a$10$krU33vpZFeAxzuUZCe8OHOdXo6/DZrcGz/tunaSypZ1F9lTLNLHES,Musk,AGENT,org1,2026-08-24 10:23:47.366,2026-08-24 10:23:47.366,t,
+user1,admin@gorka.click,$2a$10$uS6tZEfpErI4pODjS.miMuahqXUcApSsm5KzQ53Q8asHjMXstv7L.,,Admin,ADMIN,org1,2026-08-24 16:49:54.949,2026-08-24 13:01:14.512,t,2026-08-24 13:01:14.51
+cmt8h2bkx0001c4swzckqnulo,john@test.com,$2a$10$EVgiG7ja0QNupUF..BcoHuYejUpDo4Ih.9Zt/iKKZywRO7ViTerw.,,John Doe,AGENT,cmt8h2bkw0000c4swuooiiu0d,2026-08-25 09:38:09.057,2026-08-25 09:38:09.057,t,
+cmt8ha5150001c4ys227zqrrb,jane@test.com,$2a$10$mOkW9ONeo1oC/nCh2KfwJudFjRZAZTZFys6.maYOILDYhXlmZ9EP.,,Jane Doe,AGENT,cmt8ha5150000c4ys96brjqet,2026-08-25 09:44:13.817,2026-08-25 09:44:13.817,t,
+cmt8hlp100001c4ewg5gtu7ah,test@client.com,$2a$10$4a/ZBEdx4j5YlhSaS66.8O9Ks3rBUvTbUSXwV8.Z63TrN5UjZN/nS,,Test User,AGENT,cmt8hlp100000c4ewiy24iehc,2026-08-25 09:53:12.948,2026-08-25 09:53:12.948,t,
+cmt8ib2qm0007c4aoss76o5ed,reject@test.com,$2a$10$DJEKepumP9yZXnRlKpzI2ub.KYoys/wNJwq6BP7R.xJz9CYz9MFnW,,Reject User,AGENT,cmt8ib2qm0006c4aonljjr0mn,2026-08-25 10:12:57.119,2026-08-25 10:12:57.119,t,
+cmt8icf10000fc4aozyfir83n,resend@test.com,$2a$10$.N7KIfvb7rXgHXJ1pEpmHuzJQwo9u7jI6814NHGIXPG9qztTCxzDi,,Resend User,AGENT,cmt8icf10000ec4ao944ka150,2026-08-25 10:13:59.7,2026-08-25 10:13:59.7,t,
+cmt8lw1d50001c4ywbgsatmr5,trum@example.com,$2a$10$4Nfe/ZylzaqUGkZW80dmOu425B7SVjjkiRP/FWoj0QBW9H8QIvnMG,,Trump,AGENT,cmt8lw1d50000c4ywfhcffhd8,2026-08-25 11:53:13.961,2026-08-25 11:53:13.961,t,

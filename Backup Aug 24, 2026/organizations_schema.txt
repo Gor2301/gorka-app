@@ -1,0 +1,24 @@
+                                  Table "public.organizations"
+       Column       |              Type              | Collation | Nullable |      Default      
+--------------------+--------------------------------+-----------+----------+-------------------
+ id                 | text                           |           | not null | 
+ name               | text                           |           | not null | 
+ timezone           | text                           |           | not null | 'UTC'::text
+ createdAt          | timestamp(3) without time zone |           | not null | CURRENT_TIMESTAMP
+ updatedAt          | timestamp(3) without time zone |           | not null | 
+ registrationNumber | text                           |           |          | 
+ taxId              | text                           |           |          | 
+ primaryContact     | text                           |           |          | 
+ contactEmail       | text                           |           |          | 
+ contactPhone       | text                           |           |          | 
+ address            | text                           |           |          | 
+ clientType         | text                           |           |          | 
+Indexes:
+    "organizations_pkey" PRIMARY KEY, btree (id)
+Referenced by:
+    TABLE "activity_logs" CONSTRAINT "activity_logs_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES organizations(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    TABLE "calendar_events" CONSTRAINT "calendar_events_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES organizations(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    TABLE "connectors" CONSTRAINT "connectors_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES organizations(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    TABLE "debtors" CONSTRAINT "debtors_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES organizations(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    TABLE "users" CONSTRAINT "users_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES organizations(id) ON UPDATE CASCADE ON DELETE RESTRICT
+

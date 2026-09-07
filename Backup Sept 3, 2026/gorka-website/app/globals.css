@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gorka-cream: #fbf9f4;
+  --color-gorka-dark: #1a1a1a;
+  --color-gorka-black: #000000;
+  --color-gorka-violet: #712fff;
+  --color-gorka-red: #f01428;
+  
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  --spacing-section-y-sm: 80px;
+  --spacing-section-y-md: 100px;
+  --spacing-section-y-lg: 160px;
+  --spacing-section-x: 40px;
+  
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    background-color: var(--color-gorka-cream);
+    color: var(--color-gorka-dark);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer components {
+  .container-gorka {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--spacing-section-x);
+    padding-right: var(--spacing-section-x);
+  }
+  
+  .section-padding {
+    padding-top: var(--spacing-section-y-sm);
+    padding-bottom: var(--spacing-section-y-sm);
+  }
+  
+  .section-padding-lg {
+    padding-top: var(--spacing-section-y-md);
+    padding-bottom: var(--spacing-section-y-md);
+  }
+  
+  .dark-section {
+    background-color: var(--color-gorka-black);
+    color: white;
+  }
+}
+
+@media (min-width: 768px) {
+  .container-gorka {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+  
+  .section-padding {
+    padding-top: var(--spacing-section-y-md);
+    padding-bottom: var(--spacing-section-y-md);
+  }
+  
+  .section-padding-lg {
+    padding-top: var(--spacing-section-y-lg);
+    padding-bottom: var(--spacing-section-y-lg);
+  }
+}

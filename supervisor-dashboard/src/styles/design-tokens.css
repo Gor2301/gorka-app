@@ -1,0 +1,36 @@
+:root {
+  /* Colors */
+  --color-sidebar: #FAFAFA;
+  --color-background: #FFFFFF;
+  --color-border: #E3E3E3;
+  --color-text-primary: #111111;
+  --color-text-secondary: #4A4A4A;
+  --color-text-muted: #8A8A8A;
+  --color-accent: #7C3AED;
+  --color-accent-light: #F4F0FF;
+
+  /* Sizes */
+  --sidebar-width: 240px;
+  --header-height: 56px;
+  --nav-item-height: 36px;
+  --content-padding: 40px;
+
+  /* Typography */
+  --font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  --font-size-page-title: 28px;
+  --font-size-nav: 13px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  background: #FFFFFF;
+  color: #111111;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

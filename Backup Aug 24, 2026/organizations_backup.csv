@@ -1,0 +1,2 @@
+id,name,timezone,createdAt,updatedAt,registrationNumber,taxId,primaryContact,contactEmail,contactPhone,address,clientType
+org1,GORKA Demo,UTC,2026-08-24 16:37:37.756,2026-08-24 16:37:37.756,,,,,,,

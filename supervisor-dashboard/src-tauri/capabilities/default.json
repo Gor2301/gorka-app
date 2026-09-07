@@ -1,0 +1,13 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for GORKA Client Dashboard",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "store:default",
+    "dialog:default",
+    "fs:allow-appdata-read",
+    "fs:allow-appdata-write",
+    "fs:allow-appdata-meta"
+  ]
+}

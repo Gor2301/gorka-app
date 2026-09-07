@@ -1,18 +1,36 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "CommonJS",
+    "module": "commonjs",
     "lib": ["ES2020"],
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "strict": false,
+    "outDir": "./dist/backend",
+    "rootDir": "./src/backend",
+    "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "types": ["node"]
   },
   "include": [
     "src/backend/**/*"
   ],
-  "exclude": ["node_modules", "src/renderer", "src/main"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/backend/_disabled/**/*",
+    "src/backend/**/*.test.ts",
+    "src/backend/**/*.spec.ts"
+  ]
 }

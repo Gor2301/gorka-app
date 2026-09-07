@@ -1,119 +1,147 @@
 import express from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
-import { logger } from './config/logger';
+import cookieParser from 'cookie-parser';
+import dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
+import { authenticateToken } from './middleware/auth';
+import { errorHandler } from './middleware/errorHandler';
+import logger from './middleware/logger';
 
 // Import routes
 import authRoutes from './routes/auth';
-import debtorRoutes from './routes/debtors';
-import actionRoutes from './routes/actions';
-import communicationRoutes from './routes/communications';
-import templateRoutes from './routes/templates';
-import copilotRoutes from './routes/copilot.routes';
+import supportRoutes from './routes/support.routes';
+import statusRoutes from './routes/status';
+import auditRoutes from './routes/audit.routes';
+import analyticsRoutes from './routes/analytics.routes';
+import complianceRoutes from './routes/compliance.routes';
+import connectorRoutes from './routes/connector.routes';
+import calendarRoutes from './routes/calendar.routes';
+import permissionsRoutes from './routes/permissions.routes';
+import usersRoutes from './routes/users.routes';
+import dashboardRoutes from './routes/dashboard.routes';
+import debtorsRoutes from './routes/debtors';
+import clientsRoutes from './routes/clients';
 
-// Super Admin Routes
-import superAdminAuthRoutes from './super-admin/routes/auth.routes';
-import superAdminClientsRoutes from './super-admin/routes/clients.routes';
-import superAdminAnalyticsRoutes from './super-admin/routes/analytics.routes';
-import superAdminAuditRoutes from './super-admin/routes/audit.routes';
+dotenv.config();
+
+// ✅ CRITICAL: Fail fast if JWT_SECRET is missing
+if (!process.env.JWT_SECRET) {
+  console.error('❌ JWT_SECRET is not set in environment variables');
+  console.error('❌ Server will not start. Please set JWT_SECRET and restart.');
+  process.exit(1);
+}
+
+if (!process.env.DATABASE_URL) {
+  console.error('❌ DATABASE_URL is not set in environment variables');
+  console.error('❌ Server will not start. Please set DATABASE_URL and restart.');
+  process.exit(1);
+}
 
 const app = express();
+const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
-}));
+// ─── CORS Configuration ──────────────────────────────────────────────────
+// ✅ FIX: Added production domains + tauri/app origins
+const allowedOrigins = [
+  // Production
+  'https://www.gorka.click',
+  'https://platform.gorka.click',
+  'https://client.gorka.click',
+  'https://gorka.click',
+  // Development
+  'http://gorka.localhost:3001',
+  'http://platform.gorka.localhost:3002',
+  'http://client.gorka.localhost:5173',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  // Tauri/Electron desktop apps
+  'tauri://localhost',
+  'app://localhost',
+];
 
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:5555',
-    'https://gorka-super-admin.vercel.app'
-  ],
-  credentials: true
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Requested-With'],
 }));
+
+// ✅ Handle preflight requests explicitly
+app.options('*', cors());;
+
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(logger);
 
-// Request logging middleware
-app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`);
-  next();
-});
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    status: 'healthy',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// ============================================
-// MAIN API ROUTES
-// ============================================
-
-// Authentication
+// ─── Routes ─────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+app.use('/api/support', authenticateToken, supportRoutes);
+app.use('/api/status', authenticateToken, statusRoutes);
+app.use('/api/audit', authenticateToken, auditRoutes);
+app.use('/api/analytics', authenticateToken, analyticsRoutes);
+app.use('/api/compliance', authenticateToken, complianceRoutes);
+app.use('/api/connectors', authenticateToken, connectorRoutes);
+app.use('/api/calendar', authenticateToken, calendarRoutes);
+app.use('/api/permissions', authenticateToken, permissionsRoutes);
+app.use('/api/users', authenticateToken, usersRoutes);
+app.use('/api/dashboard', authenticateToken, dashboardRoutes);
+app.use('/api/debtors', authenticateToken, debtorsRoutes);
+app.use('/api/clients', authenticateToken, clientsRoutes);
 
-// Core Resources
-app.use('/api/debtors', debtorRoutes);
-app.use('/api/actions', actionRoutes);
-app.use('/api/communications', communicationRoutes);
-app.use('/api/templates', templateRoutes);
-
-// AI Copilot
-app.use('/api/copilot', copilotRoutes);
-
-// ============================================
-// SUPER ADMIN API ROUTES (v1)
-// ============================================
-
-// Super Admin Authentication
-app.use('/api/v1/admin/auth', superAdminAuthRoutes);
-
-// Super Admin Client Management
-app.use('/api/v1/admin/clients', superAdminClientsRoutes);
-
-// Super Admin Analytics
-app.use('/api/v1/admin/analytics', superAdminAnalyticsRoutes);
-
-// Super Admin Audit Logs
-app.use('/api/v1/admin/audit', superAdminAuditRoutes);
-
-// ============================================
-// 404 Handler
-// ============================================
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Route not found'
+// ─── Health Check ──────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
   });
 });
 
-// ============================================
-// Error Handler
-// ============================================
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  logger.error('Unhandled error:', err);
-  res.status(500).json({
-    success: false,
-    error: 'Internal server error'
-  });
+// ─── Forbidden Endpoint Blacklist (Production Only) ────────────────────
+// ✅ FIX: Block debtor endpoints in production
+const FORBIDDEN_ENDPOINTS = [
+  '/api/debtors',
+  '/api/debtors/*',
+  '/api/communications',
+  '/api/communications/*',
+  '/api/notes',
+  '/api/notes/*',
+  '/api/actions',
+  '/api/actions/*',
+  '/api/debts',
+  '/api/debts/*',
+  '/api/search',
+  '/api/reports',
+  '/api/exports',
+];
+
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    const path = req.path;
+    const isForbidden = FORBIDDEN_ENDPOINTS.some(pattern => {
+      const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`);
+      return regex.test(path);
+    });
+    if (isForbidden) {
+      console.log(`🔴 BLOCKED: Forbidden endpoint accessed: ${path}`);
+      return res.status(404).json({ error: 'Not Found' });
+    }
+  }
+  return next();
 });
 
-// ============================================
-// Start Server
-// ============================================
+// ─── Error Handler ──────────────────────────────────────────────────────
+app.use(errorHandler);
+
+// ─── Start Server ──────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  logger.info(`🚀 GORKA Application initialized`);
-  logger.info(`🚀 Express server running on http://localhost:${PORT}`);
-  logger.info(`📚 Swagger docs available at http://localhost:${PORT}/api/docs`);
-  logger.info(`🤖 Copilot available at http://localhost:${PORT}/api/copilot/health`);
+  console.log(`🚀 Express server running on http://localhost:${PORT}`);
+  console.log(`📚 API docs available at http://localhost:${PORT}/api/docs`);
+  console.log(`✅ Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 export default app;

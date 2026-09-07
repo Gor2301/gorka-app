@@ -1,0 +1,26 @@
+                                    Table "public.debtors"
+      Column      |              Type              | Collation | Nullable |      Default      
+------------------+--------------------------------+-----------+----------+-------------------
+ id               | text                           |           | not null | 
+ organizationId   | text                           |           | not null | 
+ name             | text                           |           | not null | 
+ email            | text                           |           |          | 
+ phone            | text                           |           |          | 
+ address          | text                           |           |          | 
+ totalDebt        | double precision               |           |          | 
+ daysOverdue      | integer                        |           |          | 
+ status           | text                           |           | not null | 'ACTIVE'::text
+ createdAt        | timestamp(3) without time zone |           | not null | CURRENT_TIMESTAMP
+ updatedAt        | timestamp(3) without time zone |           | not null | 
+ nextFollowUpDate | timestamp(3) without time zone |           |          | 
+ nextPaymentDate  | timestamp(3) without time zone |           |          | 
+Indexes:
+    "debtors_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "debtors_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES organizations(id) ON UPDATE CASCADE ON DELETE RESTRICT
+Referenced by:
+    TABLE "actions" CONSTRAINT "actions_debtorId_fkey" FOREIGN KEY ("debtorId") REFERENCES debtors(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    TABLE "calendar_events" CONSTRAINT "calendar_events_debtorId_fkey" FOREIGN KEY ("debtorId") REFERENCES debtors(id) ON UPDATE CASCADE ON DELETE SET NULL
+    TABLE "debts" CONSTRAINT "debts_debtorId_fkey" FOREIGN KEY ("debtorId") REFERENCES debtors(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    TABLE "message_logs" CONSTRAINT "message_logs_debtorId_fkey" FOREIGN KEY ("debtorId") REFERENCES debtors(id) ON UPDATE CASCADE ON DELETE SET NULL
+

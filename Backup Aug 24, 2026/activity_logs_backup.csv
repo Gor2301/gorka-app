@@ -1,0 +1,4 @@
+id,organizationId,userId,action,entityType,entityId,details,ipAddress,userAgent,createdAt
+cmt72tons000lo83wurotgxcm,org1,user1,UPLOAD,DEBTOR,,"{""total"": 10, ""errors"": 0, ""created"": 10}",,,2026-08-24 10:11:45.305
+cmt7395tf000210j3mu1ncyiy,org1,user1,CREATE,USER,cmt7395t1000010j3o883tgbj,"{""name"": ""Musk"", ""role"": ""AGENT"", ""email"": ""agaent3@gorka.click""}",,,2026-08-24 10:23:47.379
+cmt74cz4x0003mr2oboxdnbev,org1,user1,CREATE,CALENDAR_EVENT,cmt74cz4k0001mr2ox9wnilnw,"{""title"": ""birthday"", ""eventType"": ""MANUAL""}",,,2026-08-24 10:54:44.961

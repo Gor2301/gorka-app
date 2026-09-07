@@ -1,253 +1,563 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { logger } from '../config/logger';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { z } from 'zod';
+import { PrismaClient } from '@prisma/client';
+import { randomBytes } from 'crypto';
+import { Resend } from 'resend';
+import { getCookieOptions } from '../utils/cookies';
+import { rateLimit } from 'express-rate-limit';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'gorka-secret-key-change-this';
+// Email configuration
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@gorka.click';
 
-// Helper: Generate JWT token
-const generateToken = (userId: string, email: string, role: string, organizationId: string) => {
-  return jwt.sign(
-    { userId, email, role, organizationId },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
-};
+// Rate limiters
+const loginIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 requests per IP
+  message: { success: false, error: 'Too many login attempts from this IP' },
+});
 
-/**
- * POST /api/auth/register
- * Register a new user
- */
-router.post('/register', async (req: Request, res: Response) => {
+const loginEmailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5, // 5 failed attempts per email
+  message: { success: false, error: 'Too many failed login attempts' },
+  keyGenerator: (req) => req.body.email || req.ip,
+});
+
+// Validation schemas
+const registerSchema = z.object({
+  companyName: z.string().min(2),
+  clientType: z.enum(['AGENCY', 'CORPORATE', 'FREELANCER']),
+  registrationNumber: z.string().optional(),
+  taxId: z.string().optional(),
+  firstName: z.string().min(2, 'First name is required'),
+  lastName: z.string().min(2, 'Last name is required'),
+  primaryContact: z.string().optional(),
+  contactEmail: z.string().email().toLowerCase(),
+  contactPhone: z.string().regex(/^\+?[1-9]\d{1,14}$/),
+  address: z.string().optional(),
+  website: z.string().url().optional().or(z.literal('')),
+  password: z.string().min(8),
+});
+
+const loginSchema = z.object({
+  email: z.string().email().toLowerCase(),
+  password: z.string().min(1),
+});
+
+const verifyEmailSchema = z.object({
+  token: z.string().min(1),
+});
+
+const completeRegistrationSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8),
+});
+
+// ─── REGISTER ──────────────────────────────────────────────────────────────
+router.post('/register', async (req: Request, res: Response): Promise<any> => {
   try {
-    const { email, password, name, organizationId, role } = req.body;
-
-    // Validation
-    if (!email || !password) {
+    const result = registerSchema.safeParse(req.body);
+    if (!result.success) {
       return res.status(400).json({
         success: false,
-        error: 'Email and password are required'
+        error: result.error.errors[0].message,
       });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        error: 'Password must be at least 6 characters'
-      });
-    }
+    const data = result.data;
+    const fullName = `${data.firstName} ${data.lastName}`.trim();
 
-    // Check if user exists
-    const existing = await prisma.user.findUnique({
-      where: { email }
+    // Check if organization exists
+    const existingOrg = await prisma.organization.findFirst({
+      where: { contactEmail: data.contactEmail },
     });
 
-    if (existing) {
-      return res.status(400).json({
+    if (existingOrg) {
+      return res.status(409).json({
         success: false,
-        error: 'User already exists'
+        error: 'Organization already registered with this email',
       });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash the password
+    const passwordHash = await bcrypt.hash(data.password, 12);
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name: name || email.split('@')[0],
-        organizationId: organizationId || 'org_123',
-        role: role || 'AGENT',
-        status: 'ACTIVE'
-      }
+    // Generate verification token
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = await bcrypt.hash(rawToken, 12);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Hash email for verification token (for lookup)
+    const emailHash = await bcrypt.hash(data.contactEmail, 12);
+
+    // Create organization and user in a transaction
+    const resultData = await prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          name: data.companyName,
+          clientType: data.clientType,
+          registrationNumber: data.registrationNumber || null,
+          taxId: data.taxId || null,
+          primaryContact: fullName,
+          contactEmail: data.contactEmail,
+          contactPhone: data.contactPhone,
+          address: data.address || null,
+          website: data.website || null,
+          verificationStatus: 'PENDING_EMAIL',
+          emailVerificationToken: tokenHash,
+          emailVerificationExpires: expiresAt,
+        },
+      });
+
+      // Find or create the default role
+// Role table doesn't exist in schema — role is set directly on user
+
+      const user = await tx.user.create({
+        data: {
+          email: data.contactEmail,
+          passwordHash,
+          name: fullName,
+          role: 'OWNER',
+          organizationId: org.id,
+          isActive: true,
+        },
+      });
+
+      return { org, user };
     });
 
-    // Generate token
-    const token = generateToken(user.id, user.email, user.role, user.organizationId);
+    // Send verification email via Resend
+    try {
+      const verificationLink = `https://www.gorka.click/verify-email?token=${rawToken}`;
 
-    logger.info(`User registered: ${user.email}`);
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: data.contactEmail,
+        subject: 'Welcome to GORKA — Verify Your Email',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #7C3AED;">Welcome to GORKA</h1>
+            <p>Thank you for registering ${data.companyName}.</p>
+            <p>Please verify your email address by clicking the button below:</p>
+            <a href="${verificationLink}" style="display: inline-block; background: #7C3AED; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
+              Verify Email
+            </a>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; background: #f3f4f6; padding: 12px; border-radius: 4px;">${verificationLink}</p>
+            <p>This link expires in 24 hours.</p>
+            <p>— The GORKA Team</p>
+          </div>
+        `,
+      });
 
-    res.status(201).json({
+      console.log(`✅ Verification email sent to ${data.contactEmail}`);
+    } catch (emailError) {
+      console.error('❌ Failed to send verification email:', emailError);
+      // Still return success — user can request resend later
+    }
+
+    return res.status(201).json({
       success: true,
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role
-        },
-        token
+        organizationId: resultData.org.id,
+        userId: resultData.user.id,
+        message: 'Registration successful. Please verify your email.',
       },
-      message: 'User registered successfully'
     });
-
   } catch (error) {
-    logger.error('Error in register:', error);
-    res.status(500).json({
+    console.error('❌ Registration error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Failed to register user'
+      error: 'Registration failed',
     });
   }
 });
 
-/**
- * POST /api/auth/login
- * Login user
- */
-router.post('/login', async (req: Request, res: Response) => {
+// ─── VERIFY EMAIL ─────────────────────────────────────────────────────────
+router.post('/verify-email', async (req: Request, res: Response): Promise<any> => {
   try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
+    const result = verifyEmailSchema.safeParse(req.body);
+    if (!result.success) {
       return res.status(400).json({
         success: false,
-        error: 'Email and password are required'
+        error: result.error.errors[0].message,
       });
     }
+
+    const { token } = result.data;
+
+    // Find organization with pending verification
+    const org = await prisma.organization.findFirst({
+      where: {
+        verificationStatus: 'PENDING_EMAIL',
+        emailVerificationToken: { not: null },
+        emailVerificationExpires: { gt: new Date() },
+      },
+    });
+
+    if (!org) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invalid or expired verification token',
+      });
+    }
+
+    // Verify the token
+    const isValid = await bcrypt.compare(token, org.emailVerificationToken!);
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid verification token',
+      });
+    }
+
+    // Update organization
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: {
+        verificationStatus: 'ACTIVE',
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+      },
+    });
+
+    // Create registration session cookie
+    const sessionToken = jwt.sign(
+      {
+        organizationId: org.id,
+        email: org.contactEmail,
+        purpose: 'registration',
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: '1h' }
+    );
+
+    const cookieOptions = getCookieOptions();
+
+    return res
+      .cookie('gorka_registration_session', sessionToken, cookieOptions)
+      .status(200)
+      .json({
+        success: true,
+        data: {
+          organizationId: org.id,
+          email: org.contactEmail,
+          message: 'Email verified successfully',
+        },
+      });
+  } catch (error) {
+    console.error('❌ Verification error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Verification failed',
+    });
+  }
+});
+
+// ─── COMPLETE REGISTRATION ──────────────────────────────────────────────
+router.post('/complete-registration', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const result = completeRegistrationSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error.errors[0].message,
+      });
+    }
+
+    const { token, password } = result.data;
+
+    // Get registration session from cookie
+    const sessionToken = req.cookies?.gorka_registration_session;
+    if (!sessionToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'Registration session expired. Please start over.',
+      });
+    }
+
+    let sessionData: any;
+    try {
+      sessionData = jwt.verify(sessionToken, process.env.JWT_SECRET!);
+    } catch {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid registration session. Please start over.',
+      });
+    }
+
+    if (sessionData.purpose !== 'registration') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid session',
+      });
+    }
+
+    // Check if token matches (from request body)
+    const org = await prisma.organization.findFirst({
+      where: {
+        id: sessionData.organizationId,
+        verificationStatus: 'ACTIVE',
+      },
+      include: {
+        users: true,
+      },
+    });
+
+    if (!org) {
+      return res.status(404).json({
+        success: false,
+        error: 'Organization not found or not verified',
+      });
+    }
+
+    // Hash the new password
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Update user's password
+    const user = await prisma.user.update({
+      where: { email: org.contactEmail || undefined },
+      data: { passwordHash, isActive: true },
+    });
+
+    // Clear registration session cookie
+    res.clearCookie('gorka_registration_session');
+
+    // Create auth token
+    const authToken = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        organizationId: user.organizationId,
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    const cookieOptions = getCookieOptions();
+
+    return res
+      .cookie('gorka_session', authToken, cookieOptions)
+      .status(200)
+      .json({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            organizationId: user.organizationId,
+          },
+redirectUrl: user.role === 'PLATFORM_OWNER'
+  ? 'http://platform.gorka.localhost:3002'
+  : 'http://client.gorka.localhost:5173',
+        },
+      });
+  } catch (error) {
+    console.error('❌ Complete registration error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to complete registration',
+    });
+  }
+});
+
+// ─── LOGIN ──────────────────────────────────────────────────────────────
+router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const result = loginSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error.errors[0].message,
+      });
+    }
+
+    const { email, password } = result.data;
+
+    console.log(`🔍 LOGIN ATTEMPT: ${email}`);
 
     // Find user
     const user = await prisma.user.findUnique({
       where: { email },
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
     });
 
     if (!user) {
+      console.log(`🔴 LOGIN FAILED: User not found: ${email}`);
       return res.status(401).json({
         success: false,
-        error: 'Invalid email or password'
+        error: 'Invalid email or password',
       });
     }
 
-    // Check if user is active
-    if (user.status !== 'ACTIVE') {
+    console.log(`🟢 LOGIN USER FOUND:`, {
+      id: user.id,
+      email: user.email,
+      isActive: user.isActive,
+      role: user.role,
+    });
+
+    if (!user.isActive) {
+      console.log(`🔴 LOGIN FAILED: User inactive: ${email}`);
       return res.status(401).json({
         success: false,
-        error: 'Account is not active'
+        error: 'Account is inactive. Please contact support.',
       });
     }
 
     // Check password
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    console.log(`🟢 LOGIN CHECKPOINT 1 — PASSWORD VALID: ${isValidPassword}`);
+
+    if (!isValidPassword) {
+      console.log(`🔴 LOGIN FAILED: Invalid password for: ${email}`);
       return res.status(401).json({
         success: false,
-        error: 'Invalid email or password'
+        error: 'Invalid email or password',
       });
     }
+
+    console.log(`🟢 LOGIN CHECKPOINT 2 — PASSWORD PASSED`);
 
     // Update last login
     await prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() }
+      data: { lastLogin: new Date() },
     });
 
-    // Generate token
-    const token = generateToken(user.id, user.email, user.role, user.organizationId);
+    console.log(`🟢 LOGIN CHECKPOINT 3 — LAST LOGIN UPDATED`);
 
-    logger.info(`User logged in: ${user.email}`);
-
-    res.json({
-      success: true,
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          organization: user.organization
-        },
-        token
+    // Create JWT token
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        organizationId: user.organizationId,
       },
-      message: 'Login successful'
-    });
+      process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
 
+    console.log(`🟢 LOGIN CHECKPOINT 4 — JWT CREATED`);
+
+    const cookieOptions = getCookieOptions();
+
+    console.log(`🟢 LOGIN CHECKPOINT 5 — COOKIE SET`);
+
+    console.log(`🟢 LOGIN CHECKPOINT 6 — RETURNING 200`);
+
+    return res
+      .cookie('gorka_session', token, cookieOptions)
+      .status(200)
+      .json({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            organizationId: user.organizationId,
+          },
+redirectUrl: user.role === 'PLATFORM_OWNER'
+  ? 'http://platform.gorka.localhost:3002'
+  : 'http://client.gorka.localhost:5173',
+          token, // For desktop apps (Bearer token)
+        },
+      });
   } catch (error) {
-    logger.error('Error in login:', error);
-    res.status(500).json({
+    console.error('❌ Login error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Failed to login'
+      error: 'Login failed',
     });
   }
 });
 
-/**
- * GET /api/auth/me
- * Get current user info
- */
-router.get('/me', async (req: Request, res: Response) => {
-  try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        error: 'No token provided'
-      });
-    }
+// ─── LOGOUT ──────────────────────────────────────────────────────────────
+router.post('/logout', (req: Request, res: Response): any => {
+  res.clearCookie('gorka_session', {
+    path: '/',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+  });
 
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
-    });
+  res.clearCookie('gorka_registration_session', {
+    path: '/',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: 'Logged out successfully',
+  });
+});
+
+// ─── GET ME ──────────────────────────────────────────────────────────────
+import { authenticateToken } from '../middleware/auth';
+
+router.get('/me', authenticateToken, async (req: Request, res: Response): Promise<any> => {
+
+  try {
+    const user = (req as any).user;
+
+console.log('[ME] User from token:', user);
+console.log('[ME] User ID:', user?.id);
+console.log('[ME] User userId:', user?.userId);
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'User not found'
+        error: 'Not authenticated',
       });
     }
 
-    res.json({
+    const fullUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: {
+        organization: true,
+      },
+    });
+
+    if (!fullUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    return res.status(200).json({
       success: true,
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          organization: user.organization
-        }
-      }
+        id: fullUser.id,
+        email: fullUser.email,
+        name: fullUser.name,
+        role: fullUser.role,
+        organizationId: fullUser.organizationId,
+        organization: fullUser.organization,
+        isActive: fullUser.isActive,
+        lastLogin: fullUser.lastLogin,
+      },
     });
-
   } catch (error) {
-    logger.error('Error in /me:', error);
-    res.status(401).json({
+    console.error('❌ Get me error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Invalid token'
+      error: 'Failed to get user data',
     });
   }
-});
-
-/**
- * POST /api/auth/logout
- * Logout user (client-side token removal)
- */
-router.post('/logout', async (req: Request, res: Response) => {
-  res.json({
-    success: true,
-    message: 'Logged out successfully'
-  });
 });
 
 export default router;

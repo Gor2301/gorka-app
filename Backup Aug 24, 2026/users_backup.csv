@@ -1,0 +1,3 @@
+id,email,passwordHash,password,name,role,organizationId,createdAt,updatedAt,isActive,lastLogin
+cmt7395t1000010j3o883tgbj,agaent3@gorka.click,$2a$10$krU33vpZFeAxzuUZCe8OHOdXo6/DZrcGz/tunaSypZ1F9lTLNLHES,$2a$10$krU33vpZFeAxzuUZCe8OHOdXo6/DZrcGz/tunaSypZ1F9lTLNLHES,Musk,AGENT,org1,2026-08-24 10:23:47.366,2026-08-24 10:23:47.366,t,
+user1,admin@gorka.click,$2a$10$uS6tZEfpErI4pODjS.miMuahqXUcApSsm5KzQ53Q8asHjMXstv7L.,,Admin,ADMIN,org1,2026-08-24 16:49:54.949,2026-08-24 13:01:14.512,t,2026-08-24 13:01:14.51

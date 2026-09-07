@@ -1,0 +1,8 @@
+id,name,timezone,createdAt,updatedAt,registrationNumber,taxId,primaryContact,contactEmail,contactPhone,address,clientType,billingEmail,billingPhone,emailVerifiedAt,rejectedAt,reviewNotes,stripeCustomerId,stripePaymentMethodId,suspendedAt,suspendedBy,termsAcceptedAt,verificationStatus,verifiedAt,verifiedBy,website
+org1,GORKA Demo,UTC,2026-08-24 16:37:37.756,2026-08-24 16:37:37.756,,,,,,,,,,,,,,,,,,PENDING_EMAIL,,,
+cmt8h2bkw0000c4swuooiiu0d,Test Agency,UTC,2026-08-25 09:38:09.057,2026-08-25 09:38:09.057,,,John Doe,john@test.com,+1234567890,,AGENCY,,,,,,,,,,2026-08-25 09:38:09.052,PENDING_EMAIL,,,
+cmt8ha5150000c4ys96brjqet,Verify Test,UTC,2026-08-25 09:44:13.817,2026-08-25 09:45:27.777,,,Jane Doe,jane@test.com,+1234567890,,AGENCY,,,2026-08-25 09:45:27.765,,,,,,,2026-08-25 09:44:13.813,PENDING_REVIEW,,,
+cmt8hlp100000c4ewiy24iehc,Updated Client Name,UTC,2026-08-25 09:53:12.948,2026-08-25 10:12:25.57,,,Test User,test@client.com,+1234567890,,AGENCY,,,2026-08-25 09:53:34.63,,Issue resolved,,,,,2026-08-25 09:53:12.945,ACTIVE,2026-08-25 09:54:48.485,system,https://example.com
+cmt8ib2qm0006c4aonljjr0mn,Reject Test,UTC,2026-08-25 10:12:57.119,2026-08-25 10:13:35.782,,,Reject User,reject@test.com,+1234567890,,AGENCY,,,2026-08-25 10:13:18.202,2026-08-25 10:13:35.78,Invalid business information,,,,,2026-08-25 10:12:57.116,REJECTED,,,
+cmt8icf10000ec4ao944ka150,Resend Test,UTC,2026-08-25 10:13:59.7,2026-08-25 10:13:59.7,,,Resend User,resend@test.com,+1234567890,,AGENCY,,,,,,,,,,2026-08-25 10:13:59.697,PENDING_EMAIL,,,
+cmt8lw1d50000c4ywfhcffhd8,Agency Alfa,UTC,2026-08-25 11:53:13.961,2026-08-25 12:06:50.308,1234567,1234567,Trump Ha Ha ,trum@example.com,1234567890,123 nan,AGENCY,www@text.com,12345678,,,,,,,,2026-08-25 11:53:13.959,PENDING_EMAIL,,,""

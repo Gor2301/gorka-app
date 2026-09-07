@@ -1,0 +1,236 @@
+import { getPool } from '../db';
+
+interface HealthResult {
+  status: 'online' | 'offline' | 'degraded';
+  responseTime: number;
+  message?: string;
+}
+
+interface ServiceStatus {
+  serviceName: string;
+  status: 'online' | 'offline' | 'degraded';
+  responseTime: number | null;
+  message: string | null;
+  lastCheck: Date;
+}
+
+export class HealthCheckService {
+  private readonly TIMEOUT = 5000;
+  private readonly organizationId: string;
+
+  constructor(organizationId: string) {
+    this.organizationId = organizationId;
+  }
+
+  async checkAll(): Promise<ServiceStatus[]> {
+    const checks = await Promise.allSettled([
+      this.checkDashboard(),
+      this.checkAPI(),
+      this.checkDatabase(),
+      this.checkConnectors(),
+      this.checkJobs()
+    ]);
+
+    const services = ['dashboard', 'api', 'database', 'connectors', 'jobs'];
+    
+    return checks.map((result, index) => {
+      return this.formatResult(services[index], result);
+    });
+  }
+
+  private async checkDashboard(): Promise<HealthResult> {
+    const start = Date.now();
+    try {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const response = await fetch(`${frontendUrl}/`, {
+        signal: AbortSignal.timeout(this.TIMEOUT)
+      });
+      const responseTime = Date.now() - start;
+      return {
+        status: response.ok ? 'online' : 'degraded',
+        responseTime,
+        message: response.ok ? undefined : 'Dashboard returned error'
+      };
+    } catch (error) {
+      return {
+        status: 'offline',
+        responseTime: Date.now() - start,
+        message: error instanceof Error ? error.message : 'Dashboard unreachable'
+      };
+    }
+  }
+
+  private async checkAPI(): Promise<HealthResult> {
+    const start = Date.now();
+    try {
+      const apiUrl = process.env.API_URL || 'http://localhost:3000';
+      const response = await fetch(`${apiUrl}/api/health`, {
+        signal: AbortSignal.timeout(this.TIMEOUT)
+      });
+      const responseTime = Date.now() - start;
+      
+      if (!response.ok) {
+        return { status: 'degraded', responseTime, message: 'API returned error' };
+      }
+      
+      return {
+        status: 'online',
+        responseTime,
+        message: undefined
+      };
+    } catch (error) {
+      return {
+        status: 'offline',
+        responseTime: Date.now() - start,
+        message: error instanceof Error ? error.message : 'API unreachable'
+      };
+    }
+  }
+
+  private async checkDatabase(): Promise<HealthResult> {
+    const start = Date.now();
+    try {
+      const pool = getPool();
+      await pool.query('SELECT 1');
+      const responseTime = Date.now() - start;
+      
+      return {
+        status: responseTime < 1000 ? 'online' : 'degraded',
+        responseTime,
+        message: responseTime >= 1000 ? 'Database response slow' : undefined
+      };
+    } catch (error) {
+      return {
+        status: 'offline',
+        responseTime: Date.now() - start,
+        message: error instanceof Error ? error.message : 'Database unreachable'
+      };
+    }
+  }
+
+  private async checkConnectors(): Promise<HealthResult> {
+    const start = Date.now();
+    try {
+      const pool = getPool();
+const result = await pool.query(
+  `SELECT * FROM external_enrichments 
+   WHERE "organizationId" = $1 
+   LIMIT 5`,
+  [this.organizationId]
+);
+      
+      const responseTime = Date.now() - start;
+      
+      if (result.rows.length === 0) {
+        return {
+          status: 'degraded',
+          responseTime,
+          message: 'No connectors configured'
+        };
+      }
+      
+      return {
+        status: 'online',
+        responseTime,
+        message: undefined
+      };
+    } catch (error) {
+      return {
+        status: 'offline',
+        responseTime: Date.now() - start,
+        message: error instanceof Error ? error.message : 'Connectors unreachable'
+      };
+    }
+  }
+
+  private async checkJobs(): Promise<HealthResult> {
+    const start = Date.now();
+    try {
+      const pool = getPool();
+      const result = await pool.query(
+        `SELECT * FROM "JobQueue" 
+         WHERE "createdAt" > NOW() - INTERVAL '24 hours'
+         ORDER BY "createdAt" DESC 
+         LIMIT 1`
+      );
+      
+      const responseTime = Date.now() - start;
+      
+      if (result.rows.length === 0) {
+        return {
+          status: 'degraded',
+          responseTime,
+          message: 'No jobs run in last 24 hours'
+        };
+      }
+      
+      return {
+        status: 'online',
+        responseTime,
+        message: undefined
+      };
+    } catch (error) {
+      return {
+        status: 'offline',
+        responseTime: Date.now() - start,
+        message: error instanceof Error ? error.message : 'Jobs service unreachable'
+      };
+    }
+  }
+
+  private formatResult(service: string, result: PromiseSettledResult<HealthResult>): ServiceStatus {
+    if (result.status === 'rejected') {
+      return {
+        serviceName: service,
+        status: 'offline',
+        responseTime: null,
+        message: result.reason?.message || 'Check failed',
+        lastCheck: new Date()
+      };
+    }
+
+    return {
+      serviceName: service,
+      status: result.value.status,
+      responseTime: result.value.responseTime,
+      message: result.value.message || null,
+      lastCheck: new Date()
+    };
+  }
+
+  async saveStatuses(statuses: ServiceStatus[]): Promise<void> {
+    const pool = getPool();
+
+    for (const status of statuses) {
+      await pool.query(
+        `INSERT INTO "ServiceStatus" ("organizationId", "serviceName", "status", "statusMessage", "responseTime", "lastCheck")
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT ("organizationId", "serviceName") 
+         DO UPDATE SET 
+           "status" = EXCLUDED."status",
+           "statusMessage" = EXCLUDED."statusMessage",
+           "responseTime" = EXCLUDED."responseTime",
+           "lastCheck" = EXCLUDED."lastCheck"`,
+        [
+          this.organizationId,
+          status.serviceName,
+          status.status,
+          status.message,
+          status.responseTime,
+          new Date()
+        ]
+      );
+
+      await pool.query(
+        `INSERT INTO "StatusHistory" ("organizationId", "serviceName", "status", "responseTime")
+         VALUES ($1, $2, $3, $4)`,
+        [
+          this.organizationId,
+          status.serviceName,
+          status.status,
+          status.responseTime
+        ]
+      );
+    }
+  }
+}

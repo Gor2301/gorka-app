@@ -1,0 +1,225 @@
+{
+  "nav": {
+    "home": "Home",
+    "about": "About",
+    "pricing": "Pricing",
+    "faq": "FAQ",
+    "contact": "Contact",
+    "bookDemo": "Book a Demo"
+  },
+  "hero": {
+    "title": "AI-Powered Debt Collection Platform",
+    "subtitle": "Built for agencies. Ready for banks. Automate collections with AI Copilot, multi-channel communications, and local-first data security.",
+    "ctaPrimary": "Get Started Free",
+    "ctaSecondary": "Book a Demo"
+  },
+  "features": {
+    "title": "Built for collections, designed for compliance",
+    "items": [
+      {
+        "title": "Multi-user roles & permissions",
+        "description": "Granular access control for agents, managers, and admins — built for agency workflows."
+      },
+      {
+        "title": "CSV import with dynamic detection",
+        "description": "Upload client and debtor files in any format — GORKA auto-detects columns and maps them."
+      },
+      {
+        "title": "AI Copilot",
+        "description": "Generate follow-up emails, strategy recommendations, and insights — powered by Gemini."
+      },
+      {
+        "title": "Action Center",
+        "description": "Task and workflow management for collection agents — track every step."
+      },
+      {
+        "title": "Local-first architecture",
+        "description": "Your data stays on your infrastructure — never uploaded to third-party servers."
+      }
+    ]
+  },
+  "twoColumn": {
+    "security": {
+      "title": "Your data stays yours",
+      "description": "GORKA uses a local-first architecture — your data never leaves your infrastructure unless you choose to use a cloud provider.",
+      "detail": "For banks and agencies handling sensitive debtor information, this means full control over compliance, security, and data sovereignty."
+    },
+    "copilot": {
+      "title": "AI Copilot that actually helps",
+      "description": "GORKA's AI Copilot generates follow-up emails, strategy recommendations, and insights — all reviewed and approved by your team before sending.",
+      "detail": "Powered by Gemini, it learns your agency's tone and patterns, making every interaction more effective without sacrificing human judgment."
+    }
+  },
+  "comparison": {
+    "title": "Why GORKA",
+    "rows": [
+      { "gorka": "Dynamic, automated data organization", "other": "Manual sorting, error-prone" },
+      { "gorka": "Data stays on your infrastructure", "other": "Data uploaded to third-party servers" },
+      { "gorka": "AI-assisted follow-ups", "other": "Manual tracking" },
+      { "gorka": "Built for agencies, scales to banks", "other": "One-size-fits-none" }
+    ]
+  },
+  "pricing": {
+    "title": "Pricing plans",
+    "tiers": [
+      {
+        "name": "Free",
+        "price": "$0",
+        "description": "Start small. Scale when ready.",
+        "cta": "Get Started",
+        "features": ["Basic AI tools", "Limited automation", "Basic chatbot integration", "Real-time reporting"]
+      },
+      {
+        "name": "Professional",
+        "price": "$1,700",
+        "description": "Full power for growing agencies.",
+        "cta": "Get Started",
+        "features": ["Everything in Free", "Advanced analytics", "Premium chatbot", "Cross-platform integrations"]
+      },
+      {
+        "name": "Enterprise",
+        "price": "Contact us",
+        "description": "Custom solutions for banks and large agencies.",
+        "cta": "Contact Sales",
+        "features": ["Everything in Professional", "Dedicated growth manager", "Custom reports & dashboards", "Fully customized AI"]
+      }
+    ]
+  },
+  "faq": {
+    "title": "Questions answered",
+    "items": [
+      {
+        "question": "What is GORKA?",
+        "answer": "GORKA is an AI-powered debt collection platform built for agencies and banks. It combines AI Copilot, multi-channel communications, and local-first data security to streamline collections."
+      },
+      {
+        "question": "Who is it built for?",
+        "answer": "GORKA is built for debt collection agencies, banks, and financial institutions that need to manage debtor communications, track actions, and automate follow-ups."
+      },
+      {
+        "question": "How does data security work?",
+        "answer": "GORKA uses a local-first architecture — your data stays on your own infrastructure. Nothing is uploaded to third-party servers unless you explicitly choose to use a cloud provider."
+      },
+      {
+        "question": "Can I import my existing data?",
+        "answer": "Yes — GORKA supports CSV and Excel imports with dynamic column detection. No reformatting needed."
+      },
+      {
+        "question": "Do you offer a free trial?",
+        "answer": "Yes — the Free tier includes basic AI tools and automation. Upgrade when you're ready to scale."
+      },
+      {
+        "question": "How is this different from legacy tools?",
+        "answer": "GORKA automates what spreadsheets and legacy tools do manually — data organization, follow-ups, reporting — with AI assistance and local-first security."
+      },
+      {
+        "question": "What's your pricing model?",
+        "answer": "We offer three tiers: Free, Professional, and Enterprise. All tiers include AI tools and automation. Enterprise includes custom solutions."
+      }
+    ]
+  },
+  "finalCta": {
+    "title": "Ready to transform your collections workflow?",
+    "cta": "Book a Free Demo"
+  },
+  "footer": {
+    "tagline": "AI-powered debt collection for agencies and banks.",
+    "contact": "hello@gorka.click",
+    "copyright": "© 2026 GORKA. All rights reserved."
+  },
+  "about": {
+    "title": "About GORKA",
+    "content": "GORKA was built to solve the chaos of manual debt collection workflows. We combine AI, automation, and local-first security to help agencies and banks collect smarter."
+  },
+  "contact": {
+    "title": "Contact us",
+    "name": "Name",
+    "email": "Email",
+    "company": "Company (optional)",
+    "message": "Message",
+    "submit": "Send message",
+    "success": "Message sent successfully!",
+    "error": "Something went wrong. Please try again."
+  },
+  "auth": {
+    "register": {
+      "title": "Start your GORKA journey",
+      "step1": {
+        "title": "Company Information",
+        "companyName": "Company Name",
+        "clientType": "Client Type",
+        "clientTypeAgency": "Collection Agency",
+        "clientTypeCorporate": "Corporate",
+        "clientTypeFreelancer": "Freelancer",
+        "registrationNumber": "Registration Number (optional)",
+        "taxId": "Tax ID (optional)",
+        "primaryContact": "Primary Contact",
+        "contactEmail": "Contact Email",
+        "contactPhone": "Contact Phone",
+        "address": "Address (optional)",
+        "website": "Website (optional)",
+        "submit": "Continue"
+      },
+      "step2": {
+        "title": "Verify Your Email",
+        "subtitle": "We sent a verification link to",
+        "resend": "Resend verification email",
+        "resendSuccess": "Verification email resent!",
+        "checkEmail": "Please check your email and click the verification link.",
+        "continue": "Continue"
+      },
+      "step3": {
+        "title": "Create Your Account",
+        "password": "Password",
+        "passwordHint": "At least 8 characters with uppercase, lowercase, number, and special character",
+        "terms": "I agree to the Terms of Service and Privacy Policy",
+        "termsError": "You must accept the Terms of Service",
+        "submit": "Create Account"
+      },
+      "success": "Account created successfully! Redirecting...",
+      "error": "Something went wrong. Please try again."
+    },
+    "login": {
+      "title": "Welcome back to GORKA",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Log in",
+      "forgotPassword": "Forgot password?",
+      "noAccount": "Don't have an account?",
+      "register": "Register here",
+      "error": "Invalid email or password. Please try again."
+    },
+    "verifyEmail": {
+      "title": "Email Verification",
+      "verifying": "Verifying your email...",
+      "success": "Email verified successfully!",
+      "successMessage": "Your email has been verified. You can now complete your registration.",
+      "continue": "Continue to registration",
+      "error": "Invalid or expired verification token.",
+      "errorMessage": "The verification link is invalid or has expired. Please request a new one.",
+      "resend": "Resend verification email"
+    }
+  },
+  "support": {
+    "title": "Submit a Support Request",
+    "subtitle": "Need help? Our team is here to assist you.",
+    "subject": "Subject",
+    "subjectPlaceholder": "Brief summary of your issue",
+    "message": "Message",
+    "messagePlaceholder": "Please describe your issue in detail...",
+    "category": "Category",
+    "categoryBilling": "Billing",
+    "categoryTechnical": "Technical Issue",
+    "categoryAccount": "Account Access",
+    "categoryFeature": "Feature Request",
+    "categoryBug": "Bug Report",
+    "categoryOther": "Other",
+    "piiAcknowledged": "I understand that this request may contain sensitive information and I consent to its processing.",
+    "submit": "Submit Ticket",
+    "success": "Ticket submitted successfully!",
+    "successMessage": "Your ticket #",
+    "successMessage2": " has been created. We'll get back to you shortly.",
+    "error": "Something went wrong. Please try again.",
+    "loginRequired": "Please log in to submit a support request."
+  }
+}

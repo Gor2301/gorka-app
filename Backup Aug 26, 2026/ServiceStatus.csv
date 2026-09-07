@@ -1,0 +1,6 @@
+id,organizationId,serviceName,status,statusMessage,lastCheck,responseTime
+99be8da7-9a8c-4226-af74-c210990c9cb2,org1,dashboard,online,,2026-08-25 10:14:54.516,323
+b5feb62a-6444-4388-a6aa-0813e73e434f,org1,api,online,,2026-08-25 10:14:54.528,233
+16c50bc1-0de5-40d9-aecf-8a6e92461aeb,org1,database,online,,2026-08-25 10:14:54.531,3
+f2968124-4107-44a1-95f6-7642305ce84e,org1,connectors,degraded,No connectors configured,2026-08-25 10:14:54.537,266
+7bd061b0-072a-4504-a1a7-c93e2855ca3d,org1,jobs,degraded,No jobs run in last 24 hours,2026-08-25 10:14:54.54,275

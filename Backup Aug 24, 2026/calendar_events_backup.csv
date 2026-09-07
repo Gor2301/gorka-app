@@ -1,0 +1,2 @@
+id,organizationId,debtorId,title,description,startDate,endDate,type,status,source,sourceId,sourceDate,allDay,eventType,createdBy,createdAt,updatedAt
+cmt74cz4k0001mr2ox9wnilnw,org1,,birthday,drinking,2026-08-25 02:54:00,2026-08-25 03:54:00,TASK,PENDING,,,,t,MANUAL,user1,2026-08-24 10:54:44.947,2026-08-24 10:54:44.947

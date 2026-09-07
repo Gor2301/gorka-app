@@ -1,0 +1,69 @@
+import express from 'express';
+import { emailQueue } from '../queues/email.queue';
+
+const router = express.Router();
+
+// Get queue status
+router.get('/status', async (req, res) => {
+  try {
+    const [waiting, active, completed, failed, delayed] = await Promise.all([
+      emailQueue.getWaitingCount(),
+      emailQueue.getActiveCount(),
+      emailQueue.getCompletedCount(),
+      emailQueue.getFailedCount(),
+      emailQueue.getDelayedCount(),
+    ]);
+
+    res.json({
+      waiting,
+      active,
+      completed,
+      failed,
+      delayed,
+    });
+  } catch (error) {
+    console.error('Error getting queue status:', error);
+    res.status(500).json({ error: 'Failed to get queue status' });
+  }
+});
+
+// Get failed jobs
+router.get('/failed', async (req, res) => {
+  try {
+    const jobs = await emailQueue.getFailed();
+    const failedJobs = await Promise.all(
+      jobs.map(async (job) => ({
+        id: job.id,
+        data: job.data,
+        failedReason: job.failedReason,
+        attempts: job.attemptsMade,
+        timestamp: job.timestamp,
+      }))
+    );
+
+    res.json(failedJobs);
+  } catch (error) {
+    console.error('Error getting failed jobs:', error);
+    res.status(500).json({ error: 'Failed to get failed jobs' });
+  }
+});
+
+// Retry a failed job
+router.post('/retry/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = await emailQueue.getJob(jobId);
+
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    await job.retry();
+    res.json({ success: true, message: 'Job retried' });
+  } catch (error) {
+    console.error('Error retrying job:', error);
+    res.status(500).json({ error: 'Failed to retry job' });
+  }
+});
+
+export default router;

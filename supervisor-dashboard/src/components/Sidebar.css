@@ -1,0 +1,39 @@
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  color: #272727;
+  background: transparent;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 400;
+  transition: background 150ms ease, color 150ms ease;
+  margin-bottom: 2px;
+  cursor: pointer;
+}
+
+.nav-item svg {
+  color: #8A8A8A;
+  transition: color 150ms ease;
+}
+
+.nav-item:hover {
+  color: #7C3AED;
+  background: #F4F0FF;
+}
+
+.nav-item:hover svg {
+  color: #7C3AED;
+}
+
+.nav-item.active {
+  color: #7C3AED;
+  background: #F4F0FF;
+}
+
+.nav-item.active svg {
+  color: #7C3AED;
+}

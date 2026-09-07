@@ -1,0 +1,89 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import AppShell from './components/AppShell';
+import Dashboard from './pages/Dashboard';
+import Agents from './pages/Agents';
+import Collections from './pages/Collections';
+import Upload from './pages/Upload';
+import Audit from './pages/Audit';
+import Permissions from './pages/Permissions';
+import Analytics from './pages/Analytics';
+import Billing from './pages/Billing';
+import Settings from './pages/Settings';
+import Login from './pages/Login';
+import UnlockScreen from './components/UnlockScreen';
+import ComplianceReport from './pages/ComplianceReport';
+import DataFlowAudit from './pages/DataFlowAudit';
+import Calendar from './pages/Calendar';
+import Connectors from './pages/Connectors';
+import { GORKAStatus } from './pages/GORKAStatus';
+import Support from './pages/Support';
+import MyRequests from './pages/MyRequests';
+import MyRequestDetail from './pages/MyRequestDetail';
+import { auth } from './services/local.db';
+
+function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
+
+  // Check authentication via Rust
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const token = await auth.getToken();
+        setIsAuthenticated(!!token);
+
+        if (token) {
+          const unlocked = await auth.isUnlocked();
+          setIsUnlocked(unlocked);
+        }
+      } catch (err) {
+        console.error('Auth check error:', err);
+        setIsAuthenticated(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <BrowserRouter>
+      {!isAuthenticated ? (
+        <Login />
+      ) : !isUnlocked ? (
+        <UnlockScreen onUnlocked={() => setIsUnlocked(true)} />
+      ) : (
+        <Routes>
+          <Route path="/" element={<AppShell><Dashboard /></AppShell>} />
+          <Route path="/dashboard" element={<AppShell><Dashboard /></AppShell>} />
+          <Route path="/agents" element={<AppShell><Agents /></AppShell>} />
+          <Route path="/collections" element={<AppShell><Collections /></AppShell>} />
+          <Route path="/upload" element={<AppShell><Upload /></AppShell>} />
+          <Route path="/audit" element={<AppShell><Audit /></AppShell>} />
+          <Route path="/permissions" element={<AppShell><Permissions /></AppShell>} />
+          <Route path="/analytics" element={<AppShell><Analytics /></AppShell>} />
+          <Route path="/billing" element={<AppShell><Billing /></AppShell>} />
+          <Route path="/settings" element={<AppShell><Settings /></AppShell>} />
+          <Route path="/compliance" element={<AppShell><ComplianceReport /></AppShell>} />
+          <Route path="/data-flow-audit" element={<AppShell><DataFlowAudit /></AppShell>} />
+          <Route path="/calendar" element={<AppShell><Calendar /></AppShell>} />
+          <Route path="/connectors" element={<AppShell><Connectors /></AppShell>} />
+          <Route path="/support" element={<Support />} />
+          <Route path="/status" element={<GORKAStatus />} />
+          <Route path="/my-requests" element={<MyRequests />} />
+          <Route path="/my-requests/:id" element={<MyRequestDetail />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      )}
+    </BrowserRouter>
+  );
+}
+
+export default App;

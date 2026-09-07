@@ -1,139 +1,70 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { logger } from '../config/logger';
+import { authenticateToken } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenant';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// Extend Express Request type
-declare global {
-  namespace Express {
-    interface Request {
-      organizationId?: string;
-      user?: any;
-    }
-  }
-}
-
-/**
- * GET /api/debtors
- * Get all debtors with optional filters
- */
-router.get('/', requireTenant, async (req: Request, res: Response) => {
+// ==================== GET ALL DEBTORS ====================
+router.get('/', authenticateToken, requireTenant, async (req: any, res: Response) => {
   try {
-    const { search, status, page = '1', limit = '50' } = req.query;
-    
-    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
-    const take = parseInt(limit as string);
+    const organizationId = req.organizationId;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+    const search = req.query.search as string || '';
 
-    const where: any = {
-      organizationId: req.organizationId
-    };
-    
+    const where: any = { organizationId };
+
     if (search) {
       where.OR = [
-        { name: { contains: search as string, mode: 'insensitive' } },
-        { email: { contains: search as string, mode: 'insensitive' } },
-        { phone: { contains: search as string, mode: 'insensitive' } }
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } }
       ];
-    }
-    
-    if (status) {
-      where.status = status as string;
     }
 
     const [debtors, total] = await Promise.all([
       prisma.debtor.findMany({
         where,
-        include: {
-          organization: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          assignedUser: {
-            select: {
-              id: true,
-              name: true,
-              email: true
-            }
-          },
-          actions: {
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 5
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
         skip,
-        take
+        take: limit,
+        orderBy: { createdAt: 'desc' }
+        // ✅ REMOVED messageLogs - doesn't exist in schema
       }),
       prisma.debtor.count({ where })
     ]);
 
-    res.json({
+    return res.json({
       success: true,
       data: debtors,
-      pagination: {
-        page: parseInt(page as string),
-        limit: parseInt(limit as string),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit as string))
-      }
+      count: total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
     });
-  } catch (error) {
-    logger.error('Error fetching debtors:', error);
-    res.status(500).json({
+  } catch (error: any) {
+    console.error('Get debtors error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Failed to fetch debtors'
+      error: error.message || 'Failed to fetch debtors'
     });
   }
 });
 
-/**
- * GET /api/debtors/:id
- * Get a single debtor by ID
- */
-router.get('/:id', requireTenant, async (req: Request, res: Response) => {
+// ==================== GET SINGLE DEBTOR ====================
+router.get('/:id', authenticateToken, requireTenant, async (req: any, res: Response) => {
   try {
     const { id } = req.params;
-    
+    const organizationId = req.organizationId;
+
     const debtor = await prisma.debtor.findFirst({
       where: {
-        id: id as string,
-        organizationId: req.organizationId
-      },
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        },
-        actions: {
-          orderBy: {
-            createdAt: 'desc'
-          }
-        },
-        messageLogs: {
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: 10
-        }
+        id,
+        organizationId
       }
+      // ✅ REMOVED messageLogs - doesn't exist in schema
     });
 
     if (!debtor) {
@@ -143,52 +74,29 @@ router.get('/:id', requireTenant, async (req: Request, res: Response) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: debtor
     });
-  } catch (error) {
-    logger.error(`Error fetching debtor ${req.params.id}:`, error);
-    res.status(500).json({
+  } catch (error: any) {
+    console.error('Get debtor error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Failed to fetch debtor'
+      error: error.message || 'Failed to fetch debtor'
     });
   }
 });
 
-/**
- * POST /api/debtors
- * Create a new debtor
- */
-router.post('/', requireTenant, async (req: Request, res: Response) => {
+// ==================== CREATE DEBTOR ====================
+router.post('/', authenticateToken, requireTenant, async (req: any, res: Response) => {
   try {
-    const { 
-      name, 
-      email, 
-      phone, 
-      address, 
-      dateOfBirth, 
-      identification, 
-      riskScore, 
-      tags, 
-      assignedTo,
-      metadata 
-    } = req.body;
+    const organizationId = req.organizationId;
+    const { name, email, phone, totalDebt, nextFollowUpDate, nextPaymentDate } = req.body;
 
-    // Validation
     if (!name) {
       return res.status(400).json({
         success: false,
         error: 'Name is required'
-      });
-    }
-
-    // Use organizationId from JWT (don't trust request body)
-    const orgId = req.organizationId;
-    if (!orgId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Organization ID is required'
       });
     }
 
@@ -197,75 +105,50 @@ router.post('/', requireTenant, async (req: Request, res: Response) => {
         name,
         email,
         phone,
-        address,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        identification,
-        riskScore: riskScore || 0,
-        tags: tags || [],
-        organizationId: orgId,
-        assignedTo: assignedTo || null,
-        metadata: metadata || {},
-        status: 'ACTIVE'
-      },
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
+        totalDebt: totalDebt || 0,
+        nextFollowUpDate: nextFollowUpDate ? new Date(nextFollowUpDate) : null,
+        nextPaymentDate: nextPaymentDate ? new Date(nextPaymentDate) : null,
+        organizationId
       }
     });
 
-    logger.info(`Debtor created: ${debtor.id} - ${debtor.name}`);
-    
-    res.status(201).json({
-      success: true,
-      data: debtor,
-      message: 'Debtor created successfully'
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        organizationId,
+        userId: req.user.id,
+        action: 'CREATE',
+        entityType: 'DEBTOR',
+        entityId: debtor.id,
+        details: { name }
+      }
     });
-  } catch (error) {
-    logger.error('Error creating debtor:', error);
-    res.status(500).json({
+
+    return res.status(201).json({
+      success: true,
+      data: debtor
+    });
+  } catch (error: any) {
+    console.error('Create debtor error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Failed to create debtor'
+      error: error.message || 'Failed to create debtor'
     });
   }
 });
 
-/**
- * PUT /api/debtors/:id
- * Update a debtor
- */
-router.put('/:id', requireTenant, async (req: Request, res: Response) => {
+// ==================== UPDATE DEBTOR ====================
+router.put('/:id', authenticateToken, requireTenant, async (req: any, res: Response) => {
   try {
     const { id } = req.params;
-    const { 
-      name, 
-      email, 
-      phone, 
-      address, 
-      dateOfBirth, 
-      identification, 
-      riskScore, 
-      tags, 
-      status,
-      assignedTo,
-      metadata 
-    } = req.body;
+    const organizationId = req.organizationId;
+    const { name, email, phone, totalDebt, nextFollowUpDate, nextPaymentDate } = req.body;
 
-    // Check if debtor exists and belongs to this org
+    // Check if debtor exists
     const existing = await prisma.debtor.findFirst({
       where: {
-        id: id as string,
-        organizationId: req.organizationId
+        id,
+        organizationId
       }
     });
 
@@ -277,66 +160,53 @@ router.put('/:id', requireTenant, async (req: Request, res: Response) => {
     }
 
     const debtor = await prisma.debtor.update({
-      where: { id: id as string },
+      where: { id },
       data: {
         name: name || existing.name,
         email: email !== undefined ? email : existing.email,
         phone: phone !== undefined ? phone : existing.phone,
-        address: address !== undefined ? address : existing.address,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : existing.dateOfBirth,
-        identification: identification !== undefined ? identification : existing.identification,
-        riskScore: riskScore !== undefined ? riskScore : existing.riskScore,
-        tags: tags !== undefined ? tags : existing.tags,
-        status: status || existing.status,
-        assignedTo: assignedTo !== undefined ? assignedTo : existing.assignedTo,
-        metadata: metadata || existing.metadata
-      },
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
+        totalDebt: totalDebt !== undefined ? totalDebt : existing.totalDebt,
+        nextFollowUpDate: nextFollowUpDate !== undefined ? (nextFollowUpDate ? new Date(nextFollowUpDate) : null) : existing.nextFollowUpDate,
+        nextPaymentDate: nextPaymentDate !== undefined ? (nextPaymentDate ? new Date(nextPaymentDate) : null) : existing.nextPaymentDate
       }
     });
 
-    logger.info(`Debtor updated: ${debtor.id} - ${debtor.name}`);
-    
-    res.json({
-      success: true,
-      data: debtor,
-      message: 'Debtor updated successfully'
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        organizationId,
+        userId: req.user.id,
+        action: 'UPDATE',
+        entityType: 'DEBTOR',
+        entityId: debtor.id,
+        details: { name: debtor.name }
+      }
     });
-  } catch (error) {
-    logger.error(`Error updating debtor ${req.params.id}:`, error);
-    res.status(500).json({
+
+    return res.json({
+      success: true,
+      data: debtor
+    });
+  } catch (error: any) {
+    console.error('Update debtor error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Failed to update debtor'
+      error: error.message || 'Failed to update debtor'
     });
   }
 });
 
-/**
- * DELETE /api/debtors/:id
- * Soft delete a debtor
- */
-router.delete('/:id', requireTenant, async (req: Request, res: Response) => {
+// ==================== DELETE DEBTOR ====================
+router.delete('/:id', authenticateToken, requireTenant, async (req: any, res: Response) => {
   try {
     const { id } = req.params;
+    const organizationId = req.organizationId;
 
-    // Check if debtor exists and belongs to this org
+    // Check if debtor exists
     const existing = await prisma.debtor.findFirst({
       where: {
-        id: id as string,
-        organizationId: req.organizationId
+        id,
+        organizationId
       }
     });
 
@@ -347,65 +217,112 @@ router.delete('/:id', requireTenant, async (req: Request, res: Response) => {
       });
     }
 
-    // Soft delete - update status and set deletedAt
-    await prisma.debtor.update({
-      where: { id: id as string },
+    await prisma.debtor.delete({
+      where: { id }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
       data: {
-        status: 'DELETED',
-        deletedAt: new Date()
+        organizationId,
+        userId: req.user.id,
+        action: 'DELETE',
+        entityType: 'DEBTOR',
+        entityId: id,
+        details: { name: existing.name }
       }
     });
 
-    logger.info(`Debtor deleted (soft): ${id}`);
-    
-    res.json({
+    return res.json({
       success: true,
       message: 'Debtor deleted successfully'
     });
-  } catch (error) {
-    logger.error(`Error deleting debtor ${req.params.id}:`, error);
-    res.status(500).json({
+  } catch (error: any) {
+    console.error('Delete debtor error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Failed to delete debtor'
+      error: error.message || 'Failed to delete debtor'
     });
   }
 });
 
-/**
- * GET /api/debtors/stats
- * Get debtor statistics
- */
-router.get('/stats', requireTenant, async (req: Request, res: Response) => {
+// ==================== BULK UPLOAD DEBTORS ====================
+router.post('/bulk', authenticateToken, requireTenant, async (req: any, res: Response) => {
   try {
-    const [total, byStatus, byRiskScore] = await Promise.all([
-      prisma.debtor.count({
-        where: { organizationId: req.organizationId }
-      }),
-      prisma.debtor.groupBy({
-        by: ['status'],
-        where: { organizationId: req.organizationId },
-        _count: true
-      }),
-      prisma.debtor.groupBy({
-        by: ['riskScore'],
-        where: { organizationId: req.organizationId },
-        _count: true
-      })
-    ]);
+    const organizationId = req.organizationId;
+    const { debtors } = req.body;
 
-    res.json({
-      success: true,
+    console.log('🔍 User ID from req.user:', req.user.id);
+    console.log('🔍 Organization ID:', organizationId);
+
+
+    if (!debtors || !Array.isArray(debtors) || debtors.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Debtors array is required and must not be empty'
+      });
+    }
+
+    const created = [];
+    const errors = [];
+
+    for (const debtorData of debtors) {
+      try {
+        const { name, email, phone, totalDebt, nextFollowUpDate, nextPaymentDate } = debtorData;
+        
+        if (!name) {
+          errors.push({ ...debtorData, error: 'Name is required' });
+          continue;
+        }
+
+        const debtor = await prisma.debtor.create({
+          data: {
+            name,
+            email: email || null,
+            phone: phone || null,
+            totalDebt: totalDebt || 0,
+            nextFollowUpDate: nextFollowUpDate ? new Date(nextFollowUpDate) : null,
+            nextPaymentDate: nextPaymentDate ? new Date(nextPaymentDate) : null,
+            organizationId
+          }
+        });
+
+        created.push(debtor);
+      } catch (error: any) {
+        errors.push({ ...debtorData, error: error.message });
+      }
+    }
+
+    // Log activity
+    await prisma.activityLog.create({
       data: {
-        total,
-        byStatus,
-        byRiskScore
+        organizationId,
+        userId: req.user.id,
+        action: 'UPLOAD',
+        entityType: 'DEBTOR',
+        details: { 
+          total: debtors.length,
+          created: created.length,
+          errors: errors.length
+        }
       }
     });
-  } catch (error) {
-    logger.error('Error fetching debtor stats:', error);
-    res.status(500).json({
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        created,
+        errors,
+        total: debtors.length,
+        succeeded: created.length,
+        failed: errors.length
+      }
+    });
+  } catch (error: any) {
+    console.error('Bulk upload error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Failed to fetch debtor stats'
+      error: error.message || 'Failed to upload debtors'
     });
   }
 });

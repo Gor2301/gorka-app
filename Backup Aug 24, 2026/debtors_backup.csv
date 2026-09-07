@@ -1,0 +1,11 @@
+id,organizationId,name,email,phone,address,totalDebt,daysOverdue,status,createdAt,updatedAt,nextFollowUpDate,nextPaymentDate
+cmt72tomt0001o83w0uqdqar6,org1,Alice Williams,alice.williams@example.com,+4449876543,,25000,,ACTIVE,2026-08-24 10:11:45.268,2026-08-24 10:11:45.268,,
+cmt72ton50003o83wyosa5e61,org1,Bob Johnson,bob.johnson@example.com,+5551234567,,15000,,ACTIVE,2026-08-24 10:11:45.281,2026-08-24 10:11:45.281,,
+cmt72ton80005o83we4d98mha,org1,Carol Davis,carol.davis@example.com,+4449876544,,42000,,ACTIVE,2026-08-24 10:11:45.284,2026-08-24 10:11:45.284,,
+cmt72tonb0007o83wedmwpgbk,org1,David Miller,david.miller@example.com,+4449876545,,5000,,ACTIVE,2026-08-24 10:11:45.287,2026-08-24 10:11:45.287,,
+cmt72tond0009o83wrcumlj0o,org1,Emma Wilson,emma.wilson@example.com,+4449876546,,38000,,ACTIVE,2026-08-24 10:11:45.29,2026-08-24 10:11:45.29,,
+cmt72tong000bo83w9r5pn43p,org1,Frank Moore,frank.moore@example.com,+4449876547,,12000,,ACTIVE,2026-08-24 10:11:45.292,2026-08-24 10:11:45.292,,
+cmt72tonj000do83wqmtxwo2c,org1,Grace Taylor,grace.taylor@example.com,+4449876548,,55000,,ACTIVE,2026-08-24 10:11:45.295,2026-08-24 10:11:45.295,,
+cmt72tonl000fo83w0ritjep3,org1,Henry Anderson,henry.anderson@example.com,+4449876549,,28000,,ACTIVE,2026-08-24 10:11:45.297,2026-08-24 10:11:45.297,,
+cmt72tonn000ho83wbv3j5anf,org1,Irene Thomas,irene.thomas@example.com,+4449876550,,8000,,ACTIVE,2026-08-24 10:11:45.3,2026-08-24 10:11:45.3,,
+cmt72tonp000jo83w4q2kxf0y,org1,Jack Jackson,jack.jackson@example.com,+4449876551,,45000,,ACTIVE,2026-08-24 10:11:45.302,2026-08-24 10:11:45.302,,

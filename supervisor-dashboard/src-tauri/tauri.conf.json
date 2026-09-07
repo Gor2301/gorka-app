@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "GORKA Client Dashboard",
+  "version": "0.1.0",
+  "identifier": "com.gorka.client",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "GORKA Client Dashboard",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "connect-src": "'self' https://api.gorka.click",
+        "img-src": "'self' data: blob:",
+        "font-src": "'self'",
+        "media-src": "'self'",
+        "object-src": "'none'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "copyright": "© 2026 GORKA",
+    "category": "Business",
+    "shortDescription": "GORKA Client Dashboard",
+    "longDescription": "Manage debtors, upload data, and oversee your agency"
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://api.gorka.click/api/updates"
+      ],
+      "dialog": true,
+      "pubkey": "YOUR_PUBKEY_HERE"
+    }
+  }
+}

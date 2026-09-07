@@ -1,0 +1,114 @@
+// src/backend/routes/auth.ts
+import { Router } from 'express';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+const router = Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'gorka-secret-key-change-this';
+
+// Login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { organization: true }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (!user.isActive) {
+      return res.status(401).json({ error: 'Account disabled' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        organizationId: user.organizationId,
+        organizationName: user.organization?.name,
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Register organization
+router.post('/register', async (req, res) => {
+  try {
+    const { adminName, adminEmail, orgName, password } = req.body;
+
+    if (!adminName || !adminEmail || !orgName || !password) {
+      return res.status(400).json({ error: 'All fields required' });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: adminEmail }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Create organization
+      const organization = await tx.organization.create({
+        data: { name: orgName }
+      });
+
+      // Create admin user
+      const user = await tx.user.create({
+        data: {
+          email: adminEmail,
+          password: hashedPassword,
+          name: adminName,
+          role: 'ADMIN',
+          organizationId: organization.id,
+          isActive: true,
+        }
+      });
+
+      return { organization, user };
+    });
+
+    res.json({
+      success: true,
+      message: 'Organization registered successfully',
+      organizationId: result.organization.id,
+      userId: result.user.id
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+export default router;

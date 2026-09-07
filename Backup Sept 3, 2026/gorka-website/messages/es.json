@@ -1,0 +1,225 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "about": "Acerca de",
+    "pricing": "Precios",
+    "faq": "Preguntas",
+    "contact": "Contacto",
+    "bookDemo": "Reservar una Demo"
+  },
+  "hero": {
+    "title": "Plataforma de Cobro con IA",
+    "subtitle": "Diseñada para agencias. Lista para bancos. Automatiza cobros con Copilot de IA, comunicaciones multicanal y seguridad de datos local.",
+    "ctaPrimary": "Empieza Gratis",
+    "ctaSecondary": "Reservar una Demo"
+  },
+  "features": {
+    "title": "Diseñada para cobros, creada para cumplimiento",
+    "items": [
+      {
+        "title": "Roles y permisos multiusuario",
+        "description": "Control de acceso granular para agentes, gerentes y administradores — diseñado para flujos de trabajo de agencias."
+      },
+      {
+        "title": "Importación CSV con detección dinámica",
+        "description": "Sube archivos de clientes y deudores en cualquier formato — GORKA detecta automáticamente las columnas y las mapea."
+      },
+      {
+        "title": "Copilot de IA",
+        "description": "Genera correos de seguimiento, recomendaciones de estrategia y perspectivas — impulsado por Gemini."
+      },
+      {
+        "title": "Centro de Acción",
+        "description": "Gestión de tareas y flujos de trabajo para agentes de cobro — sigue cada paso."
+      },
+      {
+        "title": "Arquitectura local-first",
+        "description": "Tus datos permanecen en tu infraestructura — nunca se suben a servidores de terceros."
+      }
+    ]
+  },
+  "twoColumn": {
+    "security": {
+      "title": "Tus datos siguen siendo tuyos",
+      "description": "GORKA usa una arquitectura local-first — tus datos nunca abandonan tu infraestructura a menos que decidas usar un proveedor de nube.",
+      "detail": "Para bancos y agencias que manejan información sensible de deudores, esto significa control total sobre cumplimiento, seguridad y soberanía de datos."
+    },
+    "copilot": {
+      "title": "Copilot de IA que realmente ayuda",
+      "description": "El Copilot de IA de GORKA genera correos de seguimiento, recomendaciones de estrategia y perspectivas — todo revisado y aprobado por tu equipo antes de enviar.",
+      "detail": "Impulsado por Gemini, aprende el tono y los patrones de tu agencia, haciendo cada interacción más efectiva sin sacrificar el juicio humano."
+    }
+  },
+  "comparison": {
+    "title": "¿Por qué GORKA?",
+    "rows": [
+      { "gorka": "Organización de datos dinámica y automatizada", "other": "Clasificación manual, propensa a errores" },
+      { "gorka": "Los datos permanecen en tu infraestructura", "other": "Datos subidos a servidores de terceros" },
+      { "gorka": "Seguimientos asistidos por IA", "other": "Seguimiento manual" },
+      { "gorka": "Diseñada para agencias, escala para bancos", "other": "Un tamaño que no sirve para ninguno" }
+    ]
+  },
+  "pricing": {
+    "title": "Planes de precios",
+    "tiers": [
+      {
+        "name": "Gratis",
+        "price": "$0",
+        "description": "Empieza pequeño. Escala cuando estés listo.",
+        "cta": "Comenzar",
+        "features": ["Herramientas básicas de IA", "Automatización limitada", "Integración básica de chatbot", "Informes en tiempo real"]
+      },
+      {
+        "name": "Profesional",
+        "price": "$1,700",
+        "description": "Todo el poder para agencias en crecimiento.",
+        "cta": "Comenzar",
+        "features": ["Todo en Gratis", "Análisis avanzado", "Chatbot premium", "Integraciones multiplataforma"]
+      },
+      {
+        "name": "Empresarial",
+        "price": "Contáctanos",
+        "description": "Soluciones personalizadas para bancos y grandes agencias.",
+        "cta": "Contactar Ventas",
+        "features": ["Todo en Profesional", "Gestor de crecimiento dedicado", "Informes y paneles personalizados", "IA completamente personalizada"]
+      }
+    ]
+  },
+  "faq": {
+    "title": "Preguntas respondidas",
+    "items": [
+      {
+        "question": "¿Qué es GORKA?",
+        "answer": "GORKA es una plataforma de cobro con IA diseñada para agencias y bancos. Combina Copilot de IA, comunicaciones multicanal y seguridad de datos local para optimizar los cobros."
+      },
+      {
+        "question": "¿Para quién está diseñado?",
+        "answer": "GORKA está diseñado para agencias de cobro, bancos e instituciones financieras que necesitan gestionar comunicaciones con deudores, rastrear acciones y automatizar seguimientos."
+      },
+      {
+        "question": "¿Cómo funciona la seguridad de datos?",
+        "answer": "GORKA usa una arquitectura local-first — tus datos permanecen en tu propia infraestructura. Nada se sube a servidores de terceros a menos que decidas usar un proveedor de nube."
+      },
+      {
+        "question": "¿Puedo importar mis datos existentes?",
+        "answer": "Sí — GORKA admite importaciones CSV y Excel con detección dinámica de columnas. No es necesario reformatear."
+      },
+      {
+        "question": "¿Ofrecen una prueba gratuita?",
+        "answer": "Sí — el nivel Gratis incluye herramientas básicas de IA y automatización. Actualiza cuando estés listo para escalar."
+      },
+      {
+        "question": "¿En qué se diferencia de las herramientas heredadas?",
+        "answer": "GORKA automatiza lo que las hojas de cálculo y herramientas heredadas hacen manualmente — organización de datos, seguimientos, informes — con asistencia de IA y seguridad local."
+      },
+      {
+        "question": "¿Cuál es su modelo de precios?",
+        "answer": "Ofrecemos tres niveles: Gratis, Profesional y Empresarial. Todos los niveles incluyen herramientas de IA y automatización. Empresarial incluye soluciones personalizadas."
+      }
+    ]
+  },
+  "finalCta": {
+    "title": "¿Listo para transformar tu flujo de trabajo de cobros?",
+    "cta": "Reservar una Demo Gratis"
+  },
+  "footer": {
+    "tagline": "Cobro con IA para agencias y bancos.",
+    "contact": "hello@gorka.click",
+    "copyright": "© 2026 GORKA. Todos los derechos reservados."
+  },
+  "about": {
+    "title": "Acerca de GORKA",
+    "content": "GORKA fue creado para resolver el caos de los flujos de trabajo manuales de cobro. Combinamos IA, automatización y seguridad local para ayudar a agencias y bancos a cobrar de manera más inteligente."
+  },
+  "contact": {
+    "title": "Contáctanos",
+    "name": "Nombre",
+    "email": "Correo electrónico",
+    "company": "Empresa (opcional)",
+    "message": "Mensaje",
+    "submit": "Enviar mensaje",
+    "success": "¡Mensaje enviado con éxito!",
+    "error": "Algo salió mal. Por favor, inténtalo de nuevo."
+  },
+  "auth": {
+    "register": {
+      "title": "Comienza tu viaje con GORKA",
+      "step1": {
+        "title": "Información de la Empresa",
+        "companyName": "Nombre de la Empresa",
+        "clientType": "Tipo de Cliente",
+        "clientTypeAgency": "Agencia de Cobro",
+        "clientTypeCorporate": "Corporativo",
+        "clientTypeFreelancer": "Freelancer",
+        "registrationNumber": "Número de Registro (opcional)",
+        "taxId": "NIF/CIF (opcional)",
+        "primaryContact": "Contacto Principal",
+        "contactEmail": "Correo Electrónico de Contacto",
+        "contactPhone": "Teléfono de Contacto",
+        "address": "Dirección (opcional)",
+        "website": "Sitio Web (opcional)",
+        "submit": "Continuar"
+      },
+      "step2": {
+        "title": "Verifica tu Correo",
+        "subtitle": "Hemos enviado un enlace de verificación a",
+        "resend": "Reenviar correo de verificación",
+        "resendSuccess": "¡Correo de verificación reenviado!",
+        "checkEmail": "Por favor, revisa tu correo y haz clic en el enlace de verificación.",
+        "continue": "Continuar"
+      },
+      "step3": {
+        "title": "Crea tu Cuenta",
+        "password": "Contraseña",
+        "passwordHint": "Al menos 8 caracteres con mayúscula, minúscula, número y carácter especial",
+        "terms": "Acepto los Términos de Servicio y la Política de Privacidad",
+        "termsError": "Debes aceptar los Términos de Servicio",
+        "submit": "Crear Cuenta"
+      },
+      "success": "¡Cuenta creada con éxito! Redirigiendo...",
+      "error": "Algo salió mal. Por favor, inténtalo de nuevo."
+    },
+    "login": {
+      "title": "Bienvenido de vuelta a GORKA",
+      "email": "Correo Electrónico",
+      "password": "Contraseña",
+      "submit": "Iniciar Sesión",
+      "forgotPassword": "¿Olvidaste tu contraseña?",
+      "noAccount": "¿No tienes una cuenta?",
+      "register": "Regístrate aquí",
+      "error": "Correo o contraseña inválidos. Por favor, inténtalo de nuevo."
+    },
+    "verifyEmail": {
+      "title": "Verificación de Correo",
+      "verifying": "Verificando tu correo...",
+      "success": "¡Correo verificado con éxito!",
+      "successMessage": "Tu correo ha sido verificado. Ahora puedes completar tu registro.",
+      "continue": "Continuar con el registro",
+      "error": "Token de verificación inválido o expirado.",
+      "errorMessage": "El enlace de verificación es inválido o ha expirado. Por favor, solicita uno nuevo.",
+      "resend": "Reenviar correo de verificación"
+    }
+  },
+  "support": {
+    "title": "Enviar una Solicitud de Soporte",
+    "subtitle": "¿Necesitas ayuda? Nuestro equipo está aquí para ayudarte.",
+    "subject": "Asunto",
+    "subjectPlaceholder": "Resumen breve de tu problema",
+    "message": "Mensaje",
+    "messagePlaceholder": "Por favor, describe tu problema en detalle...",
+    "category": "Categoría",
+    "categoryBilling": "Facturación",
+    "categoryTechnical": "Problema Técnico",
+    "categoryAccount": "Acceso a la Cuenta",
+    "categoryFeature": "Solicitud de Funcionalidad",
+    "categoryBug": "Reporte de Error",
+    "categoryOther": "Otro",
+    "piiAcknowledged": "Entiendo que esta solicitud puede contener información sensible y acepto su procesamiento.",
+    "submit": "Enviar Solicitud",
+    "success": "¡Solicitud enviada con éxito!",
+    "successMessage": "Tu ticket #",
+    "successMessage2": " ha sido creado. Te responderemos en breve.",
+    "error": "Algo salió mal. Por favor, inténtalo de nuevo.",
+    "loginRequired": "Por favor, inicia sesión para enviar una solicitud de soporte."
+  }
+}
