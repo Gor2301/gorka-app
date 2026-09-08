@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "GORKA Client Dashboard",
+  "productName": "GORKA-Client-Dashboard",
   "version": "0.1.0",
   "identifier": "com.gorka.client",
   "build": {
@@ -37,7 +37,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["nsis", "appimage", "deb", "dmg"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -49,7 +49,25 @@
     "copyright": "© 2026 GORKA",
     "category": "Business",
     "shortDescription": "GORKA Client Dashboard",
-    "longDescription": "Manage debtors, upload data, and oversee your agency"
+    "longDescription": "Manage debtors, upload data, and oversee your agency",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    },
+    "macOS": {
+      "entitlements": null,
+      "signingIdentity": null,
+      "minimumSystemVersion": "10.13"
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    }
   },
   "plugins": {
     "updater": {
