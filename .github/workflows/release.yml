@@ -45,5 +45,5 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'GORKA Client Dashboard ${{ github.ref_name }}'
           releaseBody: 'Automated release build.'
-          draft: false
+          releaseDraft: false
           prerelease: false
