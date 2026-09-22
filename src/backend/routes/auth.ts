@@ -6,7 +6,10 @@ import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { Resend } from 'resend';
 import { getCookieOptions } from '../utils/cookies';
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
+
+console.log("### GORKA AUTH SOURCE: SEPT-09-2026 ###");
+
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -22,11 +25,12 @@ const loginIpLimiter = rateLimit({
   message: { success: false, error: 'Too many login attempts from this IP' },
 });
 
+
 const loginEmailLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5, // 5 failed attempts per email
+  max: 5,
   message: { success: false, error: 'Too many failed login attempts' },
-  keyGenerator: (req) => req.body.email || req.ip,
+  keyGenerator: (req) => req.body.email || ipKeyGenerator(req.ip),
 });
 
 // Validation schemas
@@ -63,10 +67,16 @@ const completeRegistrationSchema = z.object({
 router.post('/register', async (req: Request, res: Response): Promise<any> => {
   try {
     const result = registerSchema.safeParse(req.body);
+
+
+console.log('🔍 REGISTER RESULT success:', result.success);
+console.log('🔍 REGISTER RESULT error:', result.error);
+
+
     if (!result.success) {
       return res.status(400).json({
         success: false,
-        error: result.error.errors[0].message,
+        error: result.error.issues?.[0]?.message || 'Validation failed',
       });
     }
 
@@ -116,14 +126,14 @@ router.post('/register', async (req: Request, res: Response): Promise<any> => {
       });
 
       // Find or create the default role
-// Role table doesn't exist in schema — role is set directly on user
+// Role is set directly on the user record (OWNER / CLIENT / AGENT)
 
       const user = await tx.user.create({
         data: {
           email: data.contactEmail,
           passwordHash,
           name: fullName,
-          role: 'OWNER',
+          role: 'CLIENT',
           organizationId: org.id,
           isActive: true,
         },
@@ -186,7 +196,7 @@ router.post('/verify-email', async (req: Request, res: Response): Promise<any> =
     if (!result.success) {
       return res.status(400).json({
         success: false,
-        error: result.error.errors[0].message,
+        error: result.error.issues?.[0]?.message || 'Validation failed',
       });
     }
 
@@ -267,7 +277,7 @@ router.post('/complete-registration', async (req: Request, res: Response): Promi
     if (!result.success) {
       return res.status(400).json({
         success: false,
-        error: result.error.errors[0].message,
+        error: result.error.issues?.[0]?.message || 'Validation failed',
       });
     }
 
@@ -356,7 +366,7 @@ router.post('/complete-registration', async (req: Request, res: Response): Promi
             role: user.role,
             organizationId: user.organizationId,
           },
-redirectUrl: user.role === 'PLATFORM_OWNER'
+redirectUrl: user.role === 'OWNER'
   ? 'http://platform.gorka.localhost:3002'
   : 'http://client.gorka.localhost:5173',
         },
@@ -377,7 +387,7 @@ router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, re
     if (!result.success) {
       return res.status(400).json({
         success: false,
-        error: result.error.errors[0].message,
+        error: result.error.issues?.[0]?.message || 'Validation failed',
       });
     }
 
@@ -468,7 +478,7 @@ router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, re
             role: user.role,
             organizationId: user.organizationId,
           },
-redirectUrl: user.role === 'PLATFORM_OWNER'
+redirectUrl: user.role === 'OWNER'
   ? 'http://platform.gorka.localhost:3002'
   : 'http://client.gorka.localhost:5173',
           token, // For desktop apps (Bearer token)
@@ -527,7 +537,26 @@ console.log('[ME] User userId:', user?.userId);
     const fullUser = await prisma.user.findUnique({
       where: { id: user.id },
       include: {
-        organization: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            clientType: true,
+            website: true,
+            registrationNumber: true,
+            taxId: true,
+            address: true,
+            contactEmail: true,
+            contactPhone: true,
+            primaryContact: true,
+            verificationStatus: true,
+            piiPolicyAcceptedAt: true,
+            piiPolicyVersion: true,
+            piiPolicyAcceptedBy: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     });
 

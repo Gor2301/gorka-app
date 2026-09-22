@@ -1,0 +1,1242 @@
+? GORKA PLATFORM — COMPLETE  txt SPECIFICATION (v5.0 FINAL)
+Date: September 3, 2026
+Status: ? IMPLEMENTATION-READY
+Purpose: Single source of truth — save this document
+
+? TABLE OF CONTENTS
+    1. Core Principle — The Hard Boundary
+    2. Naming Convention (Final)
+    3. The Architecture — Complete Picture
+    4. Data Classification & Storage
+    5. Subdomain Strategy
+    6. DNS Records (DreamHost)
+    7. SSL / HTTPS Strategy
+    8. Cookie & Token Strategy
+    9. CORS Configuration
+    10. Environment Variables
+    11. URL Inventory (What to Change)
+    12. SPA Routing (vercel.json)
+    13. Database Strategy
+    14. Free Tier Hosting
+    15. The Client Dashboard — Desktop App
+    16. Code Changes — Complete
+    17. Deployment Order (Phases 0–9)
+    18. Testing Plan
+    19. Rollback Conditions
+    20. Success Criteria
+    21. Migration Principle
+    22. Forbidden Endpoint List
+
+1. CORE PRINCIPLE — THE HARD BOUNDARY
+"GORKA's cloud infrastructure must technically prevent debtor data from being transmitted, stored, or accessed — even if a client/agent accidentally requests it."
+This is not a policy. This is an architectural enforcement.
+The Data Boundary
+Data Type	Where It Stays	Regulation
+Debtor Data (names, contacts, payments, communications, notes, documents)	LOCAL ONLY (Client Dashboard Desktop App + Electron App)	? REGULATED — GDPR, data protection laws
+Client Relationship Data (accounts, subscriptions, support tickets, licenses)	? CLOUD OK (Supabase)	? NOT REGULATED
+Platform Data (user accounts, roles, permissions, platform settings)	? CLOUD OK (Supabase)	? NOT REGULATED
+
+2. NAMING CONVENTION (FINAL)
+Old Name (Confusing)	New Name (Clear)	Who
+od.gorka.click (Owner Dashboard)	platform.gorka.click	YOU (Platform Owner)
+admin.gorka.click (SuperAdmin)	Desktop App	Client Admin
+client.gorka.click	Static Download Page	Users download the desktop app
+"SuperAdmin" (role)	"Client Admin"	Unified term
+"Agency Owner"	"Client Admin"	Unified term
+"Supervisor"	"Client Admin"	Unified term (legacy name)
+Electron App (Agents)	app.gorka.click (future)	Agents (Employees)
+
+3. THE ARCHITECTURE — COMPLETE PICTURE
+text
+???????????????????????????????????????????????????????????????????????????????
+?                                                                             ?
+?                    PLATFORM OWNER (YOU)                                     ?
+?                                                                             ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?  ?              platform.gorka.click (Platform Dashboard)              ?   ?
+?  ?                                                                     ?   ?
+?  ?  ? NO debtor data                                                  ?   ?
+?  ?  Hosting: Vercel (cloud) — metadata only                           ?   ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?                              ?                                              ?
+?                              ? (Manages clients)                           ?
+?                              ?                                              ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?  ?              ? CLIENT (Agency / Bank / Company)                     ?   ?
+?  ?                                                                     ?   ?
+?  ?  ????????????????????????????????????????????????????????????????? ?   ?
+?  ?  ?       Client Dashboard (DESKTOP APP — Tauri/Electron)        ? ?   ?
+?  ?  ?                                                               ? ?   ?
+?  ?  ?  ??????????????????????????????????????????????????????????? ? ?   ?
+?  ?  ?  ?              LOCAL SQLite (encrypted at rest)           ? ? ?   ?
+?  ?  ?  ?  ???????????????  ???????????????  ???????????????   ? ? ?   ?
+?  ?  ?  ?  ?  Debtors    ?  ?  Debts      ?  ?  Actions    ?   ? ? ?   ?
+?  ?  ?  ?  ?  Contacts   ?  ?  Payments   ?  ?  History    ?   ? ? ?   ?
+?  ?  ?  ?  ???????????????  ???????????????  ???????????????   ? ? ?   ?
+?  ?  ?  ??????????????????????????????????????????????????????????? ? ?   ?
+?  ?  ?                                                               ? ?   ?
+?  ?  ?  ? Debtor data stored in LOCAL SQLite                        ? ?   ?
+?  ?  ?  ? Metadata syncs to cloud (Supabase)                        ? ?   ?
+?  ?  ?  Hosting: Desktop (Tauri/Electron)                            ? ?   ?
+?  ?  ????????????????????????????????????????????????????????????????? ?   ?
+?  ?                              ?                                      ?   ?
+?  ?                              ? (Syncs metadata)                    ?   ?
+?  ?                              ?                                      ?   ?
+?  ?  ????????????????????????????????????????????????????????????????? ?   ?
+?  ?  ?              ? AGENTS (Employees)                            ? ?   ?
+?  ?  ?                                                               ? ?   ?
+?  ?  ?  ??????????????????????????????????????????????????????????? ? ?   ?
+?  ?  ?  ?         Electron App / Action Center (Local)            ? ? ?   ?
+?  ?  ?  ?                                                         ? ? ?   ?
+?  ?  ?  ?  ? ALL debtor data stored locally                     ? ? ?   ?
+?  ?  ?  ?  Hosting: Desktop (Electron app)                       ? ? ?   ?
+?  ?  ?  ??????????????????????????????????????????????????????????? ? ?   ?
+?  ?  ????????????????????????????????????????????????????????????????? ?   ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?                                                                             ?
+???????????????????????????????????????????????????????????????????????????????
+                                    ?
+                                    ? ? ONLY METADATA
+                                    ?    (orgId, userId, timestamps)
+                                    ?
+???????????????????????????????????????????????????????????????????????????????
+?                                                                             ?
+?                    CLOUD (NON-REGULATED DATA)                               ?
+?                                                                             ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?  ?                         Supabase                                    ?   ?
+?  ?                                                                     ?   ?
+?  ?  ???????????????  ???????????????  ???????????????                 ?   ?
+?  ?  ?   users     ?  ?organizations?  ?support_tickets?                 ?   ?
+?  ?  ?   (auth)    ?  ?  (clients)  ?  ?  (support)   ?                 ?   ?
+?  ?  ???????????????  ???????????????  ???????????????                 ?   ?
+?  ?                                                                     ?   ?
+?  ?  ???????????????  ???????????????  ???????????????                 ?   ?
+?  ?  ?  licenses   ?  ?  audit_logs ?  ?  platform   ?                 ?   ?
+?  ?  ?  (billing)  ?  ?  (metadata) ?  ?  settings   ?                 ?   ?
+?  ?  ???????????????  ???????????????  ???????????????                 ?   ?
+?  ?                                                                     ?   ?
+?  ?  ? NO DEBTOR DATA                                                  ?   ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?                                                                             ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?  ?                    api.gorka.click (Render)                         ?   ?
+?  ?                                                                     ?   ?
+?  ?  ???????????????  ???????????????  ???????????????                 ?   ?
+?  ?  ?  /auth/*    ?  ?  /license/* ?  ?  /support/* ?                 ?   ?
+?  ?  ?  (login)    ?  ?  (billing)  ?  ?  (tickets)  ?                 ?   ?
+?  ?  ???????????????  ???????????????  ???????????????                 ?   ?
+?  ?                                                                     ?   ?
+?  ?  ???????????????  ???????????????  ???????????????                 ?   ?
+?  ?  ?  /updates/* ?  ?  /health    ?  ?  /organizations/*?             ?   ?
+?  ?  ?  (auto-up)  ?  ?  (monitor)  ?  ?  (clients)   ?                 ?   ?
+?  ?  ???????????????  ???????????????  ???????????????                 ?   ?
+?  ?                                                                     ?   ?
+?  ?  ? NO /api/debtors                                                 ?   ?
+?  ?  ? NO /api/communications                                          ?   ?
+?  ?  ? NO /api/notes                                                   ?   ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?                                                                             ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?  ?                    Vercel (Frontends)                               ?   ?
+?  ?                                                                     ?   ?
+?  ?  ???????????????  ??????????????????????????????????????????????? ?   ?
+?  ?  ?  Marketing  ?  ?  Platform Dashboard                          ? ?   ?
+?  ?  ?  (static)   ?  ?  (metadata only)                            ? ?   ?
+?  ?  ???????????????  ??????????????????????????????????????????????? ?   ?
+?  ?                                                                     ?   ?
+?  ?  ???????????????????????????????????????????????????????????????   ?   ?
+?  ?  ?  client.gorka.click ? Static Download Page                   ?   ?   ?
+?  ?  ?  (Users download the Client Dashboard desktop app)          ?   ?   ?
+?  ?  ???????????????????????????????????????????????????????????????   ?   ?
+?  ?                                                                     ?   ?
+?  ?  ? NO DEBTOR UI ON VERCEL                                          ?   ?
+?  ???????????????????????????????????????????????????????????????????????   ?
+?                                                                             ?
+???????????????????????????????????????????????????????????????????????????????
+
+4. DATA CLASSIFICATION & STORAGE
+Cloud Data (Supabase) — NON-REGULATED
+Table	Purpose	Contains Debtor Data?
+users	Authentication, roles	? NO
+organizations	Client organizations	? NO
+licenses	Billing, subscriptions	? NO
+support_tickets	Support conversations	?? May contain accidental PII
+audit_logs	Metadata only (userId, action, timestamp)	? NO
+platform_settings	Global configuration	? NO
+debtors	? DOES NOT EXIST	? NO
+debts	? DOES NOT EXIST	? NO
+communications	? DOES NOT EXIST	? NO
+actions	? DOES NOT EXIST	? NO
+Local Data (SQLite — Client Dashboard + Electron App) — REGULATED
+Table	Purpose	Contains Debtor Data?
+debtors	Names, contacts, addresses	? YES
+debts	Amounts, dates, status	? YES
+actions	Next-best-actions, tasks	? YES
+communications	Calls, emails, SMS logs	? YES
+notes	Internal notes	? YES
+documents	Uploaded files	? YES
+audit_log	Full audit trail (per-debtor)	? YES
+
+5. SUBDOMAIN STRATEGY
+Production (gorka.click)
+Subdomain	App	Hosting	Data
+www.gorka.click	Marketing Website	Vercel	Static content
+platform.gorka.click	Platform Dashboard	Vercel	Metadata only
+client.gorka.click	Static Download Page	Vercel	Download links — NO debtor data
+api.gorka.click	Backend API	Render	Auth, license, support, updates — NO debtor endpoints
+app.gorka.click	Electron App (future)	Desktop	ALL debtor data (local SQLite)
+Development (Local)
+Subdomain	App	Port	Data
+gorka.localhost	Marketing Website	3001	Static content
+platform.gorka.localhost	Platform Dashboard	3002	Metadata only
+api.gorka.localhost	Backend API	3000	Auth, license, support — NO debtor endpoints
+Desktop App	Client Dashboard	Local	Debtor data (local SQLite)
+
+6. DNS RECORDS (DreamHost)
+Record	Type	Value	Purpose
+www.gorka.click	CNAME	cname.vercel-dns.com	Marketing Website
+platform.gorka.click	CNAME	cname.vercel-dns.com	Platform Dashboard
+client.gorka.click	CNAME	cname.vercel-dns.com	Static Download Page
+api.gorka.click	CNAME	gorka-api.onrender.com	Backend API
+gorka.click	Redirect (301)	? https://www.gorka.click	Apex redirect
+Note: Vercel and Render will provide exact CNAME targets after project creation.
+
+7. SSL / HTTPS STRATEGY
+Component	SSL Provider	Notes
+Vercel (www, platform, client)	Vercel (automatic)	? Auto-provisioned
+Render (api)	Render (automatic)	? Auto-provisioned
+Desktop App	None (local)	? No SSL needed for localhost
+DreamHost	DNS only	? Do NOT manage SSL at DreamHost
+
+8. COOKIE & TOKEN STRATEGY
+Web Apps (Browser) — Cookies
+Setting	Value
+Domain	NOT SET (host-only)
+Secure	true
+HttpOnly	true
+SameSite	Lax
+Path	/
+Desktop Apps — Bearer Tokens + Secure Storage
+Setting	Value	
+Storage	Tauri: @tauri-apps/plugin-store	Electron: safeStorage
+Transmission	Authorization: Bearer <token> header	
+Token expiry	7 days (same as cookies)	
+Backend Auth Strategy
+typescript
+// src/backend/middleware/auth.ts
+export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    let token = null;
+    
+    // 1. Check Authorization header (Bearer token) — for desktop app
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+      console.log('[AUTH] Token from Authorization header (desktop)');
+    }
+    
+    // 2. Check cookie — for web browsers
+    if (!token && req.cookies) {
+      token = req.cookies.gorka_session;
+      console.log('[AUTH] Token from cookie (web)');
+    }
+    
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret');
+    (req as any).user = decoded;
+    return next();
+  } catch (error) {
+    return res.status(403).json({ success: false, error: 'Invalid or expired token' });
+  }
+};
+Cookie Config
+typescript
+// src/backend/utils/cookies.ts
+export const getCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  // ? Do NOT set: domain: '.gorka.click'
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/',
+});
+
+9. CORS CONFIGURATION
+Backend (src/backend/index.ts)
+typescript
+const allowedOrigins = [
+  // Production
+  'https://www.gorka.click',
+  'https://platform.gorka.click',
+  'https://client.gorka.click',
+  'https://gorka.click',
+  // Development
+  'http://gorka.localhost:3001',
+  'http://platform.gorka.localhost:3002',
+  'http://localhost:5173',
+  'http://localhost:3002',
+];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+}));
+Local Server (local-server.ts)
+typescript
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3002',
+    'tauri://localhost',
+    'app://localhost',
+  ],
+  credentials: true,
+}));
+
+10. ENVIRONMENT VARIABLES
+Render Dashboard (Backend)
+Variable	Value
+DATABASE_URL	Supabase PostgreSQL connection string
+JWT_SECRET	Your JWT secret (DIFFERENT from development)
+MARKETING_URL	https://www.gorka.click
+PLATFORM_URL	https://platform.gorka.click
+CLIENT_URL	https://client.gorka.click
+NODE_ENV	production
+VERIFICATION_LINK_BASE	https://www.gorka.click/verify-email
+Vercel Dashboard (Marketing)
+Variable	Value
+NEXT_PUBLIC_API_URL	https://api.gorka.click
+API_BASE_URL	https://api.gorka.click
+Vercel Dashboard (Platform Dashboard)
+Variable	Value
+VITE_API_URL	/api (relative — Vercel rewrites to Render)
+Client Dashboard Desktop App
+Variable	Value
+VITE_CLOUD_API_URL	https://api.gorka.click
+VITE_LOCAL_API_PORT	31415 (dynamic)
+
+11. URL INVENTORY (WHAT TO CHANGE)
+Backend (gorka-app/)
+File	Change
+src/backend/index.ts	CORS origins (see above)
+src/backend/routes/auth.ts	redirectUrl ? use production domains
+src/backend/utils/cookies.ts	Remove .gorka.click domain
+.env	Update all URLs
+Marketing Website (gorka-website/)
+File	Change
+app/api/auth/*/route.ts	Proxy target ? https://api.gorka.click
+app/[locale]/login/page.tsx	Redirect ? based on role
+app/[locale]/register/page.tsx	Redirect ? based on role
+components/layout/Header.tsx	Links ? https://www.gorka.click
+.env.local	API_BASE_URL ? https://api.gorka.click
+Platform Dashboard (src/owner-dashboard/)
+File	Change
+src/pages/LoginPage.tsx	Redirect ? https://platform.gorka.click
+src/services/api.ts	API_BASE_URL ? /api
+vercel.json	ADD (see below)
+Client Dashboard Desktop App
+File	Change
+src/services/cloud.api.ts	Use Bearer tokens, secure storage
+src/services/local.server.ts	Add local auth, CORS restrictions
+src/services/local.db.ts	Use appDataDir for DB path
+tauri.conf.json	Add updater config, signing key
+vercel.json	REMOVE — not hosted on Vercel
+
+12. SPA ROUTING (vercel.json)
+For Platform Dashboard Only
+json
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://api.gorka.click/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+
+13. DATABASE STRATEGY
+Cloud Database (Supabase — Free Tier)
+Item	Value
+Service	Supabase (Free Tier)
+Storage	500MB
+Bandwidth	2GB
+Pause	Pauses after 7 days inactivity
+Schema	Metadata only — NO debtor tables
+Local Database (SQLite — Client Dashboard + Electron App)
+Item	Value
+Service	SQLite (embedded)
+Storage	Unlimited (client's machine)
+Location	OS app data directory
+Schema	ALL debtor data
+Prisma Schema — Cloud (Supabase)
+prisma
+// prisma/schema.cloud.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String?
+  role          Role      @default(AGENT)
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+}
+
+model Organization {
+  id              String    @id @default(cuid())
+  name            String
+  contactEmail    String
+  contactPhone    String?
+  primaryContact  String?
+  verificationStatus String  @default("PENDING")
+  users           User[]
+  licenses        License[]
+  supportTickets  SupportTicket[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model License {
+  id              String    @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  type            String    // 'PROFESSIONAL', 'ENTERPRISE'
+  status          String    // 'ACTIVE', 'EXPIRED', 'SUSPENDED'
+  expiresAt       DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model SupportTicket {
+  id              String    @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  subject         String
+  message         String
+  status          String    @default("OPEN")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model AuditLog {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  action          String
+  details         Json?
+  timestamp       DateTime  @default(now())
+}
+
+enum Role {
+  PLATFORM_OWNER   // YOU — manage the platform
+  CLIENT_ADMIN     // Agency Owner — manages their agency
+  AGENT            // Employee — works with debtors
+}
+Prisma Schema — Local (SQLite)
+prisma
+// prisma/schema.local.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./gorka-client.db"
+}
+
+model Debtor {
+  id              String    @id @default(cuid())
+  organizationId  String
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String?
+  address         String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  debts           Debt[]
+  communications  Communication[]
+  actions         Action[]
+  documents       Document[]
+}
+
+model Debt {
+  id              String    @id @default(cuid())
+  debtorId        String
+  debtor          Debtor    @relation(fields: [debtorId], references: [id])
+  amount          Float
+  currency        String    @default("USD")
+  status          String    @default("ACTIVE")
+  dueDate         DateTime?
+  description     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Communication {
+  id              String    @id @default(cuid())
+  debtorId        String
+  debtor          Debtor    @relation(fields: [debtorId], references: [id])
+  type            String    // 'CALL', 'EMAIL', 'SMS', 'NOTE'
+  direction       String    // 'INBOUND', 'OUTBOUND'
+  content         String
+  timestamp       DateTime  @default(now())
+  createdBy       String    // userId
+}
+
+model Action {
+  id              String    @id @default(cuid())
+  debtorId        String
+  debtor          Debtor    @relation(fields: [debtorId], references: [id])
+  type            String    // 'CALL', 'EMAIL', 'SMS', 'TASK'
+  status          String    @default("PENDING")
+  assignedTo      String?   // userId
+  dueDate         DateTime?
+  description     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Document {
+  id              String    @id @default(cuid())
+  debtorId        String
+  debtor          Debtor    @relation(fields: [debtorId], references: [id])
+  fileName        String
+  filePath        String
+  fileType        String
+  uploadedBy      String    // userId
+  createdAt       DateTime  @default(now())
+}
+
+model AuditLog {
+  id              String    @id @default(cuid())
+  userId          String
+  action          String
+  details         Json?
+  timestamp       DateTime  @default(now())
+}
+
+14. FREE TIER HOSTING
+Component	Service	Plan	Cost
+Marketing Website	Vercel	Hobby	? $0
+Platform Dashboard	Vercel	Hobby	? $0
+client.gorka.click	Vercel	Hobby	? $0
+Backend API	Render	Free	? $0
+Database	Supabase	Free	? $0
+Installers	GitHub Releases	Free	? $0
+Domain	DreamHost	—	~$12/year
+Render Free Tier — Cold Start Warning
+Render free web services spin down after 15 minutes of inactivity. The first request after inactivity takes 30-60 seconds to wake.
+Mitigation: Use a cron job to ping /api/health every 5 minutes (e.g., UptimeRobot, cron-job.org).
+
+15. THE CLIENT DASHBOARD — DESKTOP APP
+Overview
+Item	Value
+Name	Client Dashboard
+Framework	Tauri (recommended) or Electron
+Hosting	Desktop (not Vercel)
+Data Storage	Local SQLite
+Cloud Sync	Metadata only to Supabase
+client.gorka.click	Static download page
+Why Tauri Over Electron?
+Aspect	Tauri	Electron
+Bundle size	~3-5 MB	~60-100 MB
+Performance	? Faster	?? Heavier
+Filesystem access	? Full	? Full
+SQLite	? Works	? Works
+Learning curve	? Rust required	? JavaScript/TypeScript
+Recommendation: Use Tauri for smaller bundle size and better performance.
+
+16. CODE CHANGES — COMPLETE
+16.1 Backend — Auth Middleware
+typescript
+// src/backend/middleware/auth.ts
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+
+export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    let token = null;
+    
+    // 1. Check Authorization header (Bearer token) — for desktop app
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+    
+    // 2. Check cookie — for web browsers
+    if (!token && req.cookies) {
+      token = req.cookies.gorka_session;
+    }
+    
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret');
+    (req as any).user = decoded;
+    return next();
+  } catch (error) {
+    return res.status(403).json({ success: false, error: 'Invalid or expired token' });
+  }
+};
+16.2 Backend — Forbidden Endpoints
+typescript
+// src/backend/routes/index.ts
+const FORBIDDEN_ENDPOINTS = [
+  '/api/debtors',
+  '/api/debtors/*',
+  '/api/communications',
+  '/api/communications/*',
+  '/api/notes',
+  '/api/notes/*',
+  '/api/actions',
+  '/api/actions/*',
+  '/api/debts',
+  '/api/debts/*',
+  '/api/search',
+  '/api/reports',
+  '/api/exports',
+];
+
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    const path = req.path;
+    if (FORBIDDEN_ENDPOINTS.some(pattern => path.match(new RegExp(`^${pattern.replace('*', '.*')}$`)))) {
+      return res.status(404).json({ error: 'Not Found' });
+    }
+  }
+  next();
+});
+16.3 Client Dashboard — Cloud API Service
+typescript
+// supervisor-dashboard/src/services/cloud.api.ts
+import { Store } from '@tauri-apps/plugin-store';
+
+const CLOUD_API_URL = import.meta.env.VITE_CLOUD_API_URL || 'https://api.gorka.click';
+
+// Get token from secure storage
+const getToken = async (): Promise<string | null> => {
+  const store = new Store('.settings.dat');
+  return await store.get<string>('authToken');
+};
+
+// Set token after login
+export const setToken = async (token: string): Promise<void> => {
+  const store = new Store('.settings.dat');
+  await store.set('authToken', token);
+  await store.save();
+};
+
+// Clear token on logout
+export const clearToken = async (): Promise<void> => {
+  const store = new Store('.settings.dat');
+  await store.delete('authToken');
+  await store.save();
+};
+
+// Authenticated fetch with Bearer token
+const authFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const token = await getToken();
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+};
+
+export const cloudAPI = {
+  // Auth
+  async login(email: string, password: string) {
+    const response = await fetch(`${CLOUD_API_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await response.json();
+    if (data.success && data.data?.token) {
+      await setToken(data.data.token);
+    }
+    return data;
+  },
+
+  async logout() {
+    await clearToken();
+  },
+
+  async getMe() {
+    const response = await authFetch(`${CLOUD_API_URL}/api/auth/me`);
+    return response.json();
+  },
+
+  // Organizations
+  async getOrganizations() {
+    const response = await authFetch(`${CLOUD_API_URL}/api/organizations`);
+    return response.json();
+  },
+
+  // Licenses
+  async getLicense() {
+    const response = await authFetch(`${CLOUD_API_URL}/api/license`);
+    return response.json();
+  },
+
+  // Support tickets
+  async getSupportTickets() {
+    const response = await authFetch(`${CLOUD_API_URL}/api/support/tickets`);
+    return response.json();
+  },
+
+  async createSupportTicket(data: any) {
+    const response = await authFetch(`${CLOUD_API_URL}/api/support/tickets`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  },
+};
+16.4 Client Dashboard — Local Server (with Authentication)
+typescript
+// supervisor-dashboard/src/local-server.ts
+import express from 'express';
+import cors from 'cors';
+import crypto from 'crypto';
+import { appDataDir } from '@tauri-apps/api/path';
+import { join } from '@tauri-apps/api/path';
+import { readTextFile, writeTextFile } from '@tauri-apps/api/fs';
+import { localDB } from './services/local.db';
+
+const app = express();
+const PORT = process.env.LOCAL_API_PORT || 31415;
+
+// Generate or load local secret
+async function getLocalSecret(): Promise<string> {
+  const secretPath = await join(await appDataDir(), 'local-secret.txt');
+  try {
+    return await readTextFile(secretPath);
+  } catch {
+    const secret = crypto.randomBytes(32).toString('hex');
+    await writeTextFile(secretPath, secret);
+    return secret;
+  }
+}
+
+const LOCAL_SECRET = await getLocalSecret();
+
+// CORS — restricted to app origins only
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3002',
+    'tauri://localhost',
+    'app://localhost',
+  ],
+  credentials: true,
+}));
+
+app.use(express.json());
+
+// Local authentication middleware
+const authenticateLocal = (req: any, res: any, next: any) => {
+  const providedSecret = req.headers['x-local-secret'];
+  if (!providedSecret || providedSecret !== LOCAL_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+};
+
+// Apply to all local routes
+app.use('/api/local', authenticateLocal);
+
+// Debtors CRUD
+app.get('/api/local/debtors', (req, res) => {
+  const { organizationId } = req.query;
+  const debtors = localDB.getDebtors(organizationId as string);
+  res.json(debtors);
+});
+
+app.get('/api/local/debtors/:id', (req, res) => {
+  const debtor = localDB.getDebtor(req.params.id);
+  res.json(debtor);
+});
+
+app.post('/api/local/debtors', (req, res) => {
+  const data = req.body;
+  const result = localDB.createDebtor(data);
+  res.json(result);
+});
+
+app.put('/api/local/debtors/:id', (req, res) => {
+  const result = localDB.updateDebtor(req.params.id, req.body);
+  res.json(result);
+});
+
+app.delete('/api/local/debtors/:id', (req, res) => {
+  const result = localDB.deleteDebtor(req.params.id);
+  res.json(result);
+});
+
+// Debts
+app.get('/api/local/debts/:debtorId', (req, res) => {
+  const debts = localDB.getDebts(req.params.debtorId);
+  res.json(debts);
+});
+
+app.post('/api/local/debts', (req, res) => {
+  const result = localDB.createDebt(req.body);
+  res.json(result);
+});
+
+// Communications
+app.get('/api/local/communications/:debtorId', (req, res) => {
+  const communications = localDB.getCommunications(req.params.debtorId);
+  res.json(communications);
+});
+
+app.post('/api/local/communications', (req, res) => {
+  const result = localDB.createCommunication(req.body);
+  res.json(result);
+});
+
+// Actions
+app.get('/api/local/actions/:debtorId', (req, res) => {
+  const actions = localDB.getActions(req.params.debtorId);
+  res.json(actions);
+});
+
+app.post('/api/local/actions', (req, res) => {
+  const result = localDB.createAction(req.body);
+  res.json(result);
+});
+
+app.put('/api/local/actions/:id', (req, res) => {
+  const result = localDB.updateAction(req.params.id, req.body);
+  res.json(result);
+});
+
+app.listen(PORT, () => {
+  console.log(`Local API server running on http://localhost:${PORT}`);
+});
+
+export { LOCAL_SECRET };
+16.5 Client Dashboard — Local Database (with App Data Directory)
+typescript
+// supervisor-dashboard/src/services/local.db.ts
+import Database from 'better-sqlite3';
+import { appDataDir } from '@tauri-apps/api/path';
+import { join } from '@tauri-apps/api/path';
+
+export class LocalDB {
+  private db: Database.Database;
+
+  constructor(dbPath: string) {
+    this.db = new Database(dbPath);
+    this.init();
+  }
+
+  private init() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS debtors (
+        id TEXT PRIMARY KEY,
+        organizationId TEXT NOT NULL,
+        firstName TEXT NOT NULL,
+        lastName TEXT,
+        email TEXT,
+        phone TEXT,
+        address TEXT,
+        notes TEXT,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS debts (
+        id TEXT PRIMARY KEY,
+        debtorId TEXT NOT NULL,
+        amount REAL NOT NULL,
+        currency TEXT DEFAULT 'USD',
+        status TEXT DEFAULT 'ACTIVE',
+        dueDate DATETIME,
+        description TEXT,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (debtorId) REFERENCES debtors(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS communications (
+        id TEXT PRIMARY KEY,
+        debtorId TEXT NOT NULL,
+        type TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        content TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        createdBy TEXT NOT NULL,
+        FOREIGN KEY (debtorId) REFERENCES debtors(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS actions (
+        id TEXT PRIMARY KEY,
+        debtorId TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT DEFAULT 'PENDING',
+        assignedTo TEXT,
+        dueDate DATETIME,
+        description TEXT,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (debtorId) REFERENCES debtors(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        debtorId TEXT NOT NULL,
+        fileName TEXT NOT NULL,
+        filePath TEXT NOT NULL,
+        fileType TEXT NOT NULL,
+        uploadedBy TEXT NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (debtorId) REFERENCES debtors(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  }
+
+  // ... CRUD methods (see previous versions)
+}
+
+// Get platform-specific database path
+async function getDbPath(): Promise<string> {
+  const baseDir = await appDataDir();
+  return await join(baseDir, 'gorka-client.db');
+}
+
+export const localDB = new LocalDB(await getDbPath());
+16.6 Tauri Configuration
+json
+// supervisor-dashboard/tauri.conf.json
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:5173",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "GORKA Client Dashboard",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "fs": {
+        "all": true,
+        "readFile": true,
+        "writeFile": true,
+        "readDir": true,
+        "copyFile": true,
+        "createDir": true,
+        "removeDir": true,
+        "removeFile": true,
+        "renameFile": true
+      },
+      "shell": {
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "com.gorka.client",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ],
+      "resources": ["./dist/**/*"],
+      "targets": ["nsis", "app", "deb", "appimage"]
+    },
+    "updater": {
+      "active": true,
+      "endpoints": ["https://api.gorka.click/api/updates"],
+      "dialog": true,
+      "pubkey": "GENERATE_ME_WITH_NPX_TAURI_SIGNER_GENERATE"
+    }
+  }
+}
+16.7 client.gorka.click — Download Page
+tsx
+// client-download-page/index.tsx
+export default function DownloadPage() {
+  return (
+    <div>
+      <h1>GORKA Client Dashboard</h1>
+      <p>Download the desktop app to manage your agency</p>
+      <a href="https://github.com/gorka/client-dashboard/releases/latest/download/gorka-client-windows.msi">
+        Download for Windows
+      </a>
+      <a href="https://github.com/gorka/client-dashboard/releases/latest/download/gorka-client-mac.dmg">
+        Download for Mac
+      </a>
+      <a href="https://github.com/gorka/client-dashboard/releases/latest/download/gorka-client-linux.deb">
+        Download for Linux
+      </a>
+    </div>
+  );
+}
+
+17. DEPLOYMENT ORDER (PHASES 0–9)
+PHASE 0 — AUDIT (NO CHANGES)
+Step	What
+0.1	Find every localhost: reference
+0.2	Find every 127.0.0.1 reference
+0.3	Find every API base URL
+0.4	Find every redirect URL
+0.5	Find every CORS config
+0.6	Find every cookie config
+0.7	Find every environment variable
+0.8	Find every window.location / navigate()
+0.9	Find every fetch() / axios / baseURL
+0.10	Document everything — DO NOT CHANGE ANYTHING
+PHASE 0.5 — DATA AUDIT & PURGE
+Step	What
+0.5.1	Export current database schema
+0.5.2	Identify all tables containing debtor data
+0.5.3	Export debtor data to encrypted local files
+0.5.4	DROP all debtor tables from cloud database
+0.5.5	Verify zero debtor rows remain
+0.5.6	Delete all database backups containing debtor data
+0.5.7	Confirm in writing: cloud database contains zero regulated data
+PHASE 1 — LOCAL DEVELOPMENT SETUP
+Step	What
+1.1	Verify local hostnames resolve
+1.2	Test all services on *.gorka.localhost
+1.3	Test Client Dashboard Desktop App ? loads
+1.4	Do not proceed until local hostname resolution is confirmed
+PHASE 2 — CODE UPDATES
+Step	What
+2.1	Update all code URLs (localhost ? production)
+2.2	Update CORS configuration
+2.3	Update cookie configuration (host-only)
+2.4	Add Bearer token auth strategy to backend
+2.5	Update email verification links
+2.6	Update environment variables
+2.7	Add vercel.json to Platform Dashboard
+2.8	Add forbidden endpoint blacklist to backend
+2.9	Build Client Dashboard Desktop App (Tauri/Electron)
+2.10	Build client.gorka.click static download page
+2.11	Generate Tauri updater signing keypair
+2.12	Commit to git
+PHASE 3 — DATABASE SETUP
+Step	What
+3.1	Create Supabase project (free tier)
+3.2	Ensure NO debtor tables exist in schema
+3.3	Run migrations (metadata only)
+3.4	Get connection string
+PHASE 4 — BACKEND DEPLOYMENT
+Step	What
+4.1	Create Render service (free tier)
+4.2	Set environment variables
+4.3	Ensure NO debtor endpoints exist in API
+4.4	Deploy backend to Render
+4.5	Test https://api.gorka.click/api/health ? 200
+4.6	Add custom domain in Render dashboard
+PHASE 5 — FRONTEND DEPLOYMENT
+Step	What
+5.1	Create Vercel project for Marketing Website
+5.2	Create Vercel project for Platform Dashboard
+5.3	Create Vercel project for client.gorka.click
+5.4	Set environment variables in each
+5.5	Deploy all frontends to Vercel
+5.6	Add custom domains in Vercel dashboards
+PHASE 6 — DESKTOP APP PUBLISHING
+Step	What
+6.1	Build Client Dashboard desktop app (Windows, Mac, Linux)
+6.2	Upload installers to GitHub Releases
+6.3	Update client.gorka.click download page with release links
+6.4	Configure Tauri updater endpoint to point to GitHub Releases
+6.5	Store private signing key in CI/CD secrets
+PHASE 7 — DNS
+Step	What
+7.1	Update DNS records in DreamHost
+7.2	Wait for propagation (5-30 minutes)
+7.3	Verify all subdomains resolve
+PHASE 8 — TESTING
+Step	What
+8.1	Infrastructure tests
+8.2	Authentication tests
+8.3	Cookie/Token tests
+8.4	API tests
+8.5	Debtor data isolation tests
+8.6	Desktop app tests
+8.7	Local authentication tests
+8.8	Local CORS tests
+PHASE 9 — CLEANUP
+Step	What
+9.1	Remove debug console.log statements
+9.2	Final regression test
+
+18. TESTING PLAN
+Infrastructure Tests
+Test	Expected
+https://api.gorka.click/api/health	? 200 OK
+https://www.gorka.click	? loads homepage
+https://platform.gorka.click	? loads (or redirects to login)
+https://client.gorka.click	? loads download page
+Desktop app	? loads, local SQLite created
+Authentication Tests
+Test	Expected
+Register (Marketing)	? Success
+Email verification	? Success
+Login (Marketing)	? Redirects based on role
+Login (Platform Dashboard)	? Works
+Login (Client Dashboard Desktop)	? Works (Bearer token stored)
+Logout	? Token cleared
+Invalid credentials	? 401 error
+Cookie/Token Tests
+Check	Expected
+Web cookie domain	Host-only (no domain set)
+Desktop token storage	Secure (OS keychain / encrypted file)
+Bearer token sent in header	? Yes
+Token persists after app restart	? Yes
+API Tests
+Test	Expected
+/api/auth/me (web cookie)	? 200 OK
+/api/auth/me (Bearer token)	? 200 OK
+/api/auth/me (unauthenticated)	? 401
+/api/debtors	? 404 NOT FOUND
+/api/support/tickets	? 200 OK
+Local Server Tests
+Test	Expected
+Local server runs on localhost:31415	? Yes
+Local secret required	? 401 without header
+Invalid secret ? 401	? Yes
+Valid secret ? 200	? Yes
+CORS restricted to app origins	? Yes
+Debtor Data Isolation Tests
+Test	Expected
+Client Dashboard uploads debtor CSV	? Data stored in local SQLite
+Cloud database contains debtor data	? ZERO rows
+/api/debtors on cloud	? 404 NOT FOUND
+
+19. ROLLBACK CONDITIONS
+Condition	Action
+Production API cannot be reached	Rollback
+Authentication becomes unusable	Rollback
+Database connectivity fails	Rollback
+Cookies/tokens are shared between apps	Rollback
+Debtor data detected in cloud	IMMEDIATE ROLLBACK
+Local server has no authentication	IMMEDIATE ROLLBACK
+
+20. SUCCESS CRITERIA
+Criterion	Status
+All apps accessible via *.gorka.click	?
+Platform Dashboard shows metadata only	?
+Client Dashboard is a Desktop App	?
+Client Dashboard stores debtor data in LOCAL SQLite	?
+Debtor data NEVER sent to cloud	?
+Attempt to access /api/debtors returns 404	?
+Local server has authentication (shared secret)	?
+CORS restricted to app origins	?
+Cookies are host-scoped	?
+Desktop app uses Bearer tokens + secure storage	?
+Installers hosted on GitHub Releases	?
+Registration flow works end-to-end	?
+No 431 errors	?
+
+21. MIGRATION PRINCIPLE
+"First establish the final hostname architecture in local development and production. Only after the hostname, API, CORS, authentication, cookie, and environment configuration has been validated should remaining application endpoint/functionality problems be repaired."
+
+22. FORBIDDEN ENDPOINT LIST
+typescript
+// src/backend/routes/index.ts
+const FORBIDDEN_ENDPOINTS = [
+  '/api/debtors',
+  '/api/debtors/*',
+  '/api/communications',
+  '/api/communications/*',
+  '/api/notes',
+  '/api/notes/*',
+  '/api/actions',
+  '/api/actions/*',
+  '/api/debts',
+  '/api/debts/*',
+  '/api/search',
+  '/api/reports',
+  '/api/exports',
+];
+
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    const path = req.path;
+    if (FORBIDDEN_ENDPOINTS.some(pattern => path.match(new RegExp(`^${pattern.replace('*', '.*')}$`)))) {
+      return res.status(404).json({ error: 'Not Found' });
+    }
+  }
+  next();
+});
+
+? FINAL SUMMARY
+Check	Status
+Architecture respects data locality	? YES
+Regulated data stays local	? YES
+Cloud cannot store debtor data	? YES
+Client Dashboard is a Desktop App	? YES
+Desktop app uses Bearer tokens	? YES
+Local server has authentication	? YES
+CORS restricted to app origins	? YES
+Installers hosted on GitHub Releases	? YES
+Free tier hosting works	? YES
+Naming is consistent and clear	? YES
+
+Good — every item from the last round got a real fix, not a cosmetic one: local server now requires a shared secret, CORS is restricted to actual app origins, and the Bearer-token strategy correctly separates desktop auth from browser cookie auth. This is close to genuinely ready. A few things left, roughly in order of how much they matter:
+1. JWT_SECRET || 'default-secret' is back — this exact bug was caught and fixed months ago in your marketing-site spec, and it's resurfaced here in the new shared auth middleware.
+typescript
+const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret');
+If JWT_SECRET is ever unset in production, every token silently gets verified against a public, guessable string instead of failing loudly. This is the copy-paste hazard of iterating across many documents — worth a global search for default-secret across your whole codebase before this ships, since it's clearly capable of reappearing.
+2. getLocalSecret() writes the shared secret to a plaintext file (local-secret.txt) via writeTextFile. It solves problem #1 from last round (an unauthenticated local server) but the secret protecting it isn't itself protected — any other process or user account on the same machine can simply read that file and impersonate the desktop app to its own local API. For a product whose entire premise is "protect regulated debtor data," this is worth tightening: store it via the OS keychain (same mechanism already correctly chosen for the auth token — @tauri-apps/plugin-store or safeStorage) rather than a bare text file in the app data directory.
+3. LOCAL_SECRET is compared with !== — not constant-time. Minor in this specific context (attacker would need local code execution to time the comparison at all, at which point they could likely just read the file per #2), but worth using crypto.timingSafeEqual() for the comparison as a matter of habit, especially since this codebase already imports crypto in that same file.
+4. The local server binds to a fixed, guessable port 31415, but nothing prevents port squatting. If any other local process (malicious or just a port conflict) is already listening on 31415 before your app starts, app.listen(PORT) will either throw or silently fail depending on how errors are handled — neither path is addressed here. Worth adding an explicit .on('error', ...) handler that tries a fallback port or surfaces a clear "port unavailable" message to the user, rather than the app failing mysteriously.
+5. authenticateLocal middleware is applied via app.use('/api/local', authenticateLocal) — confirm this line's position relative to the CORS middleware and route definitions actually guards every route beneath it, since Express middleware order matters and this file interleaves CORS setup, secret loading (which is awaited at module scope — a top-level await, which needs your build/runtime to actually support that syntax; worth confirming Tauri's bundler doesn't choke on it), and route registration in a way that's easy to accidentally reorder during future edits.
+6. Role naming is now internally consistent — "Supervisor" is explicitly listed as the legacy name for "Client Admin" in the table, which resolves the collision flagged twice before. Good, this one's actually closed.
+7. Minor: /api/search, /api/reports, /api/exports are still in the forbidden list without qualification — good, that's actually cleaner than the earlier conditional wording ("if it can search debtor names"). This one's also resolved from before.
+Net: this is a coherent, implementable spec, and most of the hard architectural questions (data boundary, desktop vs. browser, auth split, CORS) are genuinely settled now. Items 1 and 2 are the two I'd actually block on — both are real gaps in the exact thing this document exists to guarantee (debtor data protection), and both have concrete, already-modeled fixes elsewhere in your own spec (the auth-token secure-storage pattern) that just need to be applied consistently to the local secret too.
+Good — every item from the last round got a real fix, not a cosmetic one: local server now requires a shared secret, CORS is restricted to actual app origins, and the Bearer-token strategy correctly separates desktop auth from browser cookie auth. This is close to genuinely ready. A few things left, roughly in order of how much they matter:
+1. JWT_SECRET || 'default-secret' is back — this exact bug was caught and fixed months ago in your marketing-site spec, and it's resurfaced here in the new shared auth middleware.
+typescript
+const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret');
+If JWT_SECRET is ever unset in production, every token silently gets verified against a public, guessable string instead of failing loudly. This is the copy-paste hazard of iterating across many documents — worth a global search for default-secret across your whole codebase before this ships, since it's clearly capable of reappearing.
+2. getLocalSecret() writes the shared secret to a plaintext file (local-secret.txt) via writeTextFile. It solves problem #1 from last round (an unauthenticated local server) but the secret protecting it isn't itself protected — any other process or user account on the same machine can simply read that file and impersonate the desktop app to its own local API. For a product whose entire premise is "protect regulated debtor data," this is worth tightening: store it via the OS keychain (same mechanism already correctly chosen for the auth token — @tauri-apps/plugin-store or safeStorage) rather than a bare text file in the app data directory.
+3. LOCAL_SECRET is compared with !== — not constant-time. Minor in this specific context (attacker would need local code execution to time the comparison at all, at which point they could likely just read the file per #2), but worth using crypto.timingSafeEqual() for the comparison as a matter of habit, especially since this codebase already imports crypto in that same file.
+4. The local server binds to a fixed, guessable port 31415, but nothing prevents port squatting. If any other local process (malicious or just a port conflict) is already listening on 31415 before your app starts, app.listen(PORT) will either throw or silently fail depending on how errors are handled — neither path is addressed here. Worth adding an explicit .on('error', ...) handler that tries a fallback port or surfaces a clear "port unavailable" message to the user, rather than the app failing mysteriously.
+5. authenticateLocal middleware is applied via app.use('/api/local', authenticateLocal) — confirm this line's position relative to the CORS middleware and route definitions actually guards every route beneath it, since Express middleware order matters and this file interleaves CORS setup, secret loading (which is awaited at module scope — a top-level await, which needs your build/runtime to actually support that syntax; worth confirming Tauri's bundler doesn't choke on it), and route registration in a way that's easy to accidentally reorder during future edits.
+6. Role naming is now internally consistent — "Supervisor" is explicitly listed as the legacy name for "Client Admin" in the table, which resolves the collision flagged twice before. Good, this one's actually closed.
+7. Minor: /api/search, /api/reports, /api/exports are still in the forbidden list without qualification — good, that's actually cleaner than the earlier conditional wording ("if it can search debtor names"). This one's also resolved from before.
+Net: this is a coherent, implementable spec, and most of the hard architectural questions (data boundary, desktop vs. browser, auth split, CORS) are genuinely settled now. Items 1 and 2 are the two I'd actually block on — both are real gaps in the exact thing this document exists to guarantee (debtor data protection), and both have concrete, already-modeled fixes elsewhere in your own spec (the auth-token secure-storage pattern) that just need to be applied consistently to the local secret too.
+

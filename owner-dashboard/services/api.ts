@@ -341,3 +341,48 @@ export async function getSystemStatus(): Promise<any> {
   const response = await fetchAPI<{ data: any }>('/status');
   return response.data;
 }
+
+// ============================================
+// BOUNDARY PROOF APIs
+// ============================================
+export interface BoundaryProofRow {
+  id: string;
+  organizationId: string;
+  eventType: string;
+  payloadSummary: any;
+  debtorDataIncluded: boolean;
+  timestamp: string;
+}
+
+export interface BoundaryProofResponse {
+  rows: BoundaryProofRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function getBoundaryProofs(params?: {
+  organizationId?: string;
+  eventType?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<BoundaryProofResponse> {
+  const query = new URLSearchParams();
+  if (params?.organizationId) query.append('organizationId', params.organizationId);
+  if (params?.eventType) query.append('eventType', params.eventType);
+  if (params?.from) query.append('from', params.from);
+  if (params?.to) query.append('to', params.to);
+  if (params?.limit) query.append('limit', String(params.limit));
+  if (params?.offset) query.append('offset', String(params.offset));
+
+  const queryString = query.toString();
+  const endpoint = queryString ? `/boundary-proofs?${queryString}` : '/boundary-proofs';
+  const response = await fetchAPI<{ data: BoundaryProofResponse }>(endpoint);
+  return response.data;
+}
+
+
+
+

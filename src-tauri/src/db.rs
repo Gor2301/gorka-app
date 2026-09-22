@@ -244,6 +244,42 @@ fn run_migrations(conn: &mut Connection) -> Result<(), String> {
         tx.commit().map_err(|e| e.to_string())?;
     }
 
+    if current_version < 3 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS actions (
+                id TEXT PRIMARY KEY,
+                debtor_id TEXT NOT NULL,
+                type TEXT NOT NULL,
+                status TEXT DEFAULT 'PENDING',
+                assigned_to TEXT,
+                due_date DATETIME,
+                description TEXT,
+                data JSON DEFAULT '{}',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (debtor_id) REFERENCES debtors(id) ON DELETE CASCADE
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_actions_debtor_id ON actions(debtor_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute("PRAGMA user_version = 3", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 

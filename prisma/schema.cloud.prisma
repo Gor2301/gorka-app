@@ -1,0 +1,398 @@
+
+// GORKA Cloud Schema
+// Version: 1.0
+// Date: September 12, 2026
+// Purpose: Cloud control plane only. No debtor data allowed.
+// Authority: See GORKA_RECOVERY/recovery-notes/ARCHITECTURAL-LAW.md
+//
+// WARNING: This schema does NOT contain debtor tables.
+// Debtor data lives exclusively in the Tauri local SQLite database.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ CORE ============
+
+model Organization {
+  id                 String   @id @default(cuid())
+  name               String
+
+  // Business identity (customer data)
+  clientType         String?  @map("client_type")
+  website            String?
+  registrationNumber String?  @map("registration_number")
+  taxId              String?  @map("tax_id")
+  address            String?
+
+  // Contact
+  contactEmail       String?  @map("contact_email")
+  contactPhone       String?  @map("contact_phone")
+  primaryContact     String?  @map("primary_contact")
+
+  // Account status
+  verificationStatus       String    @default("PENDING_EMAIL") @map("verification_status")
+  emailVerificationToken   String?   @map("email_verification_token")
+  emailVerificationExpires DateTime? @map("email_verification_expires")
+
+  // PII policy acknowledgment (Support spec v2.3)
+  piiPolicyAcceptedAt DateTime? @map("pii_policy_accepted_at")
+  piiPolicyVersion    String?   @map("pii_policy_version")
+  piiPolicyAcceptedBy String?   @map("pii_policy_accepted_by")
+
+  // Timestamps
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  users                    User[]
+  agents                   Agent[]
+  licenses                 License[]
+  aggregateMetrics         AggregateMetrics?
+  clientActivityMetrics    ClientActivityMetrics[]
+  supportTickets           SupportTicket[]
+  organizationAuditEvents  OrganizationAuditEvent[]
+  templates                Template[]
+  clientConnectors         ClientConnector[]
+  connectorUsage           ConnectorUsage[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String   @map("password_hash")
+  name           String?
+  role           String   @default("AGENT")
+  isActive       Boolean  @default(true) @map("is_active")
+  lastLogin      DateTime? @map("last_login")
+
+  organizationId String?  @map("organization_id")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Agent {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  email          String
+  role           String   @default("AGENT")
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("agents")
+}
+
+model License {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  type           String
+  status         String
+  expiresAt      DateTime @map("expires_at")
+
+  renewalCycle         String   @default("MONTHLY") @map("renewal_cycle")
+  price                Float    @default(0)
+  currency             String   @default("USD")
+  stripeCustomerId     String?  @map("stripe_customer_id")
+  stripeSubscriptionId String?  @map("stripe_subscription_id")
+  stripePriceId        String?  @map("stripe_price_id")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("licenses")
+}
+
+model PlatformSettings {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+
+  @@map("platform_settings")
+}
+
+// ============ METRICS ============
+
+model AggregateMetrics {
+  id              String   @id @default(cuid())
+  organizationId  String   @unique @map("organization_id")
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  debtorCount     Int      @default(0) @map("debtor_count")
+  totalDebt       Float    @default(0) @map("total_debt")
+  agentCount      Int      @default(0) @map("agent_count")
+  activeCaseCount Int      @default(0) @map("active_case_count")
+  lastSyncedAt    DateTime @default(now()) @map("last_synced_at")
+
+  @@map("aggregate_metrics")
+}
+
+model ClientActivityMetrics {
+  id                  String   @id @default(cuid())
+  organizationId      String   @map("organization_id")
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  periodStart         DateTime @map("period_start")
+  periodEnd           DateTime @map("period_end")
+  uploadsCount        Int      @default(0) @map("uploads_count")
+  uploadBatchAvgSize  Int      @default(0) @map("upload_batch_avg_size")
+  deletionsCount      Int      @default(0) @map("deletions_count")
+  actionsCreatedCount Int      @default(0) @map("actions_created_count")
+  messagesSentCount   Int      @default(0) @map("messages_sent_count")
+  activeUsersCount    Int      @default(0) @map("active_users_count")
+  daysActive          Int      @default(0) @map("days_active")
+  syncEventsCount     Int      @default(0) @map("sync_events_count")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, periodStart])
+  @@map("client_activity_metrics")
+}
+
+// ============ AUDIT ============
+
+model CloudAuditLog {
+  id             String   @id @default(cuid())
+  userId         String?  @map("user_id")
+  organizationId String?  @map("organization_id")
+  action         String
+  details        Json?
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  timestamp      DateTime @default(now())
+
+  @@index([organizationId, timestamp])
+  @@index([userId, timestamp])
+  @@map("cloud_audit_logs")
+}
+
+model BoundaryProofLog {
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  eventType            String   @map("event_type")
+  payloadSummary       Json     @map("payload_summary")
+  debtorDataIncluded   Boolean  @default(false) @map("debtor_data_included")
+  timestamp            DateTime @default(now())
+
+  @@index([organizationId, timestamp])
+  @@index([eventType])
+  @@map("boundary_proof_logs")
+}
+
+// ============ SUPPORT ============
+
+model SupportTicket {
+  id             String   @id @default(cuid())
+  ticketNumber   Int      @unique @map("ticket_number")
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  subject        String
+  message        String
+  category       String   @default("OTHER")
+  priority       String   @default("MEDIUM")
+  status         String   @default("OPEN")
+  source         String   @default("PORTAL")
+
+  openedBy       String   @map("opened_by")
+  openedByEmail  String   @map("opened_by_email")
+  openedByName   String?  @map("opened_by_name")
+
+  assignedTo        String?  @map("assigned_to")
+  assignedBy        String?  @map("assigned_by")
+  assignedAt        DateTime? @map("assigned_at")
+  previousAssignee  String?  @map("previous_assignee")
+
+  escalatedAt       DateTime? @map("escalated_at")
+  escalatedBy       String?  @map("escalated_by")
+  escalationReason  String?  @map("escalation_reason")
+
+  firstRespondedAt  DateTime? @map("first_responded_at")
+  resolvedAt        DateTime? @map("resolved_at")
+  closedAt          DateTime? @map("closed_at")
+  resolvedBy        String?  @map("resolved_by")
+  closedBy          String?  @map("closed_by")
+
+  mergedIntoId      String?  @map("merged_into_id")
+  mergedAt          DateTime? @map("merged_at")
+
+  isDeleted         Boolean  @default(false) @map("is_deleted")
+  deletedAt         DateTime? @map("deleted_at")
+  deletedBy         String?  @map("deleted_by")
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  replies SupportTicketReply[]
+  events  SupportTicketEvent[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([assignedTo, status])
+  @@map("support_tickets")
+}
+
+model SupportTicketReply {
+  id         String   @id @default(cuid())
+  ticketId   String   @map("ticket_id")
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message    String
+  isInternal Boolean  @default(false) @map("is_internal")
+  sentBy     String   @map("sent_by")
+  sentByName String?  @map("sent_by_name")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_replies")
+}
+
+model SupportTicketEvent {
+  id        String   @id @default(cuid())
+  ticketId  String   @map("ticket_id")
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  eventType String   @map("event_type")
+  actorId   String   @map("actor_id")
+  actorName String?  @map("actor_name")
+  oldValue  Json?    @map("old_value")
+  newValue  Json?    @map("new_value")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_events")
+}
+
+model OrganizationAuditEvent {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  eventType      String   @map("event_type")
+  actorId        String   @map("actor_id")
+  actorName      String?  @map("actor_name")
+  details        Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@map("organization_audit_events")
+}
+
+model Notification {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  type           String
+  message        String
+  read           Boolean  @default(false)
+  link           String?
+  ticketId       String?  @map("ticket_id")
+  deliveryStatus String   @default("PENDING") @map("delivery_status")
+  emailSentAt    DateTime? @map("email_sent_at")
+  emailError     String?  @map("email_error")
+  attemptCount   Int      @default(0) @map("attempt_count")
+  lastError      String?  @map("last_error")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model TicketCounter {
+  id         String @id @default("default")
+  lastNumber Int    @default(0) @map("last_number")
+
+  @@map("ticket_counter")
+}
+
+// ============ TEMPLATES ============
+
+model Template {
+  id             String   @id @default(cuid())
+  name           String
+  subject        String?
+  content        String
+  channel        String
+  type           String   @default("CUSTOM")
+  description    String?
+  variables      String[] @default([])
+  status         String   @default("ACTIVE")
+  organizationId String?  @map("organization_id")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, status])
+  @@map("templates")
+}
+
+// ============ CONNECTORS ============
+
+model ConnectorCatalog {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  name              String
+  description       String?
+  category          String
+  provider          String
+  isManagedByGorka  Boolean  @default(true) @map("is_managed_by_gorka")
+  isActive          Boolean  @default(true) @map("is_active")
+  lifecycleStatus   String   @default("ACTIVE") @map("lifecycle_status")
+  pricingModel      String   @default("PASS_THROUGH") @map("pricing_model")
+  pricingConfig     Json     @map("pricing_config")
+  iconUrl           String?  @map("icon_url")
+  documentationUrl  String?  @map("documentation_url")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("connector_catalog")
+}
+
+model ClientConnector {
+  id                    String   @id @default(cuid())
+  organizationId        String   @map("organization_id")
+  organization          Organization @relation(fields: [organizationId], references: [id])
+  connectorCode         String   @map("connector_code")
+  status                String   @default("CONNECTED")
+  credentialsLocation   String   @default("LOCAL") @map("credentials_location")
+  credentialsEncrypted  String?  @map("credentials_encrypted")
+  connectedAt           DateTime @default(now()) @map("connected_at")
+  disconnectedAt        DateTime? @map("disconnected_at")
+  suspendedReason       String?  @map("suspended_reason")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, connectorCode])
+  @@map("client_connectors")
+}
+
+model ConnectorUsage {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  connectorCode  String   @map("connector_code")
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  usageCount     Int      @map("usage_count")
+  usageUnit      String   @map("usage_unit")
+  unitPrice      Float    @map("unit_price")
+  pricingVersion String   @map("pricing_version")
+  billableAmount Float    @map("billable_amount")
+  currency       String   @default("USD")
+  syncSource     String   @map("sync_source")
+  reportedAt     DateTime @default(now()) @map("reported_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, connectorCode, periodStart])
+  @@map("connector_usage")
+}
+

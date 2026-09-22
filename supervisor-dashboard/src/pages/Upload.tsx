@@ -62,11 +62,7 @@ const Upload: React.FC = () => {
       return;
     }
 
-    const token = localStorage.getItem('supervisor_token');
-    if (!token) {
-      setError('Please login first');
-      return;
-    }
+    const token = ''; // not used by the local upload service
 
     setUploading(true);
     setMessage('');

@@ -7,6 +7,7 @@ import ClientDetailPage from './pages/ClientDetailPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import BillingPage from './pages/BillingPage';
 import AuditPage from './pages/AuditPage';
+import BoundaryProofsPage from './pages/BoundaryProofsPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -85,6 +86,12 @@ const App = () => {
             <AuditPage />
           </ProtectedRoute>
         } />
+        <Route path="/boundary-proofs" element={
+          <ProtectedRoute>
+            <BoundaryProofsPage />
+          </ProtectedRoute>
+        } />
+
         <Route path="/settings" element={
           <ProtectedRoute>
             <SettingsPage />

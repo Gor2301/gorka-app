@@ -1,4 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000/api';
+// src/services/upload.service.ts
+//
+// Local-only upload service. Parses CSV in the browser, then writes
+// to the local SQLCipher database via localDB (Tauri invoke).
+// No cloud calls. No token required. No debtor data leaves the machine.
+
+import { localDB, DebtorInput } from './local.db';
 
 export interface UploadResponse {
   success: boolean;
@@ -7,141 +13,134 @@ export interface UploadResponse {
   errors?: string[];
 }
 
+// ─── CSV Parser ───────────────────────────────────────────────────────
+// Produces rows shaped for localDB.insertDebtor / bulkInsertDebtors.
+// Recognizes common header variants.
+
+function parseCsv(text: string): { rows: DebtorInput[]; errors: string[] } {
+  const errors: string[] = [];
+  const rows: DebtorInput[] = [];
+
+  const lines = text.split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) {
+    return { rows: [], errors: ['CSV file must have at least a header row and one data row'] };
+  }
+
+  const firstLine = lines[0];
+  let delimiter = ',';
+  if (firstLine.includes('\t')) delimiter = '\t';
+  else if (firstLine.includes(';')) delimiter = ';';
+
+  const headers = firstLine.split(delimiter).map((h) => h.trim().toLowerCase());
+
+  const pick = (row: Record<string, string>, ...keys: string[]): string => {
+    for (const k of keys) {
+      const v = row[k.toLowerCase()];
+      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+    }
+    return '';
+  };
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(delimiter).map((v) => v.trim());
+    const row: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index] || '';
+    });
+
+    // Name + surname detection.
+    let name = pick(row, 'name', 'first name', 'first', 'firstname', 'first_name');
+    let surname = pick(row, 'surname', 'last name', 'last', 'lastname', 'last_name');
+
+    // Fallback: a single "Name" column holding "John Smith".
+    if (!surname && name.includes(' ')) {
+      const parts = name.split(/\s+/);
+      name = parts[0];
+      surname = parts.slice(1).join(' ');
+    }
+
+    if (!name) {
+      errors.push(`Row ${i}: skipped - no name column matched`);
+      continue;
+    }
+    if (!surname) {
+      surname = '-';
+    }
+
+    const email = pick(row, 'email', 'e-mail', 'email address') || undefined;
+    const phone = pick(row, 'phone', 'phone number', 'mobile', 'telephone') || undefined;
+    const address = pick(row, 'address', 'street address', 'full address') || undefined;
+
+    // Debt amount is stashed in data, since it is not a debtor field
+    // in the local schema. A separate Debts table would carry it.
+    const debtRaw = pick(row, 'total debt', 'total_debt', 'debt', 'total', 'amount');
+    const totalDebt = debtRaw ? parseFloat(debtRaw.replace(/[$,]/g, '')) || 0 : 0;
+
+    rows.push({
+      name,
+      surname,
+      email,
+      phone,
+      data: {
+        address: address || undefined,
+        totalDebt: totalDebt || undefined,
+        status: 'ACTIVE',
+      },
+    });
+  }
+
+  return { rows, errors };
+}
+
+// ─── Service ──────────────────────────────────────────────────────────
 export const uploadService = {
-  async uploadStructuredData(token: string, file: File, dataType: string): Promise<UploadResponse> {
-    const text = await file.text();
-    const debtors: any[] = [];
-
-    if (dataType === 'csv' || file.name.endsWith('.csv')) {
-      const lines = text.split('\n').filter(line => line.trim());
-      
-      if (lines.length < 2) {
-        return {
-          success: false,
-          message: 'CSV file must have at least a header row and one data row',
-          errors: ['File appears empty or invalid']
-        };
-      }
-
-      const firstLine = lines[0];
-      let delimiter = ',';
-      if (firstLine.includes('\t')) delimiter = '\t';
-      else if (firstLine.includes(';')) delimiter = ';';
-
-      const headers = firstLine.split(delimiter).map(h => h.trim());
-      console.log('📋 Headers:', headers);
-      
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(delimiter).map(v => v.trim());
-        const row: any = {};
-        headers.forEach((header, index) => {
-          row[header] = values[index] || null;
-        });
-
-        // Extract name from various formats
-        let name = row['Name'] || row['name'] || '';
-        if (!name) {
-          const firstName = row['First Name'] || row['First'] || row['first_name'] || row['firstName'] || '';
-          const lastName = row['Last Name'] || row['Last'] || row['last_name'] || row['lastName'] || '';
-          name = `${firstName} ${lastName}`.trim();
-        }
-        
-        if (!name || name.trim() === '') {
-          console.log(`Row ${i}: Skipping - no name`);
-          continue;
-        }
-
-        // Extract total debt from various formats
-        let totalDebt = 0;
-        const debtValue = row['Total Debt'] || row['total_debt'] || row['Debt'] || row['debt'] || row['Total'] || row['total'] || '0';
-        if (typeof debtValue === 'string') {
-          totalDebt = parseFloat(debtValue.replace(/[$,]/g, '')) || 0;
-        } else if (typeof debtValue === 'number') {
-          totalDebt = debtValue;
-        }
-
-        debtors.push({
-          name: name.trim(),
-          email: row['Email'] || row['email'] || null,
-          phone: row['Phone'] || row['phone'] || null,
-          address: row['Address'] || row['address'] || null,
-          totalDebt: totalDebt,
-          status: 'ACTIVE'
-        });
-      }
-    } else {
+  async uploadStructuredData(_token: string, file: File, dataType: string): Promise<UploadResponse> {
+    // _token retained in signature for backward compatibility with
+    // Upload.tsx. It is not used. Debtor data never leaves the machine.
+    if (dataType !== 'csv' && !file.name.toLowerCase().endsWith('.csv')) {
       return {
         success: false,
         message: 'Only CSV files are supported currently',
-        errors: ['JSON, Excel, and XML support coming soon']
+        errors: ['JSON, Excel, and XML support coming soon'],
       };
     }
 
-    console.log(`✅ Parsed ${debtors.length} debtors`);
+    const text = await file.text();
+    const { rows, errors } = parseCsv(text);
 
-    if (debtors.length === 0) {
+    if (rows.length === 0) {
       return {
         success: false,
         message: 'No valid debtors found in file',
-        errors: ['Make sure the CSV has "Name" or "First Name" and "Last Name" columns']
+        errors: errors.length ? errors : ['No parsable rows found'],
       };
     }
 
-    // Test the first debtor
-    console.log('📤 First debtor:', JSON.stringify(debtors[0], null, 2));
-
-    // Send to backend
     try {
-      const response = await fetch(`${API_URL}/debtors/bulk`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ debtors })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Backend error:', errorText);
-        throw new Error(`Upload failed: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
+      const inserted = await localDB.bulkInsertDebtors(rows);
       return {
-        success: result.success,
-        message: result.message || `Created ${result.data?.successCount || 0} debtors`,
-        count: result.data?.successCount || 0,
-        errors: result.data?.errors || []
+        success: true,
+        message: `Imported ${inserted.length} debtor(s) into the local database.`,
+        count: inserted.length,
+        errors: errors.length ? errors : undefined,
       };
     } catch (err: any) {
-      console.error('❌ Upload error:', err);
+      console.error('Local bulk insert failed:', err);
       return {
         success: false,
-        message: err.message || 'Upload failed',
-        errors: [err.message]
+        message: err?.message || 'Local bulk insert failed',
+        errors: [err?.message || 'unknown error'],
       };
     }
   },
 
-  async uploadUnstructuredData(token: string, file: File, documentType: string): Promise<UploadResponse> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('type', documentType);
-
-    const response = await fetch(`${API_URL}/documents/upload`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      body: formData
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Upload failed');
-    }
-
-    return response.json();
-  }
+  async uploadUnstructuredData(_token: string, _file: File, _documentType: string): Promise<UploadResponse> {
+    // Unstructured upload (PDF, images, text, email) is not implemented
+    // in the desktop app yet. Nothing is uploaded anywhere.
+    return {
+      success: false,
+      message: 'Unstructured upload is not yet available in the desktop app',
+      errors: ['PDF, image, text, and email parsing is planned for a later phase'],
+    };
+  },
 };

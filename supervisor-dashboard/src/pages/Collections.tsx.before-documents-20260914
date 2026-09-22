@@ -1,0 +1,350 @@
+import React, { useState, useEffect } from 'react';
+import { Users, Search, Plus, Pencil, Trash2, X, AlertCircle } from 'lucide-react';
+import { localDB, Debtor, DebtorInput } from '../services/local.db';
+
+const emptyForm: DebtorInput = {
+  name: '',
+  surname: '',
+  email: '',
+  phone: '',
+  data: {},
+};
+
+const Collections: React.FC = () => {
+  const [debtors, setDebtors] = useState<Debtor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<DebtorInput>(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const loadDebtors = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const rows = await localDB.getDebtors();
+      setDebtors(rows);
+    } catch (err: any) {
+      console.error('Error loading debtors:', err);
+      setError(err?.message || 'Failed to load debtors');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDebtors();
+  }, []);
+
+  const handleSearch = async (q: string) => {
+    setQuery(q);
+    if (!q.trim()) {
+      await loadDebtors();
+      return;
+    }
+    try {
+      setLoading(true);
+      setError('');
+      const rows = await localDB.searchDebtors(q);
+      setDebtors(rows);
+    } catch (err: any) {
+      console.error('Search failed:', err);
+      setError(err?.message || 'Search failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openAdd = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormError('');
+    setShowForm(true);
+  };
+
+  const openEdit = (d: Debtor) => {
+    setEditingId(d.id);
+    setForm({
+      name: d.name,
+      surname: d.surname,
+      email: d.email || '',
+      phone: d.phone || '',
+      data: d.data || {},
+    });
+    setFormError('');
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormError('');
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim() || !form.surname.trim()) {
+      setFormError('Name and surname are required');
+      return;
+    }
+    try {
+      setSaving(true);
+      setFormError('');
+      if (editingId) {
+        await localDB.updateDebtor(editingId, form);
+      } else {
+        await localDB.insertDebtor(form);
+      }
+      closeForm();
+      await handleSearch(query);
+    } catch (err: any) {
+      console.error('Save failed:', err);
+      setFormError(err?.message || 'Failed to save debtor');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (d: Debtor) => {
+    const label = `${d.name} ${d.surname}`.trim();
+    if (!window.confirm(`Delete debtor "${label}"? This also deletes their documents.`)) {
+      return;
+    }
+    try {
+      await localDB.deleteDebtor(d.id);
+      await handleSearch(query);
+    } catch (err: any) {
+      console.error('Delete failed:', err);
+      setError(err?.message || 'Failed to delete debtor');
+    }
+  };
+
+  // ─── Styles ─────────────────────────────────────────────────────────
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 12px',
+    border: '1px solid #e5e7eb',
+    borderRadius: '8px',
+    fontSize: '14px',
+    outline: 'none',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#374151',
+    marginBottom: '4px',
+  };
+
+  const btnPrimary: React.CSSProperties = {
+    background: '#7C3AED',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '8px 16px',
+    fontSize: '14px',
+    fontWeight: 500,
+    cursor: 'pointer',
+  };
+
+  const btnGhost: React.CSSProperties = {
+    background: 'white',
+    color: '#374151',
+    border: '1px solid #e5e7eb',
+    borderRadius: '8px',
+    padding: '8px 16px',
+    fontSize: '14px',
+    cursor: 'pointer',
+  };
+
+  // ─── Render ─────────────────────────────────────────────────────────
+  return (
+    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827', margin: 0 }}>Collections</h1>
+          <p style={{ color: '#6b7280', marginTop: '4px', fontSize: '14px' }}>
+            Debtor records stored locally on your machine
+          </p>
+        </div>
+        <button onClick={openAdd} style={btnPrimary}>
+          <Plus size={16} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+          Add Debtor
+        </button>
+      </div>
+
+      {/* Search bar */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+          <input
+            type="text"
+            placeholder="Search by name, surname, email, phone..."
+            value={query}
+            onChange={(e) => handleSearch(e.target.value)}
+            style={{ ...inputStyle, paddingLeft: '36px' }}
+          />
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AlertCircle size={16} />
+          <span>{error}</span>
+          <button onClick={loadDebtors} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#dc2626', textDecoration: 'underline', cursor: 'pointer' }}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Table */}
+      <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6b7280' }}>
+            <div style={{
+              display: 'inline-block',
+              width: '32px',
+              height: '32px',
+              border: '3px solid #f3f4f6',
+              borderTop: '3px solid #7C3AED',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <p style={{ marginTop: '12px' }}>Loading debtors...</p>
+          </div>
+        ) : debtors.length === 0 ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6b7280' }}>
+            <Users size={40} style={{ margin: '0 auto 12px', color: '#d1d5db' }} />
+            <p style={{ fontSize: '16px', fontWeight: 500, color: '#374151', margin: '0 0 4px 0' }}>
+              {query ? 'No matching debtors' : 'No debtors yet'}
+            </p>
+            <p style={{ margin: 0 }}>
+              {query ? 'Try a different search term.' : 'Click "Add Debtor" to create your first record.'}
+            </p>
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+            <thead>
+              <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 500, color: '#6b7280' }}>Name</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 500, color: '#6b7280' }}>Email</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 500, color: '#6b7280' }}>Phone</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: '#6b7280' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {debtors.map((d) => (
+                <tr key={d.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '12px 16px', color: '#111827', fontWeight: 500 }}>
+                    {d.surname}, {d.name}
+                  </td>
+                  <td style={{ padding: '12px 16px', color: '#4b5563' }}>{d.email || '—'}</td>
+                  <td style={{ padding: '12px 16px', color: '#4b5563' }}>{d.phone || '—'}</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                    <button
+                      onClick={() => openEdit(d)}
+                      title="Edit"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7C3AED', marginRight: '12px' }}
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(d)}
+                      title="Delete"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Form modal */}
+      {showForm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50
+        }}>
+          <div style={{ background: 'white', borderRadius: '12px', padding: '24px', width: '440px', maxWidth: '90vw' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827', margin: 0 }}>
+                {editingId ? 'Edit Debtor' : 'Add Debtor'}
+              </h2>
+              <button onClick={closeForm} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {formError && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '10px 12px', borderRadius: '8px', marginBottom: '12px', fontSize: '13px' }}>
+                {formError}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>Name *</label>
+                <input
+                  style={inputStyle}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Surname *</label>
+                <input
+                  style={inputStyle}
+                  value={form.surname}
+                  onChange={(e) => setForm({ ...form, surname: e.target.value })}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Email</label>
+                <input
+                  style={inputStyle}
+                  type="email"
+                  value={form.email || ''}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Phone</label>
+                <input
+                  style={inputStyle}
+                  value={form.phone || ''}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+              <button onClick={closeForm} style={btnGhost} disabled={saving}>Cancel</button>
+              <button onClick={handleSave} style={btnPrimary} disabled={saving}>
+                {saving ? 'Saving...' : (editingId ? 'Save Changes' : 'Create Debtor')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default Collections;

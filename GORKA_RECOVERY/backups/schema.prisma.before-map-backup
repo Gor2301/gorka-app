@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  timezone  String   @default("UTC")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registrationNumber String? @map("registrationNumber")
+  taxId              String? @map("taxId")
+  primaryContact     String? @map("primaryContact")
+  contactEmail       String? @map("contactEmail")
+  contactPhone       String? @map("contactPhone")
+  address            String?
+  clientType         String? @map("clientType")
+
+  users        User[]
+  debtors      Debtor[]
+  activityLogs ActivityLog[]
+  connectors   Connector[]
+  calendarEvents CalendarEvent[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  password       String?
+  name           String?
+  role           String   @default("AGENT")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  isActive       Boolean  @default(true)
+  lastLogin      DateTime?
+
+  actions        Action[]
+  messageLogs    MessageLog[]
+  activityLogs   ActivityLog[]
+
+  @@map("users")
+}
+
+model Debtor {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  totalDebt      Float?
+  daysOverdue    Int?
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  nextFollowUpDate DateTime?
+  nextPaymentDate  DateTime?
+
+  debts          Debt[]
+  actions        Action[]
+  messageLogs    MessageLog[]
+calendarEvents CalendarEvent[]  //
+
+  @@map("debtors")
+}
+
+model Debt {
+  id          String   @id @default(cuid())
+  debtorId    String
+  debtor      Debtor   @relation(fields: [debtorId], references: [id])
+  amount      Float
+  currency    String   @default("USD")
+  dueDate     DateTime
+  status      String   @default("PENDING")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("debts")
+}
+
+model Action {
+  id             String    @id @default(cuid())
+  debtorId       String
+  debtor         Debtor    @relation(fields: [debtorId], references: [id])
+  assignedTo     String
+  assignee       User      @relation(fields: [assignedTo], references: [id])
+  type           String
+  priority       String    @default("MEDIUM")
+  status         String    @default("PENDING")
+  description    String?
+  dueDate        DateTime
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  triggerEmail     Boolean  @default(false)
+  emailTemplateId  String?
+  emailDelayHours  Int      @default(0)
+  messageLogId     String?
+
+  triggerSms       Boolean  @default(false)
+  smsTemplateId    String?
+  smsDelayHours    Int      @default(0)
+
+  @@map("actions")
+}
+
+model ActivityLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id])
+  action         String
+  entityType     String
+  entityId       String?
+  details        Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@map("activity_logs")
+}
+
+model CalendarEvent {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organizationId")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  debtorId       String?  @map("debtorId")
+  debtor         Debtor?  @relation(fields: [debtorId], references: [id])
+  title          String
+  description    String?
+  startDate      DateTime @map("startDate")
+  endDate        DateTime @map("endDate")
+  type           String   @default("TASK")
+  status         String   @default("PENDING")
+  source         String?
+  sourceId       String?  @map("sourceId")
+  sourceDate     DateTime? @map("sourceDate")
+  allDay         Boolean  @default(false)
+  eventType      String?  @map("eventType")
+createdBy    String?  @map("createdBy")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([startDate])
+@@unique([organizationId, eventType, debtorId, sourceDate])
+  @@map("calendar_events")
+}
+
+model PermissionRole {
+  id             String   @id @default(cuid())
+  role           String   @unique
+  organizationId String?  @map("organizationId")
+  description    String?
+  permissions    Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("permission_roles")
+}
+
+model MessageLog {
+  id               String    @id @default(cuid())
+  jobId            String?   @unique
+  debtorId         String?
+  debtor           Debtor?   @relation(fields: [debtorId], references: [id])
+  userId           String?
+  user             User?     @relation(fields: [userId], references: [id])
+  templateId       String?
+  template         Template? @relation(fields: [templateId], references: [id])
+
+  contactEmail     String
+  contactName      String?
+
+  channel          String
+  recipient        String
+  subject          String?
+  content          String
+  contentPreview   String
+
+  status           String   @default("PENDING")
+
+  provider         String?
+  providerMessageId String?
+  providerData     Json?
+
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  openedAt         DateTime?
+  clickedAt        DateTime?
+  scheduledAt      DateTime?
+  error            String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  events           MessageEvent[]
+
+  @@map("message_logs")
+}
+
+model MessageEvent {
+  id           String    @id @default(cuid())
+  messageLogId String
+  messageLog   MessageLog @relation(fields: [messageLogId], references: [id])
+  event        String
+  data         Json?
+  timestamp    DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+
+  @@map("message_events")
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  channel     String
+  subject     String?
+  content     String
+  category    String   @default("GENERAL")
+  description String?
+  isActive    Boolean  @default(true)
+  version     Int      @default(1)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messageLogs MessageLog[]
+
+  @@map("templates")
+}
+
+model Connector {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  type           String
+  provider       String
+  status         String   @default("DISCONNECTED")
+  config         String
+  credentials    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  description    String?
+  category       String?
+  isDefault      Boolean  @default(false)
+  isEnabled      Boolean  @default(true)
+  acknowledged   Boolean  @default(false)
+  lastTestedAt   DateTime?
+
+  externalEnrichments ExternalEnrichment[]
+
+  @@map("connectors")
+}
+
+model ExternalEnrichment {
+  id              String    @id @default(cuid())
+  connectorId     String
+  connector       Connector @relation(fields: [connectorId], references: [id])
+  debtorId        String
+  organizationId  String
+  externalScore   Int?
+  riskLevel       String?
+  externalStatus  String?
+  retrievedAt     DateTime  @default(now())
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("external_enrichments")
+}

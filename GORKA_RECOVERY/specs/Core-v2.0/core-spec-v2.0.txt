@@ -1,0 +1,407 @@
+GORKA — Core Technical Specification (FINAL — EXECUTION VERSION)
+Version: 2.0 (Final)
+Date: August 4, 2026
+Purpose: Single source of truth for development
+
+1. Core Principle
+GORKA is a browser-based application deployed locally on client infrastructure. All business data stays on infrastructure the client controls. GORKA never stores customer data on its own infrastructure.
+The only exception is the optional AI Copilot feature (see Section 3).
+
+2. MVP Scope (6 Weeks)
+In MVP	Not in MVP
+Electron desktop app	Tauri (deferred)
+Plain SQLite (no encryption)	SQLCipher (Phase 2)
+Basic multi-user (polling sync)	WebSockets (Phase 2)
+CRUD: Debtors, Debts, Actions	PostgreSQL Enterprise tier
+CSV/Excel import + mapping	Multi-tenancy / RLS
+Action Center (heuristics rules)	Local LLM
+AI Copilot (simplified anonymization)	Full anonymization pipeline
+Auto-backup (local folder)	Cloud backup (optional)
+Health monitor (basic)	Advanced monitoring
+Admin user management	Billing integration
+License check (HTTP to GORKA)	Offline license files
+
+3. The Honest AI Exception
+Feature	Data Flow	Does it leave?
+All core storage	Local SQLite	No
+Local network sync	Within client office	No
+Backup (optional)	To client's cloud account	No
+AI Copilot	Anonymized context ? External AI Provider (client's key)	Yes — opt-in, disclosed
+MVP Anonymization Rules:
+    • Name ? "Debtor A", "Debtor B" (sequential per session)
+    • Amount ? rounded to nearest 100
+    • Everything else ? fully redacted ? "[REDACTED]"
+    • No parsing of unstructured text
+    • No classification
+Positioning:
+"Core data is fully local. AI Copilot is optional, transparent, and uses your own API key. No hidden transfers."
+
+4. Architecture
+Tier	Tech Stack
+Desktop App	Electron (not Tauri — ships faster)
+Frontend	React + TypeScript + Material UI
+Database	SQLite (plain — no encryption in MVP)
+Data Access	Prisma ORM
+Backend	Node.js (native in Electron)
+Auth	JWT (local, admin-managed)
+Multi-User Sync	Polling (10s interval, adaptive)
+Job Queue	Custom SQLite polling loop (single-threaded, timeout recovery)
+Event Bus	Node.js EventEmitter
+Backup	SQLite dump to local folder + optional cloud
+Auto-Update	Electron autoUpdater
+Licensing	HTTP check to GORKA license server (no debtor data)
+AI	External AI Provider (OpenAI default) — client-managed key
+Secrets	Plain config file (MVP) ? OS keyring (Phase 2)
+
+5. Core Schema
+Table	Purpose
+Organization	Client entity
+User	Admin, Supervisor, Collector
+Debtor	Real data (names, phones, addresses — NOT anonymized)
+Debt	Individual debts
+Action	Next-best-actions
+Interaction	History log
+Document	Uploaded files
+AuditLog	Immutable audit trail
+ComplianceRule	Jurisdiction rules (data, not code)
+JobQueue	Background jobs
+EventLog	Event bus
+Template	Email/SMS templates (data, not code)
+Configuration	System settings
+MVP Compliance:
+    • Table exists, populated with Initial Recommended Rules for: UK, Spain, Philippines, Indonesia
+    • Disclaimer: "Guidance only — verify with local counsel"
+    • Updates via auto-updater
+
+6. Critical Implementation Notes
+Item	What You Must Actually Build
+Electron + Node	Node is native in Electron. No sidecar, no IPC complexity.
+SQLite Polling Queue	Single-threaded polling with lockedAt timeout (reset jobs stuck >5 min)
+Optimistic Locking	Manual version field in Prisma — @updatedAt alone doesn't prevent overwrites
+Polling Indexes	Must add @@index([assignedTo, status]) and @@index([dueDate]) to Action table BEFORE launch
+AI Anonymization	Name?"Debtor A", Amount?rounded, rest?"[REDACTED]" — no parsing
+License Check	Simple HTTP call to GORKA license server (e.g., /api/license/check). This carries NO debtor data — only license/account status.
+Backup Recovery	Use PRAGMA integrity_check on backup file — simple and effective.
+
+7. Data Flow (What Actually Happens)
+text
+[Collector's Browser] ?? [Local Network]
+                              ?
+                     [Host PC: Electron App]
+                              ?
+                     [Node.js + SQLite]
+                              ?
+                [AI Copilot: Optional ? External AI Provider]
+                [Licensing: Outbound HTTP ? GORKA Server]
+                [Backup: Optional ? Client's Cloud Account]
+
+All debtor data remains on Host PC.
+Only AI Copilot and Licensing touch external endpoints.
+AI Copilot uses client's own API key.
+Licensing carries zero debtor data — only license/account status.
+
+8. What We're NOT Doing (MVP)
+    • ? Tauri (Electron is faster to ship)
+    • ? SQLCipher encryption (plain SQLite for MVP)
+    • ? WebSockets real-time sync (polling is sufficient)
+    • ? Full AI anonymization pipeline (simplified version only)
+    • ? PostgreSQL (deferred to Enterprise tier)
+    • ? Multi-tenancy / RLS
+    • ? Local LLM
+    • ? Billing integration (placeholder only)
+
+9. Build Priority (MVP)
+Week	What to Build
+1	Electron shell + React + Prisma + SQLite schema
+2	CRUD: Debtors, Debts, Actions + basic UI
+3	CSV/Excel import + field mapping
+4	Action Center (heuristics rules) + polling sync + indexes
+5	AI Copilot (simplified) + backup system + licensing
+6	Health monitor + testing + bug fixes + auto-updater
+
+10. Final Reality Check
+Question	Answer
+Is this doable in 6 weeks?	Yes. With Electron, plain SQLite, and simplified AI.
+Does it preserve "local-first"?	Yes. All debtor data stays local. Only optional AI and licensing touch external endpoints.
+Is the spec perfect?	No. But it's good enough to start building. Many details will change during implementation — that's normal.
+What matters most?	Ship. The rest can be fixed later.
+
+GORKA — Product Specification
+Version: 2.0 (Complete)
+Date: August 4, 2026
+
+The Core Concept (One Product, Two Stages)
+GORKA is a browser-based application deployed locally on client infrastructure. All business data stays on infrastructure the client controls. GORKA never stores customer data on its own infrastructure.
+We build one product with a clear upgrade path:
+    • Stage 1: Professional Edition — for small to medium agencies (self-serve, no IT needed)
+    • Stage 2: Enterprise Edition — for banks and large institutions (IT-managed, scalable)
+The architecture is designed so Stage 2 is an upgrade, not a rewrite.
+
+STAGE 1: Professional Edition
+What We're Building Now
+Component	Technology	Why
+Desktop App	Electron	Node.js native, ships fast
+Frontend	React + TypeScript + Material UI	Robust ecosystem
+Database	SQLite (plain, no encryption)	Embedded, zero-configuration
+Data Access	Prisma ORM	Abstracts database — enables upgrade to PostgreSQL later
+Backend	Node.js (native in Electron)	No sidecar, no IPC complexity
+Multi-User Sync	Polling (10-second interval)	Simple, works for 5-10 concurrent writers
+Authentication	JWT (local, admin-managed)	Session-only, no central server
+AI	External AI Provider (OpenAI default) — client-managed key	Optional, transparent, opt-in
+Job Queue	Custom SQLite polling loop	Simple, single-threaded, timeout recovery
+Event Bus	Node.js EventEmitter	Simple, sufficient for single host
+Backup	SQLite dump to local folder	Client-chosen location
+Auto-Update	Electron autoUpdater	Essential for non-technical users
+Licensing	HTTP check to GORKA license server	Minimal exception, no debtor data
+
+What Stage 1 Does
+Feature	Description
+Multi-User	Admin, Supervisor, Collector roles. Up to 100 users total, ~5-10 concurrent writers.
+Data Import	CSV/Excel upload with field mapping and automatic data cleaning.
+Action Center	Smart daily task prioritization using research-backed heuristics (UK, Spain, Philippines, Indonesia rules).
+AI Copilot	Generates message drafts using client's own API key. Simplified anonymization: Name ? "Debtor A", Amount ? rounded, rest ? "[REDACTED]".
+Skip Tracing	Aggregates all contacts (phone, email, address) in one profile. Manual enrichment.
+History & Audit	Full interaction log with immutable audit trail.
+Compliance Dashboard	Data location report, audit log, key management report.
+Backup & Restore	Auto-backup every 4 hours + on-demand. Simple restore flow.
+Health Monitor	Database status, disk space, queue status, backup status, version, license.
+Admin UI	User management, basic settings, billing placeholder.
+
+Stage 1 Technical Limits
+Limit	Details	Mitigation
+Concurrent writers	~5-10 recommended	Queue writes, optimistic locking, retry on lock
+Total users	100+ fine in practice	Reads are unlimited
+Total records	100,000+ debtors	SQLite handles this easily
+Database size	Up to 100GB	SQLite supports this
+Sync	Polling (not real-time)	10-second interval is sufficient for small teams
+
+Stage 1 Deployment
+    1. Client downloads a single installer (Windows/Mac).
+    2. One computer runs the app (the "host").
+    3. Other employees connect via browser to http://gorka.local:3000 (or IP address).
+    4. All data lives on the host machine.
+    5. No IT setup required.
+
+STAGE 2: Enterprise Edition
+What We Add Later
+Component	Upgrade	Why
+Database	PostgreSQL (client's own server)	Removes SQLite write limits
+Sync	WebSockets (real-time)	Better for larger teams
+Multi-tenancy	PostgreSQL RLS	Data isolation between departments
+AI	Local LLM (Ollama/Llama)	Fully local AI option
+AI Anonymization	Full pipeline (parsing, classification)	More sophisticated data protection
+Encryption	SQLCipher (proper key recovery)	Data at rest encryption
+Backup	Cloud integration (S3, etc.)	More robust backup options
+Job Queue	BullMQ with Redis	Scalable, reliable
+Event Bus	Redis PubSub	Multi-server support
+Infrastructure	Client-hosted server	IT-managed deployment
+Mobile Access	Web-based (if server is accessible)	Remote work support
+Advanced Compliance	More jurisdictions	International expansion
+Billing	Full payment integration	For Enterprise pricing
+
+What Stage 2 Adds
+Feature	Description
+PostgreSQL Database	Removes write contention. Supports 100+ concurrent writers.
+Real-Time Sync	WebSockets. Changes appear instantly to all users.
+Multi-Tenancy	One deployment can serve multiple departments with data isolation.
+Local LLM	Fully local AI processing. No external calls. Optional, requires GPU hardware.
+Full AI Anonymization	Parses unstructured text, identifies PII, classifies debt descriptions, maps responses back to real debtors.
+Data at Rest Encryption	SQLCipher with proper key recovery (recovery keys, not hardware-bound).
+Cloud Backup	Backup to client's own S3, Google Drive, or Dropbox.
+Enterprise Job Queue	BullMQ with Redis. Reliable, retryable, priority queues.
+Advanced Compliance	Support for more jurisdictions, automated rule updates.
+Mobile Access	Collectors can work from anywhere (if server is accessible).
+API Access	REST API for integration with client's existing systems.
+White-Labeling	Custom branding for Enterprise clients.
+
+Stage 2 Technical Limits
+Limit	Details
+Concurrent writers	100+ (no practical limit)
+Total users	Unlimited
+Total records	Unlimited (PostgreSQL scales)
+Database size	Unlimited (PostgreSQL scales)
+Sync	Real-time (WebSockets)
+Deployment	Client's IT team (on-premise or private cloud)
+
+Stage 2 Deployment
+    1. Client's IT team deploys PostgreSQL on their own infrastructure.
+    2. Client's IT team deploys the GORKA server (Node.js) on their own infrastructure.
+    3. Employees connect via browser to the server (internal network or VPN).
+    4. No data ever leaves client infrastructure (except optional AI, if enabled).
+
+The Upgrade Path: Stage 1 ? Stage 2
+text
+[Stage 1: Professional Edition]
+              ?
+    SQLite + Electron + Polling
+              ?
+    Client grows, needs more scale
+              ?
+[UPGRADE]
+              ?
+    Client's IT deploys PostgreSQL
+    Change one config: DATABASE_URL
+    Run Prisma migration
+              ?
+    Same application
+    Same schema
+    Same business logic
+              ?
+[Stage 2: Enterprise Edition]
+Key Principle: The upgrade is a config change, not a rewrite. The same code works on both SQLite and PostgreSQL.
+
+Architecture Continuity: What Stays the Same
+Element	Stage 1	Stage 2	Change
+Core schema	? Same	? Same	None
+Business logic	? Same	? Same	None
+UI/UX	? Same	? Same	None
+Prisma models	? Same	? Same	None
+Authentication	JWT	JWT	None
+Roles	Admin/Supervisor/Collector	Admin/Supervisor/Collector	None
+Compliance rules	Data table	Data table	More jurisdictions
+AI Copilot	External API (opt-in)	External API + Local LLM	Adds option
+Backup	Local folder	Local + Cloud	Adds option
+
+Summary: What We're Building
+Stage	What	For Whom	When
+Stage 1	Professional Edition: SQLite + Electron + Polling	Small to medium agencies	Now (6 weeks)
+Stage 2	Enterprise Edition: PostgreSQL + WebSockets + Advanced features	Banks, large institutions	Later (post-launch)
+
+The One-Liner for Anyone Who Asks
+"GORKA is a single product with two deployment editions. Stage 1 (Professional) is a self-installed desktop app for small agencies. Stage 2 (Enterprise) is the same application, running on the client's own server with PostgreSQL, for larger institutions. The upgrade is seamless — one config change."
+
+Save this document. This is the whole concept.
+Technical Tasks We Can Do Now (No External Dependencies)
+1. Set Up Development Environment
+Task	Why	Effort
+Initialize Git repository	Version control	1 hour
+Set up project structure	Organize code	1 day
+Configure Electron + React + TypeScript	Base framework	2-3 days
+Set up Prisma with SQLite	Data layer	1 day
+Configure ESLint + Prettier	Code quality	1 hour
+Set up CI/CD (GitHub Actions)	Automated builds	1 day
+
+2. Build Core Data Layer (Prisma Schema)
+Task	Why	Effort
+Define all Prisma models	Foundation for everything	1-2 days
+Create initial migration	Database setup	1 hour
+Seed test data	Development	1 day
+Write basic CRUD operations	Core functionality	2-3 days
+
+3. Build Basic UI Shell
+Task	Why	Effort
+Login/Registration screens	Authentication	2-3 days
+Dashboard layout	Main navigation	2-3 days
+Debtor list view	Core feature	3-4 days
+Debtor detail view	Core feature	3-4 days
+Action Center view	Core feature	2-3 days
+
+4. Build Authentication & User Management
+Task	Why	Effort
+JWT implementation	User sessions	1-2 days
+Role system (Admin, Supervisor, Collector)	Multi-user	2-3 days
+User CRUD (Admin panel)	User management	2-3 days
+Password hashing	Security	1 day
+
+5. Build Import Functionality
+Task	Why	Effort
+CSV/Excel parser	Data import	2-3 days
+Field mapping UI	User-friendly import	2-3 days
+Data validation & cleaning	Data quality	2 days
+Import history	Audit	1 day
+
+6. Build Basic Sync (Polling)
+Task	Why	Effort
+API endpoints for polling	Data sync	2-3 days
+Frontend polling logic	Real-time updates	2 days
+Conflict handling (optimistic locking)	Data integrity	2 days
+Database indexes	Performance	1 day
+
+7. Build Action Center (Heuristics-Based)
+Task	Why	Effort
+Implement research-backed rules	Core value	2-3 days
+Priority scoring algorithm	Smart prioritization	2 days
+UI for Action Center	User-facing	2-3 days
+Manual task management	Flexibility	1-2 days
+
+8. Build AI Copilot (Simplified)
+Task	Why	Effort
+OpenAI API integration	Core AI feature	1-2 days
+Anonymization logic (Name?"Debtor A", Amount?rounded)	Privacy	1 day
+Prompt engineering	Quality responses	2-3 days
+UI for AI Copilot	User-facing	2 days
+Error handling (rate limits, timeouts)	Stability	1 day
+
+9. Build Backup & Restore
+Task	Why	Effort
+SQLite dump function	Data safety	1 day
+Scheduled backup (every 4 hours)	Automated safety	1 day
+On-demand backup	User control	1 day
+Restore from backup	Recovery	1 day
+Backup verification (PRAGMA integrity_check)	Reliability	1 day
+
+10. Build Health Monitor
+Task	Why	Effort
+Database status check	Reliability	1 day
+Disk space monitoring	Prevent failures	1 day
+Queue status	Performance	1 day
+Backup status	Data safety	1 day
+Version display	Updates	0.5 day
+License status	Subscription enforcement	1 day
+
+11. Build Auto-Update
+Task	Why	Effort
+Electron autoUpdater setup	User experience	1-2 days
+Update server configuration	Delivery mechanism	1 day
+Update notification UI	User control	1 day
+Security patch flow	Critical updates	1 day
+
+12. Build Job Queue
+Task	Why	Effort
+JobQueue table in Prisma	Foundation	0.5 day
+Polling loop for jobs	Processing	1-2 days
+Job status tracking	Visibility	1 day
+Timeout recovery (locked jobs)	Reliability	1 day
+UI for job monitoring	Admin visibility	1 day
+
+13. Build Licensing Check
+Task	Why	Effort
+HTTP client for license server	Subscription enforcement	1 day
+License status in Health Monitor	Visibility	0.5 day
+Grace period handling	User experience	1 day
+
+14. Testing
+Task	Why	Effort
+Unit tests for core logic	Reliability	3-5 days
+Integration tests	End-to-end	3-5 days
+User acceptance testing (with real data)	Validation	2-3 days
+Performance testing	Scale validation	1-2 days
+
+What We Can't Do Yet (Waiting)
+Item	What We Need	Status
+Demo access	Access from partner	Waiting
+Training data	Data from contacts	Waiting
+Real client feedback	First users	Waiting
+Investor materials	Product validation	Postponed
+Pricing finalization	Product clarity	Deferred
+Legal structure	Not urgent	Deferred
+
+Recommended Order (What to Build First)
+Week	Focus	Deliverable
+1	Dev environment + Prisma schema	Ready to code
+2	Core UI + Authentication	Login working, basic layout
+3	CRUD + Import	Can add debtors, upload data
+4	Action Center + Polling	Smart prioritization, multi-user sync
+5	AI Copilot + Backup	AI works, data is safe
+6	Health Monitor + Auto-Update + Job Queue	System is production-ready
+7	Testing + Bug Fixes	Stable product
+8	Polish + Documentation	Ready for first users
+
+Summary
+Question	Answer
+What technical work can we do now?	Everything above. No external dependencies.
+What are we waiting for?	Demo access, training data, investor discussions.
+How long until we have a working product?	6-8 weeks of focused development.
+What's the next step?	Set up the development environment. Today.
+
+

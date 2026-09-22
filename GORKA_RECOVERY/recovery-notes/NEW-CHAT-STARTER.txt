@@ -1,0 +1,56 @@
+GORKA RECOVERY - CONTINUATION FROM PREVIOUS SESSION
+Date: September 12, 2026
+
+You are continuing the GORKA recovery. Before responding, do the following:
+
+STEP 1 - Read these files (all are on disk at C:\Users\kucha\gorka-app\):
+
+  GORKA_RECOVERY/recovery-notes/ARCHITECTURAL-LAW.md
+  GORKA_RECOVERY/recovery-notes/RECOVERY-RULES.md
+  GORKA_RECOVERY/recovery-notes/DATA-BOUNDARY-MATRIX.md
+  GORKA_RECOVERY/recovery-notes/CLOUD-TABLES.md
+  GORKA_RECOVERY/recovery-notes/LOCAL-TABLES.md
+  GORKA_RECOVERY/recovery-notes/DECISIONS.md
+  GORKA_RECOVERY/recovery-notes/PRODUCTION-REBUILD-PLAN.md
+  GORKA_RECOVERY/recovery-notes/HANDOFF.md
+
+  GORKA_RECOVERY/specs/Tauri-v3.2/tauri-spec-v3.2.txt
+  GORKA_RECOVERY/specs/Migration-v5.0/migration-spec-v5.0.txt
+  GORKA_RECOVERY/specs/Core-v2.0/core-spec-v2.0.txt
+
+STEP 2 - Confirm you have read them.
+
+STEP 3 - Summarize back to me, in under 200 words:
+  - The invariant
+  - Which phases are complete
+  - What the next phase is
+
+STEP 4 - Ask me: Ready to continue with Phase 9?
+
+Do NOT:
+  - Suggest improvements
+  - Propose redesigns
+  - Recommend upgrades
+  - Question the architecture
+  - Start work without my confirmation
+
+The files in GORKA_RECOVERY/recovery-notes/ are the constitution. If they conflict with your intuition, the FILES WIN.
+
+What we have accomplished so far:
+- Phase 0: Freeze + backup - complete
+- Phase 1: Architectural Law v1.1 - complete
+- Phase 2: 8 decision documents written - complete
+- Phase 3: schema.cloud.prisma with 19 tables - complete
+- Phase 3.5: Backend cleanup, 11 files moved to _disabled/ - complete
+- Phase 4: Prisma client generated, no Debtor references - complete
+- Phase 5: gorka_test destroyed and rebuilt, 19 tables, 0 debtor tables - complete
+- Phase 6: All 19 tables structurally verified - complete
+- Phase 7: Registration works (creates CLIENT user + organization) - complete
+- Phase 8: Login + /api/auth/me work, no sensitive fields leaked - complete
+- Phase 9: Tauri local database verification - NEXT
+
+Production Supabase is untouched. Working Tauri build v0.1.0 exists on GitHub.
+
+The test database has 2 orgs + 2 users.
+
+Waiting for your confirmation.

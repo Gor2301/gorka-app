@@ -1,0 +1,3356 @@
+GORKA CLIENT DASHBOARD — FINAL SPECIFICATION v3.2 txt
+Date: September 5, 2026
+Version: 3.2 (FINAL — All Friend Feedback Incorporated)
+Status: ? ARCHITECTURE FROZEN — READY FOR IMPLEMENTATION
+Note: Architecture is frozen and specification is ready for implementation. No known architectural gaps remain. Implementation may uncover edge cases, but the design is complete.
+
+? TABLE OF CONTENTS
+    1. Core Architecture Principles
+    2. Subdomain Strategy (Final)
+    3. Architecture Overview
+    4. Data Classification
+    5. Data Sovereignty Rules
+    6. SQLite Schema (Complete)
+    7. Rust Backend — Complete
+    8. Authentication Flow
+    9. Encryption & Unlock Flow
+    10. Agent Management Foundation
+    11. Frontend Types
+    12. Frontend Service Layer
+    13. UI Pages
+    14. Tauri Configuration
+    15. Security Implementation
+    16. Backup & Recovery
+    17. Database Migration Strategy
+    18. Testing Checklist
+    19. Implementation Order
+
+1. CORE ARCHITECTURE PRINCIPLES
+? GORKA LOCAL-FIRST DATA SOVEREIGNTY
+"Debtor data never leaves the local machine. This is not a feature — it is the architectural invariant everything else depends on."
+Principle	Description
+Local Data	All client operational data (debtors, debts, communications, documents, notes) stays in local SQLite
+Cloud Control Plane	Only authentication, licensing, account metadata, billing, and configuration live in Supabase
+No Default Transmission	Client operational data is never transmitted to cloud by default
+Future Exceptions	Any future feature that transmits data must be explicitly designed, authorized, disclosed, and opt-in
+? The Data Boundary Statement
+NO CLOUD COMPONENT — including Vercel, Render, Supabase, GORKA APIs, authentication services, analytics, logging, telemetry, or support systems — may receive or persist client operational/debtor data by default.
+?? The Security Boundary
+The Tauri client is the ONLY component authorized to access client operational data.
+Component	Can Access Local Debtor DB?
+Tauri Client Dashboard	? YES
+Tauri Agent App (future)	? YES
+Web Platform Dashboard	? NO
+Web Marketing Website	? NO
+Render API	? NO
+Supabase	? NO
+Any Cloud Service	? NO
+? Terminology Correction
+"NO PII" is replaced with "NO CLIENT/DEBTOR PII OR CLIENT OPERATIONAL DATA" throughout this spec.
+This allows:
+    • ? GORKA user accounts (email, name) in the cloud
+    • ? Agent accounts (name, email) in the cloud
+    • ? Debtor names, contacts, addresses in the cloud
+    • ? Client organization PII (contact person, phone, address) in the cloud
+
+2. SUBDOMAIN STRATEGY (FINAL)
+Subdomain	Purpose	Hosting	Data
+www.gorka.click	Marketing Website	Vercel	Static content only
+od.gorka.click	Platform Owner Dashboard	Vercel	Metadata only (no debtor data)
+client.gorka.click	Static Download Page	Vercel	Installer links only
+api.gorka.click	Backend Control API	Render	Auth, licensing, billing, agent management (no debtor data)
+app.gorka.click	Download/Update Landing for Agent App	Vercel	Installer links, update metadata
+? Architecture Diagram
+text
+                    GORKA CLOUD (Control Plane)
+                         ?
+        ???????????????????????????????????
+        ?                ?                ?
+    www.gorka.click  od.gorka.click  client.gorka.click
+    (Marketing)      (Platform Owner) (Download Page)
+        ?                ?                ?
+        ???????????????????????????????????
+                         ?
+                         ?
+                  api.gorka.click
+                  (Control API)
+                         ?
+            ???????????????????????????
+            ?            ?            ?
+         Auth        Licensing     Agents
+                         ?
+                         ?
+                   Supabase
+              (Control Plane Data)
+                         ?
+            ? NO CLIENT/DEBTOR PII
+            ? NO CLIENT OPERATIONAL DATA
+???????????????????????????????????????????????????????????????
+                         ?
+                         ?
+                   CLIENT MACHINE
+                         ?
+                       Tauri
+                         ?
+                       SQLite
+                         ?
+            ???????????????????????????
+            ?            ?            ?
+        Debtors      Documents   Communications
+                         ?
+            ? ALL DEBTOR DATA
+            ? ALL PII
+            ? NEVER CLOUD
+
+3. DATA CLASSIFICATION
+What CAN Go to Cloud (Control Plane)
+Table	Purpose	Contains Client/Debtor PII?
+users	Authentication, roles	? NO (GORKA user email only)
+organizations	Client metadata	? NO (minimal — see below)
+licenses	Billing, subscriptions	? NO
+support_tickets	Support conversations	? MUST NOT contain debtor data — confirmation required before send
+audit_metadata	Counts only	? NO (debtor_count only as aggregate metadata)
+platform_settings	Global configuration	? NO
+agents	Agent accounts	? NO (GORKA user identity only — name, email, role, status)
+Cloud Organizations — Minimal Definition
+Field	Cloud?	Reason
+organization_id	? YES	UUID identifier
+organization_name	? YES	Business name (not PII)
+status	? YES	Active/Suspended
+created_at	? YES	Timestamp
+subscription_tier	? YES	Plan type
+contact_email	? NO	Could be personal
+contact_phone	? NO	Could be personal
+address	? NO	Could identify individuals
+tax_id	? NO	Sensitive financial info
+What MUST Stay Local (Data Plane)
+Table	Purpose	Contains Client/Debtor PII?
+debtors	Names, contacts, addresses	? YES
+debts	Amounts, dates, status	? YES
+documents	Uploaded files + metadata	? YES
+communications	Calls, emails, SMS logs	? YES
+audit_log	Full audit trail	?? ID ONLY (no PII duplication)
+Agent Cloud vs Local Distinction
+Cloud agent records contain identity/account metadata only (name, email, role, status). Debtor assignments, collection history, performance metrics, communications, and operational activity remain local.
+Document Metadata Privacy
+Document metadata (filenames, descriptions) and document contents are local-only and must never be included in cloud requests, telemetry, error reporting, support tickets, or logs.
+Audit Metadata Classification
+Field	Cloud?	Classification
+debtor_count	? YES (optional)	Aggregate operational metadata; contains no debtor identifiers or financial values
+total_debt	? NO	Commercially sensitive
+individual debtor IDs	? NO	Could be used to identify debtors
+timestamps	? YES	Operational metadata
+Support Ticket Rule
+"The application must warn users and must not transmit a support ticket until the user confirms that it contains no client operational/debtor data."
+
+4. DATA SOVEREIGNTY RULES
+Rule 1: Local Data Never Leaves
+text
+Debtor data ? Local SQLite ? ? NEVER to cloud
+Document contents ? Local filesystem ? ? NEVER to cloud
+Document metadata ? Local SQLite ? ? NEVER to cloud
+Communications logs ? Local SQLite ? ? NEVER to cloud
+Rule 2: Control Plane Data Only
+text
+Authentication ? Cloud ? ? YES
+Licensing ? Cloud ? ? YES
+Account metadata ? Cloud ? ? YES
+Agent identity ? Cloud ? ? YES
+Rule 3: Organization Authorization
+"The organization context used for authorization must be derived from authenticated local application state (the organization_id stored in app data at login), not trusted solely from frontend-provided parameters."
+Rule 4: Error Telemetry
+"Error telemetry must never automatically transmit database values, request payloads, filenames, debtor IDs, stack traces containing operational data, or other client data."
+Rule 5: UUID Validation for Path Security
+"All UUIDs used in filesystem paths (entity_id, debtor_id) must be validated as well-formed UUIDs before being used in PathBuf::join() operations to prevent path traversal attacks."
+
+5. SQLITE SCHEMA (COMPLETE)
+File: src-tauri/src/db.rs
+rust
+// src-tauri/src/db.rs
+
+use rusqlite::{Connection, params};
+use serde_json::Value as JsonValue;
+use std::path::PathBuf;
+use directories::ProjectDirs;
+use uuid::Uuid;
+use chrono::Utc;
+use hex;
+use argon2::{
+    password_hash::{PasswordHasher, SaltString},
+    Argon2,
+};
+use rand_core::OsRng;
+
+// ??? DATABASE PATHS ??????????????????????????????????????????????????
+
+pub fn get_db_path() -> PathBuf {
+    let proj_dirs = ProjectDirs::from("com", "gorka", "client")
+        .expect("Failed to get project directories");
+    let data_dir = proj_dirs.data_dir();
+    std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
+    data_dir.join("gorka-client.db")
+}
+
+pub fn get_files_dir() -> PathBuf {
+    let proj_dirs = ProjectDirs::from("com", "gorka", "client")
+        .expect("Failed to get project directories");
+    let files_dir = proj_dirs.data_dir().join("files").join("debtors");
+    std::fs::create_dir_all(&files_dir).expect("Failed to create files directory");
+    files_dir
+}
+
+pub fn get_debtor_files_dir(debtor_id: &str) -> Result<PathBuf, String> {
+    // ? Validate UUID format to prevent path traversal
+    Uuid::parse_str(debtor_id)
+        .map_err(|_| format!("Invalid debtor_id format: {}", debtor_id))?;
+    
+    let files_dir = get_files_dir();
+    let debtor_dir = files_dir.join(debtor_id);
+    std::fs::create_dir_all(&debtor_dir).expect("Failed to create debtor directory");
+    Ok(debtor_dir)
+}
+
+// ??? ENCRYPTION KEY DERIVATION (Argon2id ? Raw Key) ??????????????
+
+/// Derive a stable 32-byte encryption key from password + salt.
+/// Uses Argon2id to produce a raw key, then hex encodes it for SQLCipher.
+/// Returns a Result to avoid panics on bad input.
+pub fn derive_key(password: &str, salt: &[u8]) -> Result<String, String> {
+    let salt = SaltString::encode_b64(salt)
+        .map_err(|e| format!("Failed to encode salt: {}", e))?;
+    let argon2 = Argon2::default();
+    let mut key_bytes = [0u8; 32];
+    argon2.hash_password_into(password.as_bytes(), salt.as_bytes(), &mut key_bytes)
+        .map_err(|e| format!("Key derivation failed: {}", e))?;
+    Ok(hex::encode(key_bytes))
+}
+
+/// Generate a cryptographically secure salt (16 bytes)
+pub fn generate_salt() -> Vec<u8> {
+    let mut salt = vec![0u8; 16];
+    use rand::RngCore;
+    rand::thread_rng().fill_bytes(&mut salt);
+    salt
+}
+
+// ??? DATABASE INITIALIZATION ?????????????????????????????????????????
+
+pub fn init_db(key: &str) -> Result<Connection, String> {
+    let db_path = get_db_path();
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    
+    // ??? SQLCIPHER ENCRYPTION ????????????????????????????????????????
+    conn.execute(&format!("PRAGMA key = '{}'", key), [])
+        .map_err(|e| e.to_string())?;
+    
+    // ??? ENABLE FOREIGN KEYS ?????????????????????????????????????????
+    conn.execute("PRAGMA foreign_keys = ON", [])
+        .map_err(|e| e.to_string())?;
+    
+    // ??? WAL MODE FOR PERFORMANCE ????????????????????????????????????
+    conn.execute("PRAGMA journal_mode = WAL", [])
+        .map_err(|e| e.to_string())?;
+    
+    // ??? RUN MIGRATIONS ??????????????????????????????????????????????
+    run_migrations(&conn)?;
+    
+    Ok(conn)
+}
+
+// ??? VERIFY PASSWORD ?????????????????????????????????????????????????
+
+/// Verify that the password unlocks the database by attempting a read.
+/// Returns Ok(()) if the password is correct, Err if incorrect.
+pub fn verify_password(conn: &Connection) -> Result<(), String> {
+    conn.query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get::<_, i64>(0))
+        .map_err(|_| "Incorrect password".to_string())?;
+    Ok(())
+}
+
+// ??? MIGRATION SYSTEM ????????????????????????????????????????????????
+
+fn run_migrations(conn: &Connection) -> Result<(), String> {
+    let current_version: i32 = conn.query_row(
+        "PRAGMA user_version",
+        [],
+        |row| row.get(0)
+    ).unwrap_or(0);
+    
+    if current_version < 1 {
+        // Migration 1: Initial schema
+        // ?? Each migration runs in a transaction for atomicity
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS debtors (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                surname TEXT NOT NULL,
+                email TEXT,
+                phone TEXT,
+                data JSON NOT NULL DEFAULT '{}',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS debts (
+                id TEXT PRIMARY KEY,
+                debtor_id TEXT NOT NULL,
+                amount REAL,
+                currency TEXT DEFAULT 'USD',
+                status TEXT DEFAULT 'ACTIVE',
+                due_date DATETIME,
+                description TEXT,
+                data JSON DEFAULT '{}',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (debtor_id) REFERENCES debtors(id) ON DELETE CASCADE
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS documents (
+                id TEXT PRIMARY KEY,
+                entity_id TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                file_type TEXT NOT NULL,
+                file_size INTEGER,
+                category TEXT NOT NULL,
+                description TEXT,
+                uploaded_by TEXT,
+                is_primary BOOLEAN DEFAULT 0,
+                data JSON DEFAULT '{}',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (entity_id) REFERENCES debtors(id) ON DELETE CASCADE
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS communications (
+                id TEXT PRIMARY KEY,
+                debtor_id TEXT NOT NULL,
+                type TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                content TEXT,
+                duration INTEGER,
+                created_by TEXT,
+                data JSON DEFAULT '{}',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (debtor_id) REFERENCES debtors(id) ON DELETE CASCADE
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS audit_log (
+                id TEXT PRIMARY KEY,
+                action TEXT NOT NULL,
+                details TEXT,
+                debtor_id TEXT,
+                record_count INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        // ??? INDEXES ??????????????????????????????????????????????????????
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_debtors_org ON debtors(organization_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_debtors_name ON debtors(name)",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_debtors_surname ON debtors(surname)",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_documents_entity_id ON documents(entity_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category)",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_communications_debtor_id ON communications(debtor_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+        
+        tx.execute("PRAGMA user_version = 1", [])
+            .map_err(|e| e.to_string())?;
+        
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    
+    if current_version < 2 {
+        // Migration 2: Future schema changes
+        // Each migration follows the same pattern: transaction, changes, commit
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        // ... future migrations
+        tx.execute("PRAGMA user_version = 2", [])
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    
+    Ok(())
+}
+
+// ??? AUDIT LOG HELPER (NO PII) ??????????????????????????????????????
+
+pub fn log_audit(
+    conn: &Connection,
+    action: &str,
+    debtor_id: Option<&str>,
+    record_count: i64,
+    details: &str,
+) -> Result<(), String> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339();
+    
+    conn.execute(
+        "INSERT INTO audit_log (id, action, details, debtor_id, record_count, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            &id,
+            action,
+            details,
+            debtor_id,
+            record_count,
+            &now,
+        ],
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+6. RUST BACKEND — COMPLETE
+File: src-tauri/Cargo.toml
+toml
+[package]
+name = "gorka-client"
+version = "0.1.0"
+description = "GORKA Client Dashboard"
+authors = ["GORKA Team"]
+edition = "2021"
+
+[lib]
+name = "gorka_client"
+crate-type = ["cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["api-all", "updater"] }
+tauri-plugin-store = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["sqlcipher"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+directories = "5"
+thiserror = "1"
+reqwest = "0.11"
+hex = "0.4"
+sha2 = "0.10"
+once_cell = "1.19"
+argon2 = "0.5"
+rand = "0.8"
+
+[dependencies.tauri-plugin-updater]
+version = "2"
+default-features = false
+File: src-tauri/src/main.rs
+rust
+// src-tauri/src/main.rs
+
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use tauri::{command, State, Manager};
+use uuid::Uuid;
+use chrono::Utc;
+use std::sync::Mutex;
+
+mod db;
+mod auth;
+
+// ??? APP STATE (Persistent Database Connection) ????????????????????
+
+struct AppState {
+    db: Mutex<Connection>,
+}
+
+// ??? TYPES ??????????????????????????????????????????????????????????????
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Debtor {
+    pub id: String,
+    pub organization_id: String,
+    pub name: String,
+    pub surname: String,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub data: JsonValue,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+// ?? organization_id is NOT included in DebtorInput — it's derived from trusted app state
+#[derive(Debug, Deserialize)]
+pub struct DebtorInput {
+    pub name: String,
+    pub surname: String,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub data: JsonValue,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Document {
+    pub id: String,
+    pub entity_id: String,
+    pub entity_type: String,
+    pub file_name: String,
+    pub file_path: String,
+    pub file_type: String,
+    pub file_size: i64,
+    pub category: String,
+    pub description: Option<String>,
+    pub uploaded_by: Option<String>,
+    pub is_primary: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DocumentInput {
+    pub entity_id: String,
+    pub entity_type: String,
+    pub file_name: String,
+    pub file_content: Vec<u8>,
+    pub file_type: String,
+    pub category: String,
+    pub description: Option<String>,
+    pub uploaded_by: Option<String>,
+    pub is_primary: Option<bool>,
+}
+
+// ??? VALIDATION ENUMS ?????????????????????????????????????????????????
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DocumentCategory {
+    ProfilePhoto,
+    IdCard,
+    Passport,
+    DriverLicense,
+    Contract,
+    ProofOfAddress,
+    IncomeProof,
+    CollateralPhoto,
+    Other,
+}
+
+impl DocumentCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DocumentCategory::ProfilePhoto => "profile_photo",
+            DocumentCategory::IdCard => "id_card",
+            DocumentCategory::Passport => "passport",
+            DocumentCategory::DriverLicense => "driver_license",
+            DocumentCategory::Contract => "contract",
+            DocumentCategory::ProofOfAddress => "proof_of_address",
+            DocumentCategory::IncomeProof => "income_proof",
+            DocumentCategory::CollateralPhoto => "collateral_photo",
+            DocumentCategory::Other => "other",
+        }
+    }
+}
+
+// ??? AUTH COMMANDS ????????????????????????????????????????????????????
+
+#[command]
+async fn login(
+    email: String,
+    password: String,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    auth::login(email, password, app).await
+}
+
+#[command]
+fn get_auth_token(app: tauri::AppHandle) -> Result<String, String> {
+    auth::get_token(app)
+}
+
+#[command]
+fn logout(app: tauri::AppHandle) -> Result<(), String> {
+    auth::logout(app)
+}
+
+#[command]
+fn get_organization_id(app: tauri::AppHandle) -> Result<String, String> {
+    auth::get_organization_id(app)
+}
+
+// ??? ENCRYPTION UNLOCK ????????????????????????????????????????????????
+
+#[command]
+fn unlock_database(password: String, app: tauri::AppHandle) -> Result<(), String> {
+    // Get salt from store
+    let salt = auth::get_salt(&app)?;
+    
+    // Derive key using Argon2id ? raw key ? hex
+    let key = db::derive_key(&password, &salt)
+        .map_err(|e| format!("Key derivation failed: {}", e))?;
+    
+    // Initialize database with key
+    let conn = db::init_db(&key)?;
+    
+    // ? VERIFY PASSWORD — run a query to confirm the key works
+    db::verify_password(&conn)?;
+    
+    // Store connection in app state
+    let state = app.state::<AppState>();
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    *db_guard = conn;
+    
+    // Store that the database is unlocked
+    auth::set_unlocked(&app, true)?;
+    
+    Ok(())
+}
+
+#[command]
+fn is_database_unlocked(app: tauri::AppHandle) -> Result<bool, String> {
+    auth::is_unlocked(app)
+}
+
+// ??? DEBTOR COMMANDS ??????????????????????????????????????????????????
+
+// ?? organization_id is derived from authenticated app state, NOT trusted from frontend
+// The frontend no longer sends organization_id — it's populated by the service layer
+
+fn get_trusted_organization_id(app: &tauri::AppHandle) -> Result<String, String> {
+    auth::get_organization_id(app.clone())
+}
+
+#[command]
+fn get_debtors(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    
+    let mut stmt = conn.prepare(
+        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at 
+         FROM debtors WHERE organization_id = ?1
+         ORDER BY surname, name"
+    ).map_err(|e| e.to_string())?;
+    
+    let rows = stmt.query_map([&organization_id], |row| {
+        let data_json: String = row.get(6)?;
+        Ok(Debtor {
+            id: row.get(0)?,
+            organization_id: row.get(1)?,
+            name: row.get(2)?,
+            surname: row.get(3)?,
+            email: row.get(4)?,
+            phone: row.get(5)?,
+            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut debtors = Vec::new();
+    for row in rows {
+        debtors.push(row.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(debtors)
+}
+
+#[command]
+fn get_debtor(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    
+    let debtor = conn.query_row(
+        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at 
+         FROM debtors WHERE id = ?1 AND organization_id = ?2",
+        params![&id, &organization_id],
+        |row| {
+            let data_json: String = row.get(6)?;
+            Ok(Debtor {
+                id: row.get(0)?,
+                organization_id: row.get(1)?,
+                name: row.get(2)?,
+                surname: row.get(3)?,
+                email: row.get(4)?,
+                phone: row.get(5)?,
+                data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        }
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(debtor)
+}
+
+#[command]
+fn insert_debtor(
+    input: DebtorInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339();
+    
+    conn.execute(
+        "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            &id,
+            &organization_id,
+            &input.name,
+            &input.surname,
+            &input.email,
+            &input.phone,
+            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+            &now,
+            &now,
+        ],
+    ).map_err(|e| e.to_string())?;
+    
+    db::log_audit(&conn, "INSERT", Some(&id), 1, "Inserted debtor")?;
+    
+    Ok(Debtor {
+        id,
+        organization_id,
+        name: input.name,
+        surname: input.surname,
+        email: input.email,
+        phone: input.phone,
+        data: input.data,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+#[command]
+fn bulk_insert_debtors(
+    inputs: Vec<DebtorInput>,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let now = Utc::now().to_rfc3339();
+    let mut inserted = Vec::new();
+    
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    
+    for input in inputs {
+        let id = Uuid::new_v4().to_string();
+        
+        tx.execute(
+            "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                &id,
+                &organization_id,
+                &input.name,
+                &input.surname,
+                &input.email,
+                &input.phone,
+                &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+                &now,
+                &now,
+            ],
+        ).map_err(|e| e.to_string())?;
+        
+        inserted.push(Debtor {
+            id,
+            organization_id,
+            name: input.name,
+            surname: input.surname,
+            email: input.email,
+            phone: input.phone,
+            data: input.data,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        });
+    }
+    
+    tx.commit().map_err(|e| e.to_string())?;
+    
+    let count = inserted.len() as i64;
+    db::log_audit(&conn, "BULK_INSERT", None, count, &format!("Inserted {} debtors", count))?;
+    
+    Ok(inserted)
+}
+
+#[command]
+fn update_debtor(
+    id: String,
+    input: DebtorInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let now = Utc::now().to_rfc3339();
+    
+    let affected = conn.execute(
+        "UPDATE debtors 
+         SET name = ?1, surname = ?2, email = ?3, phone = ?4, data = ?5, updated_at = ?6
+         WHERE id = ?7 AND organization_id = ?8",
+        params![
+            &input.name,
+            &input.surname,
+            &input.email,
+            &input.phone,
+            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+            &now,
+            &id,
+            &organization_id,
+        ],
+    ).map_err(|e| e.to_string())?;
+    
+    if affected == 0 {
+        return Err("Debtor not found or not in this organization".to_string());
+    }
+    
+    db::log_audit(&conn, "UPDATE", Some(&id), 1, "Updated debtor")?;
+    
+    Ok(Debtor {
+        id,
+        organization_id,
+        name: input.name,
+        surname: input.surname,
+        email: input.email,
+        phone: input.phone,
+        data: input.data,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+#[command]
+fn delete_debtor(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    
+    let affected = conn.execute(
+        "DELETE FROM debtors WHERE id = ?1 AND organization_id = ?2",
+        params![&id, &organization_id],
+    ).map_err(|e| e.to_string())?;
+    
+    if affected > 0 {
+        // ? Validate UUID before deleting files
+        let debtor_dir = db::get_debtor_files_dir(&id)?;
+        if debtor_dir.exists() {
+            std::fs::remove_dir_all(&debtor_dir)
+                .map_err(|e| format!("Failed to delete debtor files: {}", e))?;
+        }
+        
+        db::log_audit(&conn, "DELETE", Some(&id), 1, "Deleted debtor")?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[command]
+fn search_debtors(
+    query: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let search_pattern = format!("%{}%", query);
+    
+    let mut stmt = conn.prepare(
+        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at 
+         FROM debtors 
+         WHERE organization_id = ?1
+         AND (name LIKE ?2 OR surname LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2
+         OR json_extract(data, '$.contacts.phone1') LIKE ?2
+         OR json_extract(data, '$.contacts.email1') LIKE ?2
+         OR json_extract(data, '$.guarantor.name') LIKE ?2)
+         ORDER BY surname, name"
+    ).map_err(|e| e.to_string())?;
+    
+    let rows = stmt.query_map([&organization_id, &search_pattern], |row| {
+        let data_json: String = row.get(6)?;
+        Ok(Debtor {
+            id: row.get(0)?,
+            organization_id: row.get(1)?,
+            name: row.get(2)?,
+            surname: row.get(3)?,
+            email: row.get(4)?,
+            phone: row.get(5)?,
+            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut debtors = Vec::new();
+    for row in rows {
+        debtors.push(row.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(debtors)
+}
+
+#[command]
+fn get_debtor_count(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<i64, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM debtors WHERE organization_id = ?1",
+        params![&organization_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(count)
+}
+
+// ??? DOCUMENT COMMANDS ???????????????????????????????????????????????
+
+#[command]
+fn upload_document(
+    input: DocumentInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Document, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    
+    // ??? VALIDATE ENTITY_ID (UUID format) ????????????????????????????
+    Uuid::parse_str(&input.entity_id)
+        .map_err(|_| format!("Invalid entity_id format: {}", input.entity_id))?;
+    
+    // ??? VALIDATE CATEGORY ????????????????????????????????????????????
+    let category = match input.category.as_str() {
+        "profile_photo" => DocumentCategory::ProfilePhoto,
+        "id_card" => DocumentCategory::IdCard,
+        "passport" => DocumentCategory::Passport,
+        "driver_license" => DocumentCategory::DriverLicense,
+        "contract" => DocumentCategory::Contract,
+        "proof_of_address" => DocumentCategory::ProofOfAddress,
+        "income_proof" => DocumentCategory::IncomeProof,
+        "collateral_photo" => DocumentCategory::CollateralPhoto,
+        "other" => DocumentCategory::Other,
+        _ => return Err("Invalid document category".to_string()),
+    };
+    
+    let category_str = category.as_str();
+    let id = Uuid::new_v4().to_string();
+    
+    // ??? FILE PATH ????????????????????????????????????????????????????
+    let debtor_dir = db::get_debtor_files_dir(&input.entity_id)?;
+    let docs_dir = debtor_dir.join("documents");
+    std::fs::create_dir_all(&docs_dir).map_err(|e| e.to_string())?;
+    
+    let file_extension = input.file_name
+        .split('.')
+        .last()
+        .unwrap_or("bin");
+    let timestamp = Utc::now().timestamp();
+    let unique_name = format!("{}_{}.{}", category_str, timestamp, file_extension);
+    let file_path = docs_dir.join(&unique_name);
+    
+    // ??? SAVE FILE ????????????????????????????????????????????????????
+    std::fs::write(&file_path, input.file_content)
+        .map_err(|e| format!("Failed to save file: {}", e))?;
+    
+    let file_size = std::fs::metadata(&file_path)
+        .map(|m| m.len() as i64)
+        .unwrap_or(0);
+    
+    let file_path_str = file_path.to_string_lossy().to_string();
+    let is_primary = input.is_primary.unwrap_or(false);
+    
+    if is_primary && input.category == "profile_photo" {
+        conn.execute(
+            "UPDATE documents SET is_primary = 0 
+             WHERE entity_id = ?1 AND category = ?2",
+            params![&input.entity_id, &category_str],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    // ??? INSERT RECORD ????????????????????????????????????????????????
+    conn.execute(
+        "INSERT INTO documents (
+            id, entity_id, entity_type, file_name, file_path, file_type,
+            file_size, category, description, uploaded_by, is_primary, created_at
+        )
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![
+            &id,
+            &input.entity_id,
+            &input.entity_type,
+            &input.file_name,
+            &file_path_str,
+            &input.file_type,
+            file_size,
+            &category_str,
+            &input.description,
+            &input.uploaded_by,
+            is_primary,
+            &Utc::now().to_rfc3339(),
+        ],
+    ).map_err(|e| e.to_string())?;
+    
+    // ?? Log audit WITHOUT filename (prevents PII in audit log)
+    db::log_audit(
+        &conn,
+        "UPLOAD_DOC",
+        Some(&input.entity_id),
+        1,
+        &format!("Uploaded document: category={}", category_str),
+    )?;
+    
+    Ok(Document {
+        id,
+        entity_id: input.entity_id,
+        entity_type: input.entity_type,
+        file_name: input.file_name,
+        file_path: file_path_str,
+        file_type: input.file_type,
+        file_size,
+        category: category_str.to_string(),
+        description: input.description,
+        uploaded_by: input.uploaded_by,
+        is_primary,
+        created_at: Utc::now().to_rfc3339(),
+    })
+}
+
+#[command]
+fn get_documents(
+    entity_id: String,
+    entity_type: Option<String>,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Document>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    
+    let mut query = String::from(
+        "SELECT id, entity_id, entity_type, file_name, file_path, file_type,
+         file_size, category, description, uploaded_by, is_primary, created_at
+         FROM documents WHERE entity_id = ?1"
+    );
+    
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(entity_id)];
+    
+    if let Some(et) = entity_type {
+        query.push_str(" AND entity_type = ?2");
+        params.push(Box::new(et));
+    }
+    
+    query.push_str(" ORDER BY created_at DESC");
+    
+    let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
+    
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok(Document {
+            id: row.get(0)?,
+            entity_id: row.get(1)?,
+            entity_type: row.get(2)?,
+            file_name: row.get(3)?,
+            file_path: row.get(4)?,
+            file_type: row.get(5)?,
+            file_size: row.get(6)?,
+            category: row.get(7)?,
+            description: row.get(8)?,
+            uploaded_by: row.get(9)?,
+            is_primary: row.get(10)?,
+            created_at: row.get(11)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut documents = Vec::new();
+    for row in rows {
+        documents.push(row.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(documents)
+}
+
+#[command]
+fn delete_document(
+    id: String,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    
+    let file_path: String = conn.query_row(
+        "SELECT file_path FROM documents WHERE id = ?1",
+        params![&id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    
+    if let Err(e) = std::fs::remove_file(&file_path) {
+        eprintln!("Failed to delete file: {}", e);
+    }
+    
+    let affected = conn.execute(
+        "DELETE FROM documents WHERE id = ?1",
+        params![&id],
+    ).map_err(|e| e.to_string())?;
+    
+    db::log_audit(&conn, "DELETE_DOC", None, 1, &format!("Deleted document: {}", id))?;
+    
+    Ok(affected > 0)
+}
+
+// ??? MAIN ????????????????????????????????????????????????????????????
+
+fn main() {
+    // Create a placeholder connection (will be replaced after unlock)
+    let placeholder_conn = db::init_db("").unwrap_or_else(|_| {
+        panic!("Failed to initialize database connection");
+    });
+    
+    tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .manage(AppState {
+            db: Mutex::new(placeholder_conn),
+        })
+        .invoke_handler(tauri::generate_handler![
+            login,
+            get_auth_token,
+            logout,
+            get_organization_id,
+            unlock_database,
+            is_database_unlocked,
+            get_debtors,
+            get_debtor,
+            insert_debtor,
+            bulk_insert_debtors,
+            update_debtor,
+            delete_debtor,
+            search_debtors,
+            get_debtor_count,
+            upload_document,
+            get_documents,
+            delete_document,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+7. AUTHENTICATION FLOW
+File: src-tauri/src/auth.rs
+rust
+// src-tauri/src/auth.rs
+
+use tauri::Manager;
+use tauri_plugin_store::StoreBuilder;
+use serde_json::{json, Value};
+use rand::RngCore;
+
+#[derive(Debug, Deserialize)]
+struct LoginResponse {
+    success: bool,
+    data: Option<LoginData>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LoginData {
+    token: String,
+    user: UserData,
+}
+
+#[derive(Debug, Deserialize)]
+struct UserData {
+    id: String,
+    email: String,
+    role: String,
+    organization_id: String,
+}
+
+pub async fn login(email: String, password: String, app: tauri::AppHandle) -> Result<String, String> {
+    // ??? CALL CLOUD API ??????????????????????????????????????????????
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://api.gorka.click/api/auth/login")
+        .json(&json!({
+            "email": email,
+            "password": password,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+    
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("Login failed: {} - {}", status, text));
+    }
+    
+    let data: LoginResponse = response.json().await.map_err(|e| e.to_string())?;
+    
+    if !data.success {
+        return Err(data.error.unwrap_or("Login failed".to_string()));
+    }
+    
+    let login_data = data.data.ok_or("No data in response")?;
+    let token = login_data.token.clone();
+    let org_id = login_data.user.organization_id;
+    
+    // ??? STORE TOKEN SECURELY ????????????????????????????????????????
+    let store = StoreBuilder::new(app.clone(), "settings.dat".parse().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    store.set("auth_token", Value::String(token.clone()))
+        .map_err(|e| e.to_string())?;
+    store.set("organization_id", Value::String(org_id))
+        .map_err(|e| e.to_string())?;
+    store.save().map_err(|e| e.to_string())?;
+    
+    // ??? GENERATE SALT FOR LOCAL ENCRYPTION ?????????????????????????
+    let salt_exists = store.get("salt").is_some();
+    if !salt_exists {
+        let salt = db::generate_salt();
+        let salt_hex = hex::encode(salt);
+        store.set("salt", Value::String(salt_hex))
+            .map_err(|e| e.to_string())?;
+        store.save().map_err(|e| e.to_string())?;
+    }
+    
+    Ok(token)
+}
+
+pub fn get_token(app: tauri::AppHandle) -> Result<String, String> {
+    let store = StoreBuilder::new(app, "settings.dat".parse().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    let token = store.get("auth_token")
+        .and_then(|v| v.as_str())
+        .ok_or("No token found")?
+        .to_string();
+    
+    Ok(token)
+}
+
+pub fn get_organization_id(app: tauri::AppHandle) -> Result<String, String> {
+    let store = StoreBuilder::new(app, "settings.dat".parse().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    let org_id = store.get("organization_id")
+        .and_then(|v| v.as_str())
+        .ok_or("No organization ID found")?
+        .to_string();
+    
+    Ok(org_id)
+}
+
+pub fn get_salt(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
+    let store = StoreBuilder::new(app.clone(), "settings.dat".parse().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    let salt_hex = store.get("salt")
+        .and_then(|v| v.as_str())
+        .ok_or("No salt found")?
+        .to_string();
+    
+    hex::decode(salt_hex).map_err(|e| e.to_string())
+}
+
+pub fn set_unlocked(app: &tauri::AppHandle, unlocked: bool) -> Result<(), String> {
+    let store = StoreBuilder::new(app.clone(), "settings.dat".parse().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    store.set("db_unlocked", Value::Bool(unlocked))
+        .map_err(|e| e.to_string())?;
+    store.save().map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+pub fn is_unlocked(app: tauri::AppHandle) -> Result<bool, String> {
+    let store = StoreBuilder::new(app, "settings.dat".parse().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    Ok(store.get("db_unlocked")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false))
+}
+
+pub fn logout(app: tauri::AppHandle) -> Result<(), String> {
+    let store = StoreBuilder::new(app, "settings.dat".parse().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    store.delete("auth_token");
+    store.delete("organization_id");
+    store.delete("db_unlocked");
+    store.save().map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+8. ENCRYPTION & UNLOCK FLOW
+The Unlock Flow Diagram
+text
+???????????????????????????????????????????????????????????????????????????????
+?  FIRST LAUNCH                                                              ?
+?                                                                             ?
+?  1. User logs in (cloud auth) ? token stored                              ?
+?  2. App generates salt ? stored in app data (not OS keychain)            ?
+?     ?? Salt is NOT secret — it prevents rainbow table attacks            ?
+?  3. App prompts: "Set local encryption password"                          ?
+?  4. User enters password ? key derived via Argon2id                       ?
+?     ? Argon2id produces raw 32-byte key ? hex encoded                   ?
+?  5. Database initialized with hex key ? SQLCipher encrypted              ?
+?  6. ?? Password verified by reading sqlite_master                        ?
+?  7. User can now upload/work with debtors                                 ?
+???????????????????????????????????????????????????????????????????????????????
+
+???????????????????????????????????????????????????????????????????????????????
+?  SUBSEQUENT LAUNCHES                                                       ?
+?                                                                             ?
+?  1. User logs in (cloud auth) ? token stored                              ?
+?  2. App checks: is db_unlocked? ? false                                   ?
+?  3. App prompts: "Enter local encryption password"                        ?
+?  4. User enters password ? key derived via Argon2id                       ?
+?     ? Argon2id produces raw 32-byte key ? hex encoded                   ?
+?  5. Database unlocked with hex key                                        ?
+?  6. ?? Password verified by reading sqlite_master                        ?
+?  7. User can work with debtors                                            ?
+???????????????????????????????????????????????????????????????????????????????
+Password Screen (UI) — Corrected
+?? CRITICAL FIX: The original spec used useState(() => {...}, []) incorrectly. The correct implementation uses useEffect for the async check.
+tsx
+// src/components/UnlockScreen.tsx
+
+import { useState, useEffect } from 'react';
+import { auth } from '../services/local.db';
+
+export function UnlockScreen({ onUnlocked }: { onUnlocked: () => void }) {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isFirstTime, setIsFirstTime] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // ? CORRECT: useEffect for async check, runs once on mount
+  useEffect(() => {
+    const checkFirstTime = async () => {
+      const salt = await auth.getSalt();
+      setIsFirstTime(!salt);
+    };
+    checkFirstTime();
+  }, []);
+
+  const handleUnlock = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      if (isFirstTime && password !== confirmPassword) {
+        setError('Passwords do not match');
+        setLoading(false);
+        return;
+      }
+
+      if (isFirstTime && password.length < 8) {
+        setError('Password must be at least 8 characters');
+        setLoading(false);
+        return;
+      }
+
+      await auth.unlockDatabase(password);
+      onUnlocked();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to unlock database');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center">
+      <div className="bg-white rounded-lg p-8 max-w-md w-full">
+        <div className="text-center mb-6">
+          <div className="text-4xl mb-2">?</div>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {isFirstTime ? 'Set Local Encryption Password' : 'Enter Local Encryption Password'}
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            {isFirstTime
+              ? 'This password encrypts all debtor data on your machine.'
+              : 'Enter your local encryption password to unlock debtor data.'}
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your local password"
+              onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+            />
+          </div>
+
+          {isFirstTime && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Confirm your local password"
+                onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                ?? This password cannot be recovered. Store it safely.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={handleUnlock}
+          disabled={loading}
+          className="w-full mt-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50"
+        >
+          {loading ? 'Unlocking...' : isFirstTime ? 'Set Password' : 'Unlock'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+9. AGENT MANAGEMENT FOUNDATION
+Cloud API Endpoints (Control Plane)
+Endpoint	Method	Purpose	Authorization
+/api/agents	GET	List agents in org	CLIENT_ADMIN or OWNER only
+/api/agents	POST	Create agent	CLIENT_ADMIN or OWNER only
+/api/agents/:id	PUT	Update agent	CLIENT_ADMIN or OWNER only
+/api/agents/:id/suspend	POST	Suspend agent	CLIENT_ADMIN or OWNER only
+/api/agents/:id/activate	POST	Activate agent	CLIENT_ADMIN or OWNER only
+/api/agents/:id/reset-password	POST	Reset password	CLIENT_ADMIN or OWNER only
+?? Authorization Rules
+Agent management endpoints must enforce:
+    1. Org-scoping: Filter by the caller's organization_id — users cannot see agents from other orgs
+    2. Role-based access: Only CLIENT_ADMIN or OWNER roles can create, suspend, activate, or reset passwords
+    3. AGENT roles: Can only view their own account, not manage other agents
+Password Reset Behavior
+resetAgentPassword:
+    • Generates a cryptographically secure random temporary password (16+ chars)
+    • Sends it via email to the agent
+    • The agent must change their password on next login
+    • The temp password expires after 24 hours
+    • The temp password is one-time-use (invalid after first login)
+Agent UI (Client Dashboard)
+tsx
+// src/pages/Agents.tsx
+
+import { useState, useEffect } from 'react';
+import { cloudAPI } from '../services/cloud.api';
+
+interface Agent {
+  id: string;
+  name: string;
+  email: string;
+  role: 'AGENT' | 'SUPERVISOR';
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  created_at: string;
+  last_login: string | null;
+}
+
+export default function Agents() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadAgents = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await cloudAPI.getAgents();
+      setAgents(response.data);
+    } catch (err) {
+      console.error('Failed to load agents:', err);
+      setError('Failed to load agents. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAgents();
+  }, []);
+
+  const handleCreateAgent = async (data: { name: string; email: string }) => {
+    try {
+      await cloudAPI.createAgent(data);
+      await loadAgents();
+      setShowAddModal(false);
+      alert(`? Agent ${data.email} created! Welcome email sent.`);
+    } catch (err) {
+      console.error('Failed to create agent:', err);
+      alert('? Failed to create agent. Please try again.');
+    }
+  };
+
+  const handleSuspendAgent = async (id: string) => {
+    if (!confirm('Suspend this agent? They will lose access.')) return;
+    try {
+      await cloudAPI.suspendAgent(id);
+      await loadAgents();
+    } catch (err) {
+      console.error('Failed to suspend agent:', err);
+      alert('? Failed to suspend agent.');
+    }
+  };
+
+  const handleActivateAgent = async (id: string) => {
+    try {
+      await cloudAPI.activateAgent(id);
+      await loadAgents();
+    } catch (err) {
+      console.error('Failed to activate agent:', err);
+      alert('? Failed to activate agent.');
+    }
+  };
+
+  const handleResetPassword = async (id: string) => {
+    if (!confirm('Reset password for this agent? They will receive a new temporary password via email.')) return;
+    try {
+      await cloudAPI.resetAgentPassword(id);
+      alert('? Password reset email sent. The agent must change their password on next login.');
+    } catch (err) {
+      console.error('Failed to reset password:', err);
+      alert('? Failed to reset password.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Manage Agents</h1>
+          <p className="text-gray-500 mt-1">
+            Create and manage agent accounts for your agency
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            ?? Agent accounts contain identity metadata only. Debtor assignments and activity logs are stored locally.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+        >
+          + Add Agent
+        </button>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {agents.length > 0 ? (
+              agents.map((agent) => (
+                <tr key={agent.id}>
+                  <td className="px-6 py-4 text-sm text-gray-900">{agent.name}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{agent.email}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{agent.role}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      agent.status === 'ACTIVE' 
+                        ? 'bg-green-100 text-green-700' 
+                        : agent.status === 'SUSPENDED'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {agent.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {agent.last_login ? new Date(agent.last_login).toLocaleDateString() : 'Never'}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => handleResetPassword(agent.id)}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        Reset
+                      </button>
+                      {agent.status === 'ACTIVE' ? (
+                        <button
+                          onClick={() => handleSuspendAgent(agent.id)}
+                          className="text-sm text-red-600 hover:text-red-800"
+                        >
+                          Suspend
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleActivateAgent(agent.id)}
+                          className="text-sm text-green-600 hover:text-green-800"
+                        >
+                          Activate
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  No agents created yet. Click "Add Agent" to get started.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add Agent Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-lg font-bold mb-4">Add Agent</h2>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              handleCreateAgent({
+                name: formData.get('name') as string,
+                email: formData.get('email') as string,
+              });
+            }}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="John Smith"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="john@agency.com"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  A welcome email with temporary credentials will be sent to this address.
+                </p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                >
+                  Create Agent
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+Agent Cloud API Service
+typescript
+// src/services/cloud.api.ts
+
+import { auth } from './local.db';
+
+const API_BASE = 'https://api.gorka.click/api';
+
+async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = await auth.getToken();
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export const cloudAPI = {
+  // ??? AGENTS ??????????????????????????????????????????????????????????
+
+  async getAgents() {
+    return fetchAPI<{ data: Agent[] }>('/agents');
+  },
+
+  async createAgent(data: { name: string; email: string }) {
+    return fetchAPI<{ data: Agent }>('/agents', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async suspendAgent(id: string) {
+    return fetchAPI<{ success: boolean }>(`/agents/${id}/suspend`, {
+      method: 'POST',
+    });
+  },
+
+  async activateAgent(id: string) {
+    return fetchAPI<{ success: boolean }>(`/agents/${id}/activate`, {
+      method: 'POST',
+    });
+  },
+
+  async resetAgentPassword(id: string) {
+    return fetchAPI<{ success: boolean }>(`/agents/${id}/reset-password`, {
+      method: 'POST',
+    });
+  },
+};
+
+10. FRONTEND TYPES
+File: src/types/debtor.ts
+typescript
+// src/types/debtor.ts
+
+// ??? CORE DEBTOR ??????????????????????????????????????????????????????
+
+// ?? organization_id is NOT included in DebtorInput — it's populated by the service layer
+export interface Debtor {
+  id: string;
+  organization_id: string;
+  name: string;
+  surname: string;
+  email: string | null;
+  phone: string | null;
+  data: DebtorData;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DebtorInput {
+  name: string;
+  surname: string;
+  email?: string;
+  phone?: string;
+  data: DebtorData;
+}
+
+// ??? COMPLETE DEBTOR DATA ????????????????????????????????????????????
+
+export interface DebtorData {
+  address?: Address;
+  contacts?: Contacts;
+  occupation?: Occupation;
+  collateral?: Collateral;
+  guarantor?: FullPerson;
+  thirdPerson?: FullPerson;
+  fourthPerson?: FullPerson;
+  documents?: DocumentReference[];
+  profilePhoto?: DocumentReference;
+  [key: string]: any;  // Custom fields
+}
+
+// ??? ADDRESS ?????????????????????????????????????????????????????????
+
+export interface Address {
+  country: string;
+  region?: string;
+  city: string;
+  street: string;
+  houseNumber: string;
+  apartment?: string;
+  postalCode?: string;
+}
+
+// ??? CONTACTS ????????????????????????????????????????????????????????
+
+export interface Contacts {
+  phone1?: string;
+  phone2?: string;
+  email1?: string;
+  email2?: string;
+  socialMedia?: SocialMedia[];
+}
+
+// ??? SOCIAL MEDIA ????????????????????????????????????????????????????
+
+export interface SocialMedia {
+  platform: 'facebook' | 'instagram' | 'twitter' | 'linkedin' | 'whatsapp' | 'telegram' | 'other';
+  username: string;
+  url?: string;
+  isPrimary?: boolean;
+}
+
+// ??? OCCUPATION ??????????????????????????????????????????????????????
+
+export interface Occupation {
+  companyName: string;
+  position: string;
+  phone: string;
+  email: string;
+  address: string;
+}
+
+// ??? COLLATERAL ??????????????????????????????????????????????????????
+
+export interface Collateral {
+  type: string;
+  value: number;
+  description: string;
+  documents?: DocumentReference[];
+}
+
+// ??? FULL PERSON ?????????????????????????????????????????????????????
+
+export interface FullPerson {
+  name: string;
+  surname: string;
+  email?: string;
+  phone?: string;
+  address?: Address;
+  documents?: DocumentReference[];
+}
+
+// ??? DOCUMENT ?????????????????????????????????????????????????????????
+
+export interface Document {
+  id: string;
+  entity_id: string;
+  entity_type: EntityType;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  file_size: number;
+  category: DocumentCategory;
+  description?: string;
+  uploaded_by?: string;
+  is_primary: boolean;
+  created_at: string;
+}
+
+export interface DocumentInput {
+  entity_id: string;
+  entity_type: EntityType;
+  file_name: string;
+  file_content: Uint8Array;
+  file_type: string;
+  category: DocumentCategory;
+  description?: string;
+  is_primary?: boolean;
+}
+
+export interface DocumentReference {
+  id: string;
+  category: DocumentCategory;
+  is_primary: boolean;
+  file_name: string;
+  file_type: string;
+}
+
+export type EntityType = 
+  | 'debtor' 
+  | 'contact' 
+  | 'guarantor' 
+  | 'third_person' 
+  | 'fourth_person'
+  | 'collateral';
+
+export type DocumentCategory = 
+  | 'profile_photo'
+  | 'id_card'
+  | 'passport'
+  | 'driver_license'
+  | 'contract'
+  | 'proof_of_address'
+  | 'income_proof'
+  | 'collateral_photo'
+  | 'other';
+
+// ??? CSV MAPPING ??????????????????????????????????????????????????????
+
+export interface ColumnMapping {
+  name: string;
+  surname: string;
+  email?: string;
+  phone?: string;
+  addressCountry?: string;
+  addressRegion?: string;
+  addressCity?: string;
+  addressStreet?: string;
+  addressHouseNumber?: string;
+  addressApartment?: string;
+  addressPostalCode?: string;
+  phone1?: string;
+  phone2?: string;
+  email1?: string;
+  email2?: string;
+  socialFacebook?: string;
+  socialInstagram?: string;
+  socialTwitter?: string;
+  socialLinkedin?: string;
+  socialWhatsapp?: string;
+  socialTelegram?: string;
+  socialOther?: string;
+  occupationCompany?: string;
+  occupationPosition?: string;
+  occupationPhone?: string;
+  occupationEmail?: string;
+  occupationAddress?: string;
+  collateralType?: string;
+  collateralValue?: string;
+  collateralDescription?: string;
+  guarantorName?: string;
+  guarantorSurname?: string;
+  guarantorEmail?: string;
+  guarantorPhone?: string;
+  guarantorAddress?: string;
+  guarantorCity?: string;
+  guarantorCountry?: string;
+  thirdPersonName?: string;
+  thirdPersonSurname?: string;
+  thirdPersonEmail?: string;
+  thirdPersonPhone?: string;
+  fourthPersonName?: string;
+  fourthPersonSurname?: string;
+  fourthPersonEmail?: string;
+  fourthPersonPhone?: string;
+}
+
+// ??? AGENT ????????????????????????????????????????????????????????????
+
+export interface Agent {
+  id: string;
+  name: string;
+  email: string;
+  role: 'AGENT' | 'SUPERVISOR';
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  created_at: string;
+  last_login: string | null;
+}
+
+11. FRONTEND SERVICE LAYER
+File: src/services/local.db.ts
+typescript
+// src/services/local.db.ts
+
+import { invoke } from '@tauri-apps/api/tauri';
+import { Store } from '@tauri-apps/plugin-store';
+import type { 
+  Debtor, DebtorInput, 
+  Document, DocumentInput, DocumentCategory, EntityType
+} from '../types/debtor';
+
+const store = await Store.load('settings.dat');
+
+// ??? AUTH ?????????????????????????????????????????????????????????????
+
+export const auth = {
+  async login(email: string, password: string): Promise<string> {
+    return await invoke<string>('login', { email, password });
+  },
+
+  async getToken(): Promise<string | null> {
+    try {
+      return await invoke<string>('get_auth_token');
+    } catch {
+      return null;
+    }
+  },
+
+  async getOrganizationId(): Promise<string | null> {
+    try {
+      return await invoke<string>('get_organization_id');
+    } catch {
+      return null;
+    }
+  },
+
+  async getSalt(): Promise<string | null> {
+    try {
+      return await store.get<string>('salt') || null;
+    } catch {
+      return null;
+    }
+  },
+
+  async isUnlocked(): Promise<boolean> {
+    try {
+      return await invoke<boolean>('is_database_unlocked');
+    } catch {
+      return false;
+    }
+  },
+
+  async unlockDatabase(password: string): Promise<void> {
+    await invoke('unlock_database', { password });
+  },
+
+  async logout(): Promise<void> {
+    await invoke('logout');
+  },
+};
+
+// ??? DEBTORS ??????????????????????????????????????????????????????????
+
+// ?? organization_id is populated by the backend from trusted app state
+// The frontend no longer sends organization_id — it's derived from auth state
+
+export const localDB = {
+  async getDebtors(): Promise<Debtor[]> {
+    return await invoke<Debtor[]>('get_debtors');
+  },
+
+  async getDebtor(id: string): Promise<Debtor> {
+    return await invoke<Debtor>('get_debtor', { id });
+  },
+
+  async insertDebtor(input: Omit<DebtorInput, 'organization_id'>): Promise<Debtor> {
+    return await invoke<Debtor>('insert_debtor', { input });
+  },
+
+  async bulkInsertDebtors(inputs: Omit<DebtorInput, 'organization_id'>[]): Promise<Debtor[]> {
+    return await invoke<Debtor[]>('bulk_insert_debtors', { inputs });
+  },
+
+  async updateDebtor(id: string, input: Omit<DebtorInput, 'organization_id'>): Promise<Debtor> {
+    return await invoke<Debtor>('update_debtor', { id, input });
+  },
+
+  async deleteDebtor(id: string): Promise<boolean> {
+    return await invoke<boolean>('delete_debtor', { id });
+  },
+
+  async searchDebtors(query: string): Promise<Debtor[]> {
+    return await invoke<Debtor[]>('search_debtors', { query });
+  },
+
+  async getDebtorCount(): Promise<number> {
+    return await invoke<number>('get_debtor_count');
+  },
+
+  // ??? DOCUMENTS ??????????????????????????????????????????????????????
+
+  async uploadDocument(input: DocumentInput): Promise<Document> {
+    return await invoke<Document>('upload_document', { input });
+  },
+
+  async getDocuments(entityId: string, entityType?: EntityType): Promise<Document[]> {
+    return await invoke<Document[]>('get_documents', { 
+      entityId, 
+      entityType 
+    });
+  },
+
+  async deleteDocument(id: string): Promise<boolean> {
+    return await invoke<boolean>('delete_document', { id });
+  },
+
+  async getPrimaryPhoto(entityId: string): Promise<Document | null> {
+    const docs = await this.getDocuments(entityId);
+    return docs.find(d => d.is_primary && d.category === 'profile_photo') || null;
+  },
+};
+
+12. TAURI CONFIGURATION
+File: src-tauri/tauri.conf.json
+json
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "GORKA Client Dashboard",
+  "version": "0.1.0",
+  "identifier": "com.gorka.client",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "GORKA Client Dashboard",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "connect-src": "'self' https://api.gorka.click",
+        "img-src": "'self' data: blob:",
+        "font-src": "'self'",
+        "media-src": "'self'",
+        "object-src": "'none'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "copyright": "© 2026 GORKA",
+    "category": "Business",
+    "shortDescription": "GORKA Client Dashboard",
+    "longDescription": "Manage debtors, upload data, and oversee your agency"
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://api.gorka.click/api/updates"
+      ],
+      "dialog": true,
+      "pubkey": "YOUR_PUBKEY_HERE"
+    }
+  }
+}
+File: src-tauri/capabilities/default.json
+json
+{
+  "identifier": "default",
+  "description": "Default capabilities for GORKA Client Dashboard",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "store:default",
+    "dialog:default",
+    "fs:allow-appdata-read",
+    "fs:allow-appdata-write",
+    "fs:allow-appdata-meta"
+  ]
+}
+
+13. SECURITY IMPLEMENTATION
+13.1 Encryption — Argon2id ? Raw Key ? SQLCipher
+Component	Implementation
+Key Derivation	Argon2id ? raw 32-byte key ? hex encoded
+Stability	hash_password_into() produces deterministic raw bytes, stable across crate versions
+Database Encryption	SQLCipher via rusqlite with sqlcipher feature
+Key Storage	Derived at runtime from password + salt, never stored
+Salt	Generated at first run, stored in app data (not secret by design)
+Password Verification	SELECT count(*) FROM sqlite_master IMMEDIATELY after unlock
+Error Handling	All functions return Result — NO .unwrap() that can panic
+Wrong Password	Returns Incorrect password error immediately, not cryptic SQLite error
+13.2 Encryption Acceptance Tests (Required)
+Test	Expected Result
+Same password + same salt ? same database key	? Key is deterministic
+Correct password opens the database	? sqlite_master read succeeds
+Wrong password fails	? Immediate Incorrect password error
+Closing/reopening preserves access	? App restarts, unlock works
+Database cannot be opened without correct secret	? SQLCipher prevents access
+Existing encrypted DB survives app restart	? Data persists after restart
+Migration does not operate on unencrypted DB	? Migration runs only after unlock
+13.3 Path Traversal Prevention
+Component	Implementation
+Category Validation	DocumentCategory enum with allowlist
+File Names	UUID + timestamp, not user-provided
+Path Construction	PathBuf::join() with validated segments
+UUID Validation	Uuid::parse_str() for entity_id before path construction
+13.4 CSP (Content Security Policy)
+Directive	Value
+default-src	'self'
+script-src	'self'
+style-src	'self' 'unsafe-inline'
+connect-src	'self' https://api.gorka.click
+img-src	'self' data: blob:
+font-src	'self'
+media-src	'self'
+object-src	'none'
+13.5 Audit Log — No PII
+Field	Contains
+id	UUID
+action	String (INSERT, UPDATE, DELETE, UPLOAD_DOC, DELETE_DOC)
+details	Description of action (NO filenames, NO debtor data)
+debtor_id	ID of affected debtor (not the data)
+record_count	Number of records affected
+created_at	Timestamp
+13.6 Support Ticket Privacy
+"The application must warn users and must not transmit a support ticket until the user confirms that it contains no client operational/debtor data."
+13.7 Organization Authorization
+"The organization context used for authorization must be derived from authenticated local application state (the organization_id stored in app data at login), not trusted solely from frontend-provided parameters."
+13.8 Error Telemetry Privacy
+"Error telemetry must never automatically transmit database values, request payloads, filenames, debtor IDs, stack traces containing operational data, or other client data."
+
+14. BACKUP & RECOVERY
+Backup Flow
+text
+???????????????????????????????????????????????????????????????????????????????
+?  USER INITIATES BACKUP                                                     ?
+?                                                                             ?
+?  1. User clicks "Backup Data" in settings                                  ?
+?  2. App prompts for local encryption password                             ?
+?  3. App creates encrypted backup package:                                 ?
+?     ???????????????????????????????????????????????????????????????????    ?
+?     ?  backup_2026-09-05.gorka                                        ?    ?
+?     ?  ??? gorka-client.db (encrypted SQLite)                        ?    ?
+?     ?  ??? files/ (all documents)                                    ?    ?
+?     ???????????????????????????????????????????????????????????????????    ?
+?  4. ?? Backup uses the password that was active at backup time           ?
+?  5. User chooses destination: USB / external disk / NAS                  ?
+?  6. ? Backup package contains NO plaintext data                         ?
+???????????????????????????????????????????????????????????????????????????????
+
+???????????????????????????????????????????????????????????????????????????????
+?  RESTORE FLOW                                                             ?
+?                                                                             ?
+?  1. User clicks "Restore from Backup" in settings                         ?
+?  2. User selects backup file (.gorka)                                     ?
+?  3. App prompts for local encryption password                             ?
+?  4. ?? You must use the password that was active when this specific      ?
+?     backup was created (not necessarily the current password)            ?
+?  5. App decrypts and restores:                                            ?
+?     ???????????????????????????????????????????????????????????????????    ?
+?     ?  gorka-client.db ? restored                                      ?    ?
+?     ?  files/ ? restored                                              ?    ?
+?     ???????????????????????????????????????????????????????????????????    ?
+?  6. App restarts with restored data                                      ?
+???????????????????????????????????????????????????????????????????????????????
+Backup Verification Test
+Test	Expected Result
+Create backup	? Backup file created
+Inspect backup package	? No readable debtor data
+Restore with correct password	? All data restored
+Restore with wrong password	? Fails
+
+15. DATABASE MIGRATION STRATEGY
+Migration Rules
+Rule	Description
+Atomic	Each migration runs in a transaction
+Versioned	PRAGMA user_version tracks current schema version
+Idempotent	Migrations can be re-run safely (CREATE TABLE IF NOT EXISTS)
+Fail-safe	A failed migration must not destroy or corrupt the existing database
+Migration Code Pattern
+rust
+fn run_migrations(conn: &Connection) -> Result<(), String> {
+    let current_version: i32 = conn.query_row(
+        "PRAGMA user_version",
+        [],
+        |row| row.get(0)
+    ).unwrap_or(0);
+    
+    if current_version < 1 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        // Migration 1: Initial schema
+        tx.execute("CREATE TABLE IF NOT EXISTS ...", [])?;
+        // ... more migration changes
+        tx.execute("PRAGMA user_version = 1", [])?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    
+    if current_version < 2 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        // Migration 2: Future changes
+        tx.execute("ALTER TABLE debtors ADD COLUMN new_field TEXT", [])?;
+        tx.execute("PRAGMA user_version = 2", [])?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    
+    Ok(())
+}
+
+16. TESTING CHECKLIST
+16.1 Data Privacy Tests
+Test	Expected Result
+Import debtor via CSV	? Data stored in local SQLite
+Check cloud database	? NO client/debtor PII in Supabase
+Network requests during import	? NO debtor data sent to cloud
+Delete debtor	? Data removed from SQLite + files
+Audit log after delete	? NO PII in audit_log
+Support ticket submission	? Warning displayed, confirmation required before send
+Upload document	? NO filename in audit log
+Document metadata	? Never sent to cloud
+16.2 Encryption Tests
+Test	Expected Result
+SQLite file	? Encrypted (cannot open with SQLite browser)
+Correct password	? Database opens, sqlite_master read succeeds
+Wrong password	? Incorrect password error returned immediately
+Salt generation	? Generated on first run, stored in app data
+Key derivation stability	? Same password + salt ? same key across sessions
+Closing/reopening preserves access	? App restarts, unlock works
+Existing encrypted DB survives app restart	? Data persists after restart
+16.3 Authorization Tests
+Test	Expected Result
+Organization isolation	? Users see only their own data
+Org spoofing attempt	? Rejected by trusted state (no org_id sent from frontend)
+Agent list	? Only agents in user's org returned
+Agent management	? Only CLIENT_ADMIN can create/suspend agents
+16.4 Path Traversal Tests
+Test	Expected Result
+Invalid category attempt	? Rejected at validation
+Invalid UUID in entity_id	? Rejected at validation
+Path traversal in entity_id	? Rejected by UUID validation
+16.5 Offline Test
+Step	Expected Result
+1. Launch GORKA	? App starts
+2. Unlock database	? Password accepted
+3. View debtors	? List loads
+4. Search debtors	? Results return
+5. Create debtor	? Insert succeeds
+6. Edit debtor	? Update succeeds
+7. Upload document	? File saved
+8. Disconnect internet	? No errors
+9. All operations	? Continue working
+10. Reconnect	? Auth/license functions resume
+16.6 Error Telemetry Test
+Test	Expected Result
+Database error	? NO debtor data in error logs
+Upload error	? NO filename in error logs
+Support ticket	? Confirmation required before send
+16.7 Backup Verification Test
+Test	Expected Result
+Create backup	? Backup file created
+Inspect backup package	? No readable debtor data
+Restore with correct password	? All data restored
+Restore with wrong password	? Fails
+
+17. IMPLEMENTATION ORDER
+Phase 1: Foundation (Day 1-2)
+Task	Time
+Add Tauri to supervisor-dashboard	30 min
+Configure tauri.conf.json + capabilities	15 min
+Set up Cargo.toml with SQLCipher + Argon2id	15 min
+Implement db.rs with migrations + encryption + verification	1.5 hours
+Implement auth.rs with Argon2id	1 hour
+Basic main.rs with persistent State connection	30 min
+Test: Encryption acceptance tests	30 min
+Phase 2: Encryption Unlock Flow (Day 2)
+Task	Time
+unlock_database command with verification	30 min
+UnlockScreen UI component (with correct useEffect)	1 hour
+Integration with app startup	30 min
+Test: Wrong password ? immediate error	15 min
+Phase 3: Core CRUD (Day 2-3)
+Task	Time
+Implement all debtor commands	1 hour
+Frontend local.db.ts service (no org_id in inputs)	30 min
+Test: Organization isolation	30 min
+Phase 4: Upload (Day 3-4)
+Task	Time
+Implement bulk_insert_debtors	30 min
+CSV/Excel parsing	1 hour
+ColumnMapper component	1 hour
+UploadZone component	30 min
+UploadDebtors page	1 hour
+Phase 5: Documents (Day 4-5)
+Task	Time
+Document commands with category validation + UUID validation	30 min
+Document modal UI	1 hour
+Test: Path traversal prevented (category + entity_id)	15 min
+Phase 6: Collections (Day 5)
+Task	Time
+Collections page	1 hour
+Search + filters	30 min
+Edit/Delete modals	30 min
+Test: Audit log contains no PII	15 min
+Phase 7: Agent Management (Day 5-6)
+Task	Time
+Cloud API endpoints (with org-scoping + role checks)	1 hour
+Agents page UI	1 hour
+Add Agent modal	30 min
+Test: Authorization scoping	30 min
+Phase 8: Backup & Recovery (Day 6)
+Task	Time
+Backup command	1 hour
+Restore command	1 hour
+Backup UI	30 min
+Test: Backup contains no plaintext data	30 min
+Phase 9: Polish & Release (Day 6-7)
+Task	Time
+Error handling	30 min
+Loading states	20 min
+GitHub Actions workflow	1 hour
+Build installers	30 min
+Full test suite	1 hour
+
+? FINAL SUMMARY
+All Friend Feedback Addressed
+Friend	Issue	Status
+F1	Architecture	? Frozen
+F1	Encryption testing	? Added to testing checklist
+F1	Backup verification	? Added to testing checklist
+F1	Wording	? Updated to "Architecture frozen"
+F2	Frontend/backend signature mismatch	? Fixed (org_id removed from DebtorInput)
+F2	Backup password change edge case	? Documented in Restore flow
+F2	Path traversal via entity_id	? UUID validation added
+F2	resetAgentPassword implementation	? Behavior specified in detail
+F2	UnlockScreen useState bug	? Fixed to useEffect
+Final Verdict
+"Architecture is frozen and specification is ready for implementation. No known architectural gaps remain."
+"I would now stop redesigning. You've crossed the line from designing GORKA into building GORKA."
+
+
+ANNEX A — CRITICAL FIX: PLACEHOLDER CONNECTION BUG
+Date: September 5, 2026
+Applies To: Specification v3.2, Section 6 (Rust Backend — main.rs)
+Severity: ? CRITICAL — Prevents encryption from working on first launch
+Status: ? FIXED
+
+? THE PROBLEM
+What Was Wrong
+In the original v3.2 specification, main.rs contained this code:
+rust
+fn main() {
+    // ? THIS CREATES THE REAL DATABASE FILE WITH AN EMPTY KEY
+    let placeholder_conn = db::init_db("").unwrap_or_else(|_| {
+        panic!("Failed to initialize database connection");
+    });
+    
+    tauri::Builder::default()
+        .manage(AppState {
+            db: Mutex::new(placeholder_conn),
+        })
+        // ...
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+Why This Breaks Everything
+Step	What Happens	Result
+1	App starts	? App launches
+2	db::init_db("") called	? Opens gorka-client.db with empty key ''
+3	run_migrations() runs	? Creates all tables under key ''
+4	User sets real password	? Key derived via Argon2id
+5	unlock_database() calls init_db(real_key)	? Tries to decrypt pages written under ''
+6	verify_password() runs SELECT count(*) FROM sqlite_master	? Fails — data corrupted
+7	User sees "Incorrect password"	? Correct password rejected EVERY TIME
+This affects every user, on every fresh install, on first launch.
+
+? THE FIX
+1. Update AppState to Use Option<Connection>
+rust
+// src-tauri/src/main.rs
+
+struct AppState {
+    db: Mutex<Option<Connection>>,  // ? No connection until real unlock
+}
+2. Update main() — Remove Placeholder Connection
+rust
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .manage(AppState {
+            db: Mutex::new(None),  // ? No connection until unlock
+        })
+        .invoke_handler(tauri::generate_handler![
+            login,
+            get_auth_token,
+            logout,
+            get_organization_id,
+            unlock_database,
+            is_database_unlocked,
+            get_debtors,
+            get_debtor,
+            insert_debtor,
+            bulk_insert_debtors,
+            update_debtor,
+            delete_debtor,
+            search_debtors,
+            get_debtor_count,
+            upload_document,
+            get_documents,
+            delete_document,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+3. Update unlock_database — Create Real Connection
+rust
+#[command]
+fn unlock_database(password: String, app: tauri::AppHandle) -> Result<(), String> {
+    // Get salt from store
+    let salt = auth::get_salt(&app)?;
+    
+    // Derive key using Argon2id ? raw key ? hex
+    let key = db::derive_key(&password, &salt)
+        .map_err(|e| format!("Key derivation failed: {}", e))?;
+    
+    // ? This is the ONLY place that calls init_db
+    let conn = db::init_db(&key)?;
+    
+    // ? Verify password works
+    db::verify_password(&conn)?;
+    
+    // ? Store the real connection
+    let state = app.state::<AppState>();
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    *db_guard = Some(conn);
+    
+    // Store that the database is unlocked
+    auth::set_unlocked(&app, true)?;
+    
+    Ok(())
+}
+4. Update is_database_unlocked
+rust
+#[command]
+fn is_database_unlocked(state: tauri::State<AppState>) -> Result<bool, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    Ok(db_guard.is_some())  // ? True if connection exists
+}
+5. Update EVERY Debtor Command — Handle None
+Pattern for all commands:
+rust
+#[command]
+fn get_debtors(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    
+    // ? Handle None case
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    // ... rest of function using `conn`
+}
+
+? COMPLETE CORRECTED main.rs
+rust
+// src-tauri/src/main.rs
+
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use tauri::{command, State, Manager};
+use uuid::Uuid;
+use chrono::Utc;
+use std::sync::Mutex;
+
+mod db;
+mod auth;
+
+// ??? APP STATE ??????????????????????????????????????????????????????
+
+struct AppState {
+    db: Mutex<Option<Connection>>,  // ? No connection until real unlock
+}
+
+// ??? TYPES ??????????????????????????????????????????????????????????????
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Debtor {
+    pub id: String,
+    pub organization_id: String,
+    pub name: String,
+    pub surname: String,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub data: JsonValue,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DebtorInput {
+    pub name: String,
+    pub surname: String,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub data: JsonValue,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Document {
+    pub id: String,
+    pub entity_id: String,
+    pub entity_type: String,
+    pub file_name: String,
+    pub file_path: String,
+    pub file_type: String,
+    pub file_size: i64,
+    pub category: String,
+    pub description: Option<String>,
+    pub uploaded_by: Option<String>,
+    pub is_primary: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DocumentInput {
+    pub entity_id: String,
+    pub entity_type: String,
+    pub file_name: String,
+    pub file_content: Vec<u8>,
+    pub file_type: String,
+    pub category: String,
+    pub description: Option<String>,
+    pub uploaded_by: Option<String>,
+    pub is_primary: Option<bool>,
+}
+
+// ??? VALIDATION ENUMS ?????????????????????????????????????????????????
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DocumentCategory {
+    ProfilePhoto,
+    IdCard,
+    Passport,
+    DriverLicense,
+    Contract,
+    ProofOfAddress,
+    IncomeProof,
+    CollateralPhoto,
+    Other,
+}
+
+impl DocumentCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DocumentCategory::ProfilePhoto => "profile_photo",
+            DocumentCategory::IdCard => "id_card",
+            DocumentCategory::Passport => "passport",
+            DocumentCategory::DriverLicense => "driver_license",
+            DocumentCategory::Contract => "contract",
+            DocumentCategory::ProofOfAddress => "proof_of_address",
+            DocumentCategory::IncomeProof => "income_proof",
+            DocumentCategory::CollateralPhoto => "collateral_photo",
+            DocumentCategory::Other => "other",
+        }
+    }
+}
+
+// ??? HELPER ??????????????????????????????????????????????????????????
+
+fn get_trusted_organization_id(app: &tauri::AppHandle) -> Result<String, String> {
+    auth::get_organization_id(app.clone())
+}
+
+// ??? AUTH COMMANDS ????????????????????????????????????????????????????
+
+#[command]
+async fn login(
+    email: String,
+    password: String,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    auth::login(email, password, app).await
+}
+
+#[command]
+fn get_auth_token(app: tauri::AppHandle) -> Result<String, String> {
+    auth::get_token(app)
+}
+
+#[command]
+fn logout(app: tauri::AppHandle) -> Result<(), String> {
+    auth::logout(app)
+}
+
+#[command]
+fn get_organization_id(app: tauri::AppHandle) -> Result<String, String> {
+    auth::get_organization_id(app)
+}
+
+// ??? ENCRYPTION UNLOCK ????????????????????????????????????????????????
+
+#[command]
+fn unlock_database(password: String, app: tauri::AppHandle) -> Result<(), String> {
+    let salt = auth::get_salt(&app)?;
+    let key = db::derive_key(&password, &salt)
+        .map_err(|e| format!("Key derivation failed: {}", e))?;
+    
+    // ? This is the ONLY place that calls init_db against the real file
+    let conn = db::init_db(&key)?;
+    
+    // ? Verify password works
+    db::verify_password(&conn)?;
+    
+    // ? Store the real connection
+    let state = app.state::<AppState>();
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    *db_guard = Some(conn);
+    
+    auth::set_unlocked(&app, true)?;
+    Ok(())
+}
+
+#[command]
+fn is_database_unlocked(state: tauri::State<AppState>) -> Result<bool, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    Ok(db_guard.is_some())
+}
+
+// ??? DEBTOR COMMANDS ??????????????????????????????????????????????????
+
+#[command]
+fn get_debtors(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    let mut stmt = conn.prepare(
+        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at 
+         FROM debtors WHERE organization_id = ?1
+         ORDER BY surname, name"
+    ).map_err(|e| e.to_string())?;
+    
+    let rows = stmt.query_map([&organization_id], |row| {
+        let data_json: String = row.get(6)?;
+        Ok(Debtor {
+            id: row.get(0)?,
+            organization_id: row.get(1)?,
+            name: row.get(2)?,
+            surname: row.get(3)?,
+            email: row.get(4)?,
+            phone: row.get(5)?,
+            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut debtors = Vec::new();
+    for row in rows {
+        debtors.push(row.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(debtors)
+}
+
+#[command]
+fn get_debtor(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    let debtor = conn.query_row(
+        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at 
+         FROM debtors WHERE id = ?1 AND organization_id = ?2",
+        params![&id, &organization_id],
+        |row| {
+            let data_json: String = row.get(6)?;
+            Ok(Debtor {
+                id: row.get(0)?,
+                organization_id: row.get(1)?,
+                name: row.get(2)?,
+                surname: row.get(3)?,
+                email: row.get(4)?,
+                phone: row.get(5)?,
+                data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        }
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(debtor)
+}
+
+#[command]
+fn insert_debtor(
+    input: DebtorInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339();
+    
+    conn.execute(
+        "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            &id,
+            &organization_id,
+            &input.name,
+            &input.surname,
+            &input.email,
+            &input.phone,
+            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+            &now,
+            &now,
+        ],
+    ).map_err(|e| e.to_string())?;
+    
+    db::log_audit(conn, "INSERT", Some(&id), 1, "Inserted debtor")?;
+    
+    Ok(Debtor {
+        id,
+        organization_id,
+        name: input.name,
+        surname: input.surname,
+        email: input.email,
+        phone: input.phone,
+        data: input.data,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+#[command]
+fn bulk_insert_debtors(
+    inputs: Vec<DebtorInput>,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    let now = Utc::now().to_rfc3339();
+    let mut inserted = Vec::new();
+    
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    
+    for input in inputs {
+        let id = Uuid::new_v4().to_string();
+        
+        tx.execute(
+            "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                &id,
+                &organization_id,
+                &input.name,
+                &input.surname,
+                &input.email,
+                &input.phone,
+                &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+                &now,
+                &now,
+            ],
+        ).map_err(|e| e.to_string())?;
+        
+        inserted.push(Debtor {
+            id,
+            organization_id,
+            name: input.name,
+            surname: input.surname,
+            email: input.email,
+            phone: input.phone,
+            data: input.data,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        });
+    }
+    
+    tx.commit().map_err(|e| e.to_string())?;
+    
+    let count = inserted.len() as i64;
+    db::log_audit(conn, "BULK_INSERT", None, count, &format!("Inserted {} debtors", count))?;
+    
+    Ok(inserted)
+}
+
+#[command]
+fn update_debtor(
+    id: String,
+    input: DebtorInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let now = Utc::now().to_rfc3339();
+    
+    let affected = conn.execute(
+        "UPDATE debtors 
+         SET name = ?1, surname = ?2, email = ?3, phone = ?4, data = ?5, updated_at = ?6
+         WHERE id = ?7 AND organization_id = ?8",
+        params![
+            &input.name,
+            &input.surname,
+            &input.email,
+            &input.phone,
+            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+            &now,
+            &id,
+            &organization_id,
+        ],
+    ).map_err(|e| e.to_string())?;
+    
+    if affected == 0 {
+        return Err("Debtor not found or not in this organization".to_string());
+    }
+    
+    db::log_audit(conn, "UPDATE", Some(&id), 1, "Updated debtor")?;
+    
+    Ok(Debtor {
+        id,
+        organization_id,
+        name: input.name,
+        surname: input.surname,
+        email: input.email,
+        phone: input.phone,
+        data: input.data,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+#[command]
+fn delete_debtor(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    let affected = conn.execute(
+        "DELETE FROM debtors WHERE id = ?1 AND organization_id = ?2",
+        params![&id, &organization_id],
+    ).map_err(|e| e.to_string())?;
+    
+    if affected > 0 {
+        let debtor_dir = db::get_debtor_files_dir(&id)?;
+        if debtor_dir.exists() {
+            std::fs::remove_dir_all(&debtor_dir)
+                .map_err(|e| format!("Failed to delete debtor files: {}", e))?;
+        }
+        
+        db::log_audit(conn, "DELETE", Some(&id), 1, "Deleted debtor")?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[command]
+fn search_debtors(
+    query: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let search_pattern = format!("%{}%", query);
+    
+    let mut stmt = conn.prepare(
+        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at 
+         FROM debtors 
+         WHERE organization_id = ?1
+         AND (name LIKE ?2 OR surname LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2
+         OR json_extract(data, '$.contacts.phone1') LIKE ?2
+         OR json_extract(data, '$.contacts.email1') LIKE ?2
+         OR json_extract(data, '$.guarantor.name') LIKE ?2)
+         ORDER BY surname, name"
+    ).map_err(|e| e.to_string())?;
+    
+    let rows = stmt.query_map([&organization_id, &search_pattern], |row| {
+        let data_json: String = row.get(6)?;
+        Ok(Debtor {
+            id: row.get(0)?,
+            organization_id: row.get(1)?,
+            name: row.get(2)?,
+            surname: row.get(3)?,
+            email: row.get(4)?,
+            phone: row.get(5)?,
+            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut debtors = Vec::new();
+    for row in rows {
+        debtors.push(row.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(debtors)
+}
+
+#[command]
+fn get_debtor_count(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<i64, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM debtors WHERE organization_id = ?1",
+        params![&organization_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(count)
+}
+
+// ??? DOCUMENT COMMANDS ???????????????????????????????????????????????
+
+#[command]
+fn upload_document(
+    input: DocumentInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Document, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    // ??? VALIDATE ENTITY_ID (UUID format) ????????????????????????????
+    Uuid::parse_str(&input.entity_id)
+        .map_err(|_| format!("Invalid entity_id format: {}", input.entity_id))?;
+    
+    // ??? VALIDATE CATEGORY ????????????????????????????????????????????
+    let category = match input.category.as_str() {
+        "profile_photo" => DocumentCategory::ProfilePhoto,
+        "id_card" => DocumentCategory::IdCard,
+        "passport" => DocumentCategory::Passport,
+        "driver_license" => DocumentCategory::DriverLicense,
+        "contract" => DocumentCategory::Contract,
+        "proof_of_address" => DocumentCategory::ProofOfAddress,
+        "income_proof" => DocumentCategory::IncomeProof,
+        "collateral_photo" => DocumentCategory::CollateralPhoto,
+        "other" => DocumentCategory::Other,
+        _ => return Err("Invalid document category".to_string()),
+    };
+    
+    let category_str = category.as_str();
+    let id = Uuid::new_v4().to_string();
+    
+    // ??? FILE PATH ????????????????????????????????????????????????????
+    let debtor_dir = db::get_debtor_files_dir(&input.entity_id)?;
+    let docs_dir = debtor_dir.join("documents");
+    std::fs::create_dir_all(&docs_dir).map_err(|e| e.to_string())?;
+    
+    let file_extension = input.file_name
+        .split('.')
+        .last()
+        .unwrap_or("bin");
+    let timestamp = Utc::now().timestamp();
+    let unique_name = format!("{}_{}.{}", category_str, timestamp, file_extension);
+    let file_path = docs_dir.join(&unique_name);
+    
+    // ??? SAVE FILE ????????????????????????????????????????????????????
+    std::fs::write(&file_path, input.file_content)
+        .map_err(|e| format!("Failed to save file: {}", e))?;
+    
+    let file_size = std::fs::metadata(&file_path)
+        .map(|m| m.len() as i64)
+        .unwrap_or(0);
+    
+    let file_path_str = file_path.to_string_lossy().to_string();
+    let is_primary = input.is_primary.unwrap_or(false);
+    
+    if is_primary && input.category == "profile_photo" {
+        conn.execute(
+            "UPDATE documents SET is_primary = 0 
+             WHERE entity_id = ?1 AND category = ?2",
+            params![&input.entity_id, &category_str],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    // ??? INSERT RECORD ????????????????????????????????????????????????
+    conn.execute(
+        "INSERT INTO documents (
+            id, entity_id, entity_type, file_name, file_path, file_type,
+            file_size, category, description, uploaded_by, is_primary, created_at
+        )
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![
+            &id,
+            &input.entity_id,
+            &input.entity_type,
+            &input.file_name,
+            &file_path_str,
+            &input.file_type,
+            file_size,
+            &category_str,
+            &input.description,
+            &input.uploaded_by,
+            is_primary,
+            &Utc::now().to_rfc3339(),
+        ],
+    ).map_err(|e| e.to_string())?;
+    
+    // ?? Log audit WITHOUT filename (prevents PII in audit log)
+    db::log_audit(
+        conn,
+        "UPLOAD_DOC",
+        Some(&input.entity_id),
+        1,
+        &format!("Uploaded document: category={}", category_str),
+    )?;
+    
+    Ok(Document {
+        id,
+        entity_id: input.entity_id,
+        entity_type: input.entity_type,
+        file_name: input.file_name,
+        file_path: file_path_str,
+        file_type: input.file_type,
+        file_size,
+        category: category_str.to_string(),
+        description: input.description,
+        uploaded_by: input.uploaded_by,
+        is_primary,
+        created_at: Utc::now().to_rfc3339(),
+    })
+}
+
+#[command]
+fn get_documents(
+    entity_id: String,
+    entity_type: Option<String>,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Document>, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    let mut query = String::from(
+        "SELECT id, entity_id, entity_type, file_name, file_path, file_type,
+         file_size, category, description, uploaded_by, is_primary, created_at
+         FROM documents WHERE entity_id = ?1"
+    );
+    
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(entity_id)];
+    
+    if let Some(et) = entity_type {
+        query.push_str(" AND entity_type = ?2");
+        params.push(Box::new(et));
+    }
+    
+    query.push_str(" ORDER BY created_at DESC");
+    
+    let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
+    
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok(Document {
+            id: row.get(0)?,
+            entity_id: row.get(1)?,
+            entity_type: row.get(2)?,
+            file_name: row.get(3)?,
+            file_path: row.get(4)?,
+            file_type: row.get(5)?,
+            file_size: row.get(6)?,
+            category: row.get(7)?,
+            description: row.get(8)?,
+            uploaded_by: row.get(9)?,
+            is_primary: row.get(10)?,
+            created_at: row.get(11)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut documents = Vec::new();
+    for row in rows {
+        documents.push(row.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(documents)
+}
+
+#[command]
+fn delete_document(
+    id: String,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    
+    let file_path: String = conn.query_row(
+        "SELECT file_path FROM documents WHERE id = ?1",
+        params![&id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    
+    if let Err(e) = std::fs::remove_file(&file_path) {
+        eprintln!("Failed to delete file: {}", e);
+    }
+    
+    let affected = conn.execute(
+        "DELETE FROM documents WHERE id = ?1",
+        params![&id],
+    ).map_err(|e| e.to_string())?;
+    
+    db::log_audit(conn, "DELETE_DOC", None, 1, &format!("Deleted document: {}", id))?;
+    
+    Ok(affected > 0)
+}
+
+// ??? MAIN ????????????????????????????????????????????????????????????
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .manage(AppState {
+            db: Mutex::new(None),  // ? No connection until real unlock
+        })
+        .invoke_handler(tauri::generate_handler![
+            login,
+            get_auth_token,
+            logout,
+            get_organization_id,
+            unlock_database,
+            is_database_unlocked,
+            get_debtors,
+            get_debtor,
+            insert_debtor,
+            bulk_insert_debtors,
+            update_debtor,
+            delete_debtor,
+            search_debtors,
+            get_debtor_count,
+            upload_document,
+            get_documents,
+            delete_document,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+? CHANGES SUMMARY
+Change	Before	After
+AppState	Mutex<Connection>	Mutex<Option<Connection>>
+main()	Creates placeholder connection with empty key	? No connection created
+unlock_database()	Replaces placeholder connection	? Creates the ONLY connection
+is_database_unlocked()	Checks db_unlocked flag	? Checks db_guard.is_some()
+All debtor/document commands	Assumes connection exists	? Handles None case with "Database not unlocked"
+
+? VERIFICATION TEST
+After applying this fix, run this test:
+Step	Expected Result
+1. Launch app (first time)	? App starts, UnlockScreen appears
+2. Set local encryption password	? Password accepted
+3. Upload/View debtors	? Works
+4. Close app	? App closes
+5. Reopen app	? UnlockScreen appears
+6. Enter same password	? Database unlocks, data accessible
+
+? RELATION TO SPECIFICATION v3.2
+This annex replaces Section 6 (Rust Backend — main.rs) in the v3.2 specification. All other sections remain unchanged.
+

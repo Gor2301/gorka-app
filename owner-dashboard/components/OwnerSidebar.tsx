@@ -9,7 +9,8 @@ import {
   Settings,
   LogOut,
   Ticket,
-  Inbox
+  Inbox,
+  ShieldCheck
 } from 'lucide-react';
 
 const OwnerSidebar: React.FC = () => {
@@ -22,6 +23,7 @@ const OwnerSidebar: React.FC = () => {
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: CreditCard, label: 'Billing', path: '/billing' },
     { icon: Activity, label: 'Audit Logs', path: '/audit' },
+    { icon: ShieldCheck, label: 'Boundary Proofs', path: '/boundary-proofs' },
     { icon: Ticket, label: 'Support', path: '/support' },
 { icon: Inbox, label: 'Inbox', path: '/inbox' },
     { icon: Settings, label: 'Settings', path: '/settings' },

@@ -6,21 +6,18 @@ import { PrismaClient } from '@prisma/client';
 import { authenticateToken } from './middleware/auth';
 import { errorHandler } from './middleware/errorHandler';
 import logger from './middleware/logger';
+import boundaryRoutes from './routes/boundary.routes';
+import connectorsRoutes from './routes/connectors.routes';
+import connectorUsageRoutes from './routes/connector-usage.routes';
+import billingRoutes from './routes/billing.routes';
+import licensesRoutes from './routes/licenses.routes';
 
 // Import routes
 import authRoutes from './routes/auth';
 import supportRoutes from './routes/support.routes';
-import statusRoutes from './routes/status';
-import auditRoutes from './routes/audit.routes';
-import analyticsRoutes from './routes/analytics.routes';
-import complianceRoutes from './routes/compliance.routes';
-import connectorRoutes from './routes/connector.routes';
-import calendarRoutes from './routes/calendar.routes';
-import permissionsRoutes from './routes/permissions.routes';
-import usersRoutes from './routes/users.routes';
 import dashboardRoutes from './routes/dashboard.routes';
-import debtorsRoutes from './routes/debtors';
-import clientsRoutes from './routes/clients';
+import metricsRoutes from './routes/metrics.routes';
+import activityRoutes from './routes/activity.routes';
 
 dotenv.config();
 
@@ -71,7 +68,7 @@ app.use(cors({
 }));
 
 // ✅ Handle preflight requests explicitly
-app.options('*', cors());;
+
 
 app.use(express.json());
 app.use(cookieParser());
@@ -80,17 +77,15 @@ app.use(logger);
 // ─── Routes ─────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/support', authenticateToken, supportRoutes);
-app.use('/api/status', authenticateToken, statusRoutes);
-app.use('/api/audit', authenticateToken, auditRoutes);
-app.use('/api/analytics', authenticateToken, analyticsRoutes);
-app.use('/api/compliance', authenticateToken, complianceRoutes);
-app.use('/api/connectors', authenticateToken, connectorRoutes);
-app.use('/api/calendar', authenticateToken, calendarRoutes);
-app.use('/api/permissions', authenticateToken, permissionsRoutes);
-app.use('/api/users', authenticateToken, usersRoutes);
 app.use('/api/dashboard', authenticateToken, dashboardRoutes);
-app.use('/api/debtors', authenticateToken, debtorsRoutes);
-app.use('/api/clients', authenticateToken, clientsRoutes);
+app.use('/api/metrics', authenticateToken, metricsRoutes);
+app.use('/api/activity', authenticateToken, activityRoutes);
+app.use('/api/boundary-proofs', authenticateToken, boundaryRoutes);
+app.use('/api/connectors', authenticateToken, connectorsRoutes);
+app.use('/api/connector-usage', authenticateToken, connectorUsageRoutes);
+app.use('/api/billing', authenticateToken, billingRoutes);
+app.use('/api/licenses', authenticateToken, licensesRoutes);
+
 
 // ─── Health Check ──────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

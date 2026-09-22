@@ -1,0 +1,491 @@
+-- DropForeignKey
+ALTER TABLE "actions" DROP CONSTRAINT "actions_assigned_to_fkey";
+
+-- DropForeignKey
+ALTER TABLE "actions" DROP CONSTRAINT "actions_debtor_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "actions" DROP CONSTRAINT "actions_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "activity_logs" DROP CONSTRAINT "activity_logs_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "activity_logs" DROP CONSTRAINT "activity_logs_user_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "agent_assignments" DROP CONSTRAINT "agent_assignments_agent_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "agent_assignments" DROP CONSTRAINT "agent_assignments_assigned_by_fkey";
+
+-- DropForeignKey
+ALTER TABLE "agent_assignments" DROP CONSTRAINT "agent_assignments_debtor_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "agent_permissions" DROP CONSTRAINT "agent_permissions_agent_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "agents" DROP CONSTRAINT "agents_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "agents" DROP CONSTRAINT "agents_supervisor_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "agents" DROP CONSTRAINT "agents_user_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_feedback" DROP CONSTRAINT "ai_feedback_agent_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_feedback" DROP CONSTRAINT "ai_feedback_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_feedback" DROP CONSTRAINT "ai_feedback_recommendation_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_outcomes" DROP CONSTRAINT "ai_outcomes_agent_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_outcomes" DROP CONSTRAINT "ai_outcomes_debtor_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_outcomes" DROP CONSTRAINT "ai_outcomes_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_outcomes" DROP CONSTRAINT "ai_outcomes_recommendation_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_recommendations" DROP CONSTRAINT "ai_recommendations_agent_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_recommendations" DROP CONSTRAINT "ai_recommendations_debtor_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ai_recommendations" DROP CONSTRAINT "ai_recommendations_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "audit_logs" DROP CONSTRAINT "audit_logs_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "audit_logs" DROP CONSTRAINT "audit_logs_user_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "communication_history" DROP CONSTRAINT "communication_history_debtor_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "communication_history" DROP CONSTRAINT "communication_history_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "data_uploads" DROP CONSTRAINT "data_uploads_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "data_uploads" DROP CONSTRAINT "data_uploads_uploaded_by_fkey";
+
+-- DropForeignKey
+ALTER TABLE "debtors" DROP CONSTRAINT "debtors_assigned_to_fkey";
+
+-- DropForeignKey
+ALTER TABLE "debtors" DROP CONSTRAINT "debtors_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "message_logs" DROP CONSTRAINT "message_logs_debtor_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "message_logs" DROP CONSTRAINT "message_logs_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "message_logs" DROP CONSTRAINT "message_logs_user_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "queue_jobs" DROP CONSTRAINT "queue_jobs_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "supervisor_actions" DROP CONSTRAINT "supervisor_actions_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "supervisor_actions" DROP CONSTRAINT "supervisor_actions_supervisor_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "supervisor_actions" DROP CONSTRAINT "supervisor_actions_target_agent_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "supervisor_actions" DROP CONSTRAINT "supervisor_actions_target_debtor_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "templates" DROP CONSTRAINT "templates_organization_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "users" DROP CONSTRAINT "users_organization_id_fkey";
+
+-- DropIndex
+DROP INDEX "actions_debtor_id_idx";
+
+-- DropIndex
+DROP INDEX "actions_due_date_idx";
+
+-- DropIndex
+DROP INDEX "actions_status_idx";
+
+-- DropIndex
+DROP INDEX "activity_logs_created_at_idx";
+
+-- DropIndex
+DROP INDEX "activity_logs_user_id_idx";
+
+-- DropIndex
+DROP INDEX "message_logs_created_at_idx";
+
+-- DropIndex
+DROP INDEX "message_logs_debtor_id_idx";
+
+-- DropIndex
+DROP INDEX "message_logs_status_idx";
+
+-- DropIndex
+DROP INDEX "organizations_slug_key";
+
+-- AlterTable
+ALTER TABLE "actions" DROP COLUMN "assigned_to",
+DROP COLUMN "completed_at",
+DROP COLUMN "created_at",
+DROP COLUMN "debtor_id",
+DROP COLUMN "due_date",
+DROP COLUMN "metadata",
+DROP COLUMN "organization_id",
+DROP COLUMN "title",
+DROP COLUMN "updated_at",
+ADD COLUMN     "assignedTo" TEXT NOT NULL,
+ADD COLUMN     "completedAt" TIMESTAMP(3),
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "debtorId" TEXT NOT NULL,
+ADD COLUMN     "dueDate" TIMESTAMP(3) NOT NULL,
+ADD COLUMN     "emailDelayHours" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "emailTemplateId" TEXT,
+ADD COLUMN     "messageLogId" TEXT,
+ADD COLUMN     "priority" TEXT NOT NULL DEFAULT 'MEDIUM',
+ADD COLUMN     "smsDelayHours" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "smsTemplateId" TEXT,
+ADD COLUMN     "triggerEmail" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "triggerSms" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- AlterTable
+ALTER TABLE "activity_logs" DROP COLUMN "created_at",
+DROP COLUMN "entity_id",
+DROP COLUMN "entity_type",
+DROP COLUMN "ip_address",
+DROP COLUMN "organization_id",
+DROP COLUMN "user_agent",
+DROP COLUMN "user_id",
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "entityId" TEXT,
+ADD COLUMN     "entityType" TEXT NOT NULL,
+ADD COLUMN     "ipAddress" TEXT,
+ADD COLUMN     "organizationId" TEXT NOT NULL,
+ADD COLUMN     "userAgent" TEXT,
+ADD COLUMN     "userId" TEXT,
+ALTER COLUMN "details" DROP NOT NULL,
+ALTER COLUMN "details" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "debtors" DROP COLUMN "assigned_to",
+DROP COLUMN "created_at",
+DROP COLUMN "date_of_birth",
+DROP COLUMN "deleted_at",
+DROP COLUMN "identification",
+DROP COLUMN "metadata",
+DROP COLUMN "organization_id",
+DROP COLUMN "risk_score",
+DROP COLUMN "tags",
+DROP COLUMN "updated_at",
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "daysOverdue" INTEGER,
+ADD COLUMN     "nextFollowUpDate" TIMESTAMP(3),
+ADD COLUMN     "nextPaymentDate" TIMESTAMP(3),
+ADD COLUMN     "organizationId" TEXT NOT NULL,
+ADD COLUMN     "totalDebt" DOUBLE PRECISION,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- AlterTable
+ALTER TABLE "message_logs" DROP COLUMN "created_at",
+DROP COLUMN "debtor_id",
+DROP COLUMN "delivered_at",
+DROP COLUMN "direction",
+DROP COLUMN "organization_id",
+DROP COLUMN "provider_id",
+DROP COLUMN "read_at",
+DROP COLUMN "sent_at",
+DROP COLUMN "updated_at",
+DROP COLUMN "user_id",
+ADD COLUMN     "clickedAt" TIMESTAMP(3),
+ADD COLUMN     "contactEmail" TEXT NOT NULL,
+ADD COLUMN     "contactName" TEXT,
+ADD COLUMN     "contentPreview" TEXT NOT NULL,
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "debtorId" TEXT,
+ADD COLUMN     "deliveredAt" TIMESTAMP(3),
+ADD COLUMN     "error" TEXT,
+ADD COLUMN     "jobId" TEXT,
+ADD COLUMN     "openedAt" TIMESTAMP(3),
+ADD COLUMN     "providerData" JSONB,
+ADD COLUMN     "providerMessageId" TEXT,
+ADD COLUMN     "recipient" TEXT NOT NULL,
+ADD COLUMN     "scheduledAt" TIMESTAMP(3),
+ADD COLUMN     "sentAt" TIMESTAMP(3),
+ADD COLUMN     "templateId" TEXT,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL,
+ADD COLUMN     "userId" TEXT,
+ALTER COLUMN "content" SET NOT NULL,
+ALTER COLUMN "status" SET DEFAULT 'PENDING',
+ALTER COLUMN "metadata" DROP NOT NULL,
+ALTER COLUMN "metadata" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "organizations" DROP COLUMN "created_at",
+DROP COLUMN "deleted_at",
+DROP COLUMN "email",
+DROP COLUMN "industry",
+DROP COLUMN "phone",
+DROP COLUMN "settings",
+DROP COLUMN "slug",
+DROP COLUMN "status",
+DROP COLUMN "updated_at",
+DROP COLUMN "website",
+ADD COLUMN     "clientType" TEXT,
+ADD COLUMN     "contactEmail" TEXT,
+ADD COLUMN     "contactPhone" TEXT,
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "primaryContact" TEXT,
+ADD COLUMN     "registrationNumber" TEXT,
+ADD COLUMN     "taxId" TEXT,
+ADD COLUMN     "timezone" TEXT NOT NULL DEFAULT 'UTC',
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- AlterTable
+ALTER TABLE "templates" DROP COLUMN "created_at",
+DROP COLUMN "organization_id",
+DROP COLUMN "status",
+DROP COLUMN "type",
+DROP COLUMN "updated_at",
+DROP COLUMN "variables",
+ADD COLUMN     "category" TEXT NOT NULL DEFAULT 'GENERAL',
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "createdBy" TEXT,
+ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL,
+ADD COLUMN     "version" INTEGER NOT NULL DEFAULT 1;
+
+-- AlterTable
+ALTER TABLE "users" DROP COLUMN "created_at",
+DROP COLUMN "deleted_at",
+DROP COLUMN "last_login_at",
+DROP COLUMN "organization_id",
+DROP COLUMN "status",
+DROP COLUMN "updated_at",
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "lastLogin" TIMESTAMP(3),
+ADD COLUMN     "organizationId" TEXT NOT NULL,
+ADD COLUMN     "passwordHash" TEXT NOT NULL,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL,
+ALTER COLUMN "password" DROP NOT NULL;
+
+-- DropTable
+DROP TABLE "agent_assignments";
+
+-- DropTable
+DROP TABLE "agent_permissions";
+
+-- DropTable
+DROP TABLE "agents";
+
+-- DropTable
+DROP TABLE "ai_feedback";
+
+-- DropTable
+DROP TABLE "ai_outcomes";
+
+-- DropTable
+DROP TABLE "ai_recommendations";
+
+-- DropTable
+DROP TABLE "audit_logs";
+
+-- DropTable
+DROP TABLE "communication_history";
+
+-- DropTable
+DROP TABLE "data_uploads";
+
+-- DropTable
+DROP TABLE "queue_jobs";
+
+-- DropTable
+DROP TABLE "supervisor_actions";
+
+-- CreateTable
+CREATE TABLE "debts" (
+    "id" TEXT NOT NULL,
+    "debtorId" TEXT NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'USD',
+    "dueDate" TIMESTAMP(3) NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "description" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "debts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "calendar_events" (
+    "id" TEXT NOT NULL,
+    "organizationId" TEXT NOT NULL,
+    "debtorId" TEXT,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "endDate" TIMESTAMP(3) NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'TASK',
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "source" TEXT,
+    "sourceId" TEXT,
+    "sourceDate" TIMESTAMP(3),
+    "allDay" BOOLEAN NOT NULL DEFAULT false,
+    "eventType" TEXT,
+    "createdBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "calendar_events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "permission_roles" (
+    "id" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "organizationId" TEXT,
+    "description" TEXT,
+    "permissions" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "permission_roles_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "message_events" (
+    "id" TEXT NOT NULL,
+    "messageLogId" TEXT NOT NULL,
+    "event" TEXT NOT NULL,
+    "data" JSONB,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "message_events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "connectors" (
+    "id" TEXT NOT NULL,
+    "organizationId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DISCONNECTED',
+    "config" TEXT NOT NULL,
+    "credentials" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "description" TEXT,
+    "category" TEXT,
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "isEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "acknowledged" BOOLEAN NOT NULL DEFAULT false,
+    "lastTestedAt" TIMESTAMP(3),
+
+    CONSTRAINT "connectors_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "external_enrichments" (
+    "id" TEXT NOT NULL,
+    "connectorId" TEXT NOT NULL,
+    "debtorId" TEXT NOT NULL,
+    "organizationId" TEXT NOT NULL,
+    "externalScore" INTEGER,
+    "riskLevel" TEXT,
+    "externalStatus" TEXT,
+    "retrievedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "external_enrichments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "calendar_events_organizationId_idx" ON "calendar_events"("organizationId");
+
+-- CreateIndex
+CREATE INDEX "calendar_events_startDate_idx" ON "calendar_events"("startDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "calendar_events_organizationId_eventType_debtorId_sourceDat_key" ON "calendar_events"("organizationId", "eventType", "debtorId", "sourceDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "permission_roles_role_key" ON "permission_roles"("role");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "message_logs_jobId_key" ON "message_logs"("jobId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "templates_name_key" ON "templates"("name");
+
+-- AddForeignKey
+ALTER TABLE "users" ADD CONSTRAINT "users_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "debtors" ADD CONSTRAINT "debtors_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "debts" ADD CONSTRAINT "debts_debtorId_fkey" FOREIGN KEY ("debtorId") REFERENCES "debtors"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "actions" ADD CONSTRAINT "actions_debtorId_fkey" FOREIGN KEY ("debtorId") REFERENCES "debtors"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "actions" ADD CONSTRAINT "actions_assignedTo_fkey" FOREIGN KEY ("assignedTo") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "activity_logs" ADD CONSTRAINT "activity_logs_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "activity_logs" ADD CONSTRAINT "activity_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "calendar_events" ADD CONSTRAINT "calendar_events_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "calendar_events" ADD CONSTRAINT "calendar_events_debtorId_fkey" FOREIGN KEY ("debtorId") REFERENCES "debtors"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "message_logs" ADD CONSTRAINT "message_logs_debtorId_fkey" FOREIGN KEY ("debtorId") REFERENCES "debtors"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "message_logs" ADD CONSTRAINT "message_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "message_logs" ADD CONSTRAINT "message_logs_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "templates"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "message_events" ADD CONSTRAINT "message_events_messageLogId_fkey" FOREIGN KEY ("messageLogId") REFERENCES "message_logs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "connectors" ADD CONSTRAINT "connectors_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "external_enrichments" ADD CONSTRAINT "external_enrichments_connectorId_fkey" FOREIGN KEY ("connectorId") REFERENCES "connectors"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+

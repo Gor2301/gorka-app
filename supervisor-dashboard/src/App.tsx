@@ -4,6 +4,7 @@ import AppShell from './components/AppShell';
 import Dashboard from './pages/Dashboard';
 import Agents from './pages/Agents';
 import Collections from './pages/Collections';
+import DebtorDetail from './pages/DebtorDetail';
 import Upload from './pages/Upload';
 import Audit from './pages/Audit';
 import Permissions from './pages/Permissions';
@@ -83,6 +84,7 @@ console.log('🔍 [APP] handleLoginSuccess called');
           <Route path="/dashboard" element={<AppShell><Dashboard /></AppShell>} />
           <Route path="/agents" element={<AppShell><Agents /></AppShell>} />
           <Route path="/collections" element={<AppShell><Collections /></AppShell>} />
+          <Route path="/collections/:id" element={<AppShell><DebtorDetail /></AppShell>} />
           <Route path="/upload" element={<AppShell><Upload /></AppShell>} />
           <Route path="/audit" element={<AppShell><Audit /></AppShell>} />
           <Route path="/permissions" element={<AppShell><Permissions /></AppShell>} />

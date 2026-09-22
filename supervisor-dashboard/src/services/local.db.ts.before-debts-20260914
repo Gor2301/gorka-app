@@ -1,0 +1,209 @@
+// src/services/local.db.ts
+
+import { invoke } from '@tauri-apps/api/core';
+
+console.log('✅ invoke loaded:', typeof invoke);
+
+export const auth = {
+  async login(email: string, password: string): Promise<string> {
+    console.log('🔑 [FRONTEND] login called');
+    try {
+      const result = await invoke<string>('login', { email, password });
+      console.log('✅ [FRONTEND] login result:', result ? 'token received' : 'empty');
+      return result;
+    } catch (err) {
+      console.error('❌ [FRONTEND] login error:', err);
+      throw err;
+    }
+  },
+
+  async getToken(): Promise<string | null> {
+    console.log('🔍 [FRONTEND] getToken called');
+    try {
+      const token = await invoke<string>('get_auth_token');
+      console.log('✅ [FRONTEND] getToken result:', token ? 'token received' : 'empty');
+      return token;
+    } catch (error) {
+      console.error('🔴 [FRONTEND] getToken failed with:', error);
+      return null;
+    }
+  },
+
+  async getOrganizationId(): Promise<string | null> {
+    console.log('🔍 [FRONTEND] getOrganizationId called');
+    try {
+      return await invoke<string>('get_organization_id');
+    } catch {
+      return null;
+    }
+  },
+
+async getSalt(): Promise<string | null> {
+  try {
+    return await invoke<string>('get_salt');
+  } catch {
+    return null;
+  }
+},
+
+  async isUnlocked(): Promise<boolean> {
+    console.log('🔍 [FRONTEND] isUnlocked called');
+    try {
+      return await invoke<boolean>('is_database_unlocked');
+    } catch {
+      return false;
+    }
+  },
+
+  async unlockDatabase(password: string): Promise<void> {
+    console.log('🔑 [FRONTEND] unlockDatabase called');
+    await invoke('unlock_database', { password });
+  },
+
+  async logout(): Promise<void> {
+    console.log('🔑 [FRONTEND] logout called');
+    await invoke('logout');
+  },
+};
+
+
+// ─── TYPES ────────────────────────────────────────────────────────────
+// Mirror of the Rust Debtor struct in src-tauri/src/main.rs.
+
+export interface Debtor {
+  id: string;
+  organization_id: string;
+  name: string;
+  surname: string;
+  email: string | null;
+  phone: string | null;
+  data: any;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DebtorInput {
+  name: string;
+  surname: string;
+  email?: string | null;
+  phone?: string | null;
+  data?: any;
+}
+
+// ─── LOCAL DB (Debtor CRUD) ───────────────────────────────────────────
+// Wraps the Rust commands registered in src-tauri/src/main.rs.
+// organization_id is derived on the Rust side; the frontend never
+// sends it.
+
+export const localDB = {
+  async getDebtors(): Promise<Debtor[]> {
+    return await invoke<Debtor[]>('get_debtors');
+  },
+
+  async getDebtor(id: string): Promise<Debtor> {
+    return await invoke<Debtor>('get_debtor', { id });
+  },
+
+  async insertDebtor(input: DebtorInput): Promise<Debtor> {
+    return await invoke<Debtor>('insert_debtor', {
+      input: {
+        name: input.name,
+        surname: input.surname,
+        email: input.email ?? null,
+        phone: input.phone ?? null,
+        data: input.data ?? {},
+      },
+    });
+  },
+
+  async bulkInsertDebtors(inputs: DebtorInput[]): Promise<Debtor[]> {
+    return await invoke<Debtor[]>('bulk_insert_debtors', {
+      inputs: inputs.map((i) => ({
+        name: i.name,
+        surname: i.surname,
+        email: i.email ?? null,
+        phone: i.phone ?? null,
+        data: i.data ?? {},
+      })),
+    });
+  },
+
+  async updateDebtor(id: string, input: DebtorInput): Promise<Debtor> {
+    return await invoke<Debtor>('update_debtor', {
+      id,
+      input: {
+        name: input.name,
+        surname: input.surname,
+        email: input.email ?? null,
+        phone: input.phone ?? null,
+        data: input.data ?? {},
+      },
+    });
+  },
+
+  async deleteDebtor(id: string): Promise<boolean> {
+    return await invoke<boolean>('delete_debtor', { id });
+  },
+
+  async searchDebtors(query: string): Promise<Debtor[]> {
+    return await invoke<Debtor[]>('search_debtors', { query });
+  },
+
+  async getDebtorCount(): Promise<number> {
+    return await invoke<number>('get_debtor_count');
+  },
+
+
+  async uploadDocument(input: DocumentInput): Promise<Document> {
+    return await invoke<Document>('upload_document', { input });
+  },
+
+  async getDocuments(entityId: string, entityType?: string): Promise<Document[]> {
+    return await invoke<Document[]>('get_documents', {
+      entityId,
+      entityType: entityType ?? null,
+    });
+  },
+
+  async deleteDocument(id: string): Promise<boolean> {
+    return await invoke<boolean>('delete_document', { id });
+  },
+
+};
+
+
+
+// ─── DOCUMENT TYPES ───────────────────────────────────────────────────
+// Mirror of the Rust Document struct in src-tauri/src/main.rs.
+
+export interface Document {
+  id: string;
+  entity_id: string;
+  entity_type: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  file_size: number;
+  category: string;
+  description: string | null;
+  uploaded_by: string | null;
+  is_primary: boolean;
+  created_at: string;
+}
+
+export interface DocumentInput {
+  entity_id: string;
+  entity_type: string;
+  file_name: string;
+  file_content: number[];   // Tauri invoke serializes Uint8Array as number[]
+  file_type: string;
+  category: string;
+  description?: string | null;
+  uploaded_by?: string | null;
+  is_primary?: boolean;
+}
+
+
+
+
+
