@@ -1,7 +1,7 @@
 # START HERE
 
 Version: 1.2
-Date: September 21, 2026
+Date: September 22, 2026
 
 Purpose: Single entry point for any new session — human or AI —
 working on GORKA recovery.
@@ -411,7 +411,7 @@ level. Do NOT change the architecture.
 
 ========================================================================
 
-8. CURRENT STATE — September 21, 2026
+8. CURRENT STATE — September 22, 2026
 
 ========================================================================
 
@@ -540,6 +540,33 @@ The document prerequisites are met. What remains is:
 
 Phase 9 Item 4 (Action CRUD) remains code complete, not yet
 tested, blocked by the same cloud environment dependency.
+
+## Update — September 22, 2026
+
+The cloud Windows development environment is now set up and working. This was the item the September 15 SAC investigation recorded as "not yet set up."
+
+- AWS EC2 instance Gorka-dev, t3.small, Windows Server 2025 Datacenter, Singapore. Disk 70 GiB. RDP working.
+- Toolchain installed: Git 2.55.0, Node.js 24.21.0, Rust 1.98.1, Visual Studio C++ Build Tools, Strawberry Perl 5.42.3.1.
+- cargo build on the Tauri backend succeeded (18m 21s). gorka-client.exe produced.
+- npm run build succeeded.
+- Backend runs, connected to Supabase gorka_test through the session pooler.
+- Tauri app launches on the cloud machine. Login succeeds. Local database unlocks. Client Dashboard reached. Collections page shows the real CRUD UI.
+- Debtor CRUD confirmed working on the cloud machine.
+- Debt CRUD partially failing at the due-date field. Diagnosis not started.
+- Phase 9 Item 4 (Action CRUD) not fully tested.
+
+Repository synchronization problem resolved. The main machine had months of uncommitted work; the cloud machine cloned an old commit. The working tree was committed as 08eac3b and pushed. Both machines are now on the same commit, working trees clean.
+
+New process rule: Git is the synchronization authority between development machines. Before starting work on either machine, verify both HEADs match with `git log --oneline -1`.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 21–22 entries.
+
+Two unresolved questions carried forward:
+
+1. Agent App architecture — second Tauri binary in the same repo (per MULTI-USER-CONCEPT.md §9 and GORKA-MVP-SCOPE.md §5.3) or built from scratch. Not yet decided or recorded.
+2. An embedding that should not have happened — something reportedly embedded into the Client Dashboard. Not yet documented.
+
+Security housekeeping: three credentials (Supabase password, GitHub token, Resend API key) were exposed in chat logs and should be rotated.
 
 ========================================================================
 

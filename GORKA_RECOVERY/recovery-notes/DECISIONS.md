@@ -2955,4 +2955,140 @@ This entry is a record, not a decision. No new decisions were made in the Septem
 
 **End of entry.**
 
+---
+
+## Recovery Session — September 21–22, 2026
+
+This entry records the September 21–22, 2026 sessions: the construction of the AWS cloud Windows environment, the resolution of the repository synchronization problem, and the partial exercise of Phase 9 Item 4.
+
+### September 21, 2026 — Cloud environment built
+
+- **AWS EC2 instance created.** `Gorka-dev` (`i-0ac85da213bdaa09a`), `t3.small` (2 vCPU, 2 GiB RAM), Windows Server 2025 Datacenter, region Singapore (`ap-southeast-1`). Disk EBS `vol-02111dd953df939b6`, gp3, grown 30 → 50 → 70 GiB. C: extended in Windows to ~69.5 GB. Security group allows RDP from "My IP" only.
+
+- **Toolchain installed and verified.** Git 2.55.0, Node.js 24.21.0 with npm 11.19.0, Rust 1.98.1 with cargo, Visual Studio C++ Build Tools, Strawberry Perl 5.42.3.1 (required by `openssl-sys` to build OpenSSL from source).
+
+- **Rust build succeeded.** `cargo build` on the Tauri backend: `Finished dev profile [unoptimized + debuginfo] target(s) in 18m 21s`. `gorka-client.exe` produced at `C:\gorka-app\src-tauri\target\debug\gorka-client.exe`.
+
+- **Frontend built.** `npm run build` succeeded. `dist/` produced.
+
+- **Backend runs.** Express on port 3000. Initial connection attempts to Supabase failed because the direct hostname `db.tmloklxelckicufzpzxz.supabase.co` does not resolve from AWS Singapore. Switched to the Supabase **session pooler**: `aws-1-eu-west-3.pooler.supabase.com:5432`, username `postgres.tmloklxelckicufzpzxz`. Connection succeeded: `✅ PostgreSQL connected successfully`.
+
+- **Tauri app launches.** Login screen appears. Login with `test@example.com` / `Test123!` succeeds. Local SQLCipher database unlocks with `Password123`. Client Dashboard reached. Collections page shows the real CRUD UI.
+
+- **Eight file mismatches found and resolved.** The cloud machine was cloning an old commit because the main machine had months of uncommitted work. The eight mismatches — `package.json` backend dependencies, the Prisma schema, `@map` annotations, an orphan field, `api.service.ts` token source, `Collections.tsx` placeholder, `DebtorEditModal.tsx`, `local.db.ts` stub — were all symptoms of one cause: the main machine's working tree had become the de facto development branch, and git was not the synchronization authority.
+
+- **Repository synchronized.** On the main machine: `.gitignore` extended to exclude backup binaries and database copies; `git add -A`, commit as `08eac3b` (114 files changed, 122,495 insertions, 673 deletions); pushed to `origin/main`. On the cloud machine: the pull was blocked by an untracked `DebtorEditModal.tsx`. After moving that file aside, the pull fast-forwarded cleanly from `c9efd44` to `08eac3b`.
+
+- **Both machines on commit `08eac3b`.** Working trees clean.
+
+### September 22, 2026 — Item 4 partial test
+
+- **Services started on the cloud machine.** Vite dev server (`npm run dev`), backend (`npx tsx src/backend/index.ts` with inline environment variables), Tauri app.
+
+- **Local database created fresh.** Initial "Enter password" screen failed with `file is not a database` when entering `Test123!`. The correct password is `Password123` — the local encryption password is distinct from the login password. Once the correct password was entered, the database unlocked.
+
+- **Debtor CRUD confirmed working on the cloud machine.** Create, edit, delete all functioned. Collections page shows the real CRUD UI.
+
+- **Debt CRUD partially failing.** Adding a debt failed at the due-date field. Not yet diagnosed. This is the first Phase 9 feature confirmed broken since the cloud environment came up.
+
+- **Phase 9 Item 4 (Action CRUD) not yet fully tested.** Debtor CRUD was exercised; Action CRUD was not completed because the debt due-date issue appeared first.
+
+### Operational knowledge recorded
+
+- **Supabase session pooler is required from AWS Singapore.** The direct database hostname does not resolve. The pooler hostname `aws-1-eu-west-3.pooler.supabase.com` does. The username format for the pooler appends the project ID: `postgres.tmloklxelckicufzpzxz`.
+
+- **SQLCipher's `file is not a database` error means wrong key, not corrupt file.** This is the SQLCipher error message when the key is wrong; it cannot distinguish wrong key from corruption. Always try the correct password before considering deletion.
+
+- **Supabase free tier pauses projects after 7 days of inactivity.** The Gorka SaaS project was paused on September 20, resumed on September 22. Project ID `tmloklxelckicufzpzxz`, region `eu-west-3`.
+
+- **The `prisma/schema.prisma` file in git was the wrong schema.** It described the pre-recovery cloud database with `Debtor`, `Debt`, `Action`, `MessageLog`, `CalendarEvent`, `PermissionRole`, `Connector` models. The correct schema is `prisma/schema.cloud.prisma`, which has the 21 cloud-only models. The cloud machine's `schema.prisma` is now the content of `schema.cloud.prisma`. **A future session should resolve the relationship between these two files** — right now, `schema.prisma` is authoritative in practice, but its content has been overwritten with the cloud schema, and the naming is confusing.
+
+- **`prisma.config.ts` was renamed to `prisma.config.ts.disabled`** in git as part of commit `08eac3b`. This is recorded in the commit, but worth noting.
+
+### Process rule established
+
+**Git is the synchronization authority between development machines.**
+
+Not file-copying. Not "I think it is committed." The workflow is:
+
+MAIN MACHINE
+git status
+git add -A
+git commit
+git push
+↓
+GITHUB
+↓
+CLOUD MACHINE
+git pull
+git log --oneline -1 ← verify HEAD
+restart services if needed
+
+Before starting work on either machine, verify the HEAD matches:
+
+git log --oneline -1
+
+
+Both machines must show the same commit. This rule would have prevented most of the September 21–22 confusion.
+
+### The method lesson
+
+The founder's instruction — **check first, then edit** — was tested and held. Two false alarms (the `≤` character in `SYNC-ARCHITECTURE.md`, the `â€"` character in the header) were proven to be terminal display artifacts, not file corruption, by running byte-level checks. In one case (`Password123`), the "corruption" reported by SQLCipher was actually a wrong password. The lesson, restated: **run a byte-level or targeted check before any deletion or repair**.
+
+### Unresolved questions
+
+Two questions the founder has raised are not yet decided or recorded elsewhere:
+
+1. **Agent App architecture.** `MULTI-USER-CONCEPT.md §9` and `GORKA-MVP-SCOPE.md §5.3` describe the Agent App as a second Tauri binary in the same repository, sharing the Rust command layer. The founder recalls a prior-chat discussion about building it **from scratch** instead. **This is not recorded in any recovery document.** Before Phase 9.5 begins, this decision must be discussed, decided, and recorded here.
+
+2. **An embedding that should not have happened.** The founder mentions a prior attempt to embed something (likely Agent App functionality) into the Client Dashboard. **Not documented in any recovery file.** If the founder can identify the code or file, we investigate and record. Otherwise this remains an open question.
+
+### Security items to address
+
+Three credentials have been written into chat logs during the September 21–22 sessions and should be rotated:
+
+1. **Supabase password** `<REDACTED>` — rotate in the Supabase dashboard.
+2. **GitHub token** `<REDACTED>` — revoke at `https://github.com/settings/tokens`, create a new one with `repo` scope.
+3. **Resend API key** `<REDACTED>` — rotate in the Resend dashboard.
+
+After rotating, update the `.env` files on both machines and redact the credentials from this document and any other recovery document that references them, using `<REDACTED>` in place of the value. The Redact Rule: **no credential value should appear in any recovery document, git commit, or handoff file.**
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change to production.
+- No CI/CD touched.
+- Invariant held.
+- No application code written. All work was infrastructure and testing.
+
+### What is still open
+
+- **Debt due-date bug.** Adding a debt fails at the due-date field. Diagnosis not started.
+- **Phase 9 Item 4 completion.** Action CRUD not yet fully tested.
+- **Persistence-across-restart test.** Not run for the cloud-machine database.
+- **Registration flow audit.** Not done. Known UX bug: `UnlockScreen` shows "Set" vs "Enter" incorrectly because the salt is written during `login()` rather than during `set-password`.
+- **Argon2id parameters.** `§7.3` and `§22.19.2` still need benchmarked values.
+- **Test-vector computation.** M1, M2, V1, V4, V6 not computed.
+- **Control Plane tables not applied to `gorka_test`.** `device_registrations` and `relay_sessions` are specified in `CLOUD-TABLES.md` v1.2 §20 but not created.
+- **Control Plane services not implemented.** Discovery, signaling, relay coordination.
+- **Agent App (Phase 9.5) not started.** Requires the architecture decision above.
+- **Sync engine (Phase 9.6) not started.** Requires the three prerequisites above.
+- **Multi-user demonstration (Phase 9.7) not started.**
+
+### The next phase
+
+Two parallel workstreams are now available:
+
+1. **Phase 9 polish.** Fix the debt due-date bug. Complete Item 4. Audit the registration flow. Fix the `UnlockScreen` UX bug.
+2. **Sync engine prerequisites.** Benchmark the Argon2id parameters. Apply the Control Plane tables to `gorka_test`. Compute the test vectors.
+
+The Agent App (Phase 9.5) should wait until the architecture question is decided and recorded.
+
+### Rule compliance for this entry
+
+This entry is a record, not a decision, except for the process rule established (git as synchronization authority) and the operational knowledge recorded. Those two items are decisions in effect and should be treated as binding going forward.
+
+---
+
+**End of entry.**
 

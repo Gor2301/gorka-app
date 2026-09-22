@@ -1112,6 +1112,113 @@ Every edit was verified by reading the file on disk, not by trusting a paste. Sp
 
 The next workstream is to set up the V2 Cloud Windows environment, benchmark the Argon2id parameters, compute the test vectors, then begin implementation of the MVP sync engine.
 
+---
+
+## Session Extension — September 18–22, 2026
+
+### What these sessions did
+
+Two distinct workstreams across five days: the completion of the multi-user model's remaining prerequisite documents (September 18–20), and the construction of the AWS cloud Windows environment (September 21–22). The second was the work that finally resolved the blocker recorded on September 15 — the Smart App Control enforcement that prevented the signed Tauri binary from running on the founder's main machine.
+
+### September 18, 2026 — MVP scope and the three-zones amendment
+
+`ARCHITECTURAL-LAW.md` was amended to v1.3. The new Section 21, The Three Zones of Data Control, distinguishes Zone 1 (GORKA cloud), Zone 2 (GORKA-provided mechanisms), and Zone 3 (client-connected third parties). GORKA's obligation in Zone 2 is prevention — the mechanism is the guard. GORKA's obligation in Zone 3 is warning at the point of connection, recorded and non-blocking. The v1.0 and v1.2 law named the two planes but did not distinguish these two cases.
+
+`ARCHITECTURAL-LAW-AMENDMENTS.md` was updated with a v1.3 entry.
+
+`GORKA-MVP-SCOPE.md` v1.1 was written and frozen. It defines the MVP in full: three tiers, the MVP event set, the exact synchronized objects, the operational limitations, the demonstration, the prerequisites, and the acceptance criteria. It corrects the earlier ordering that placed `SYNC-ARCHITECTURE.md` before this document.
+
+### September 19, 2026 — SYNC-ARCHITECTURE.md v1.0 frozen
+
+`SYNC-ARCHITECTURE.md` was written and frozen at v1.0. Thirty sections in seven parts. It defines the exact wire format (TLV, big-endian, canonical serialization), the protocol order (`logical_clock`, `device_id`, `sequence`), the reconciliation rule, the duplicate detection rule (`event_id` only), and the sync state machine.
+
+`§22.1` through `§22.6.7` were written. The message-specific subsections — `§22.7` through `§22.19` — were left incomplete. This became the critical open problem.
+
+`THREAT-MODEL.md` v1.0 was written and frozen, audited against `SYNC-ARCHITECTURE.md` v1.1 Sections 28 and 29. Nine residual risks (R1–R9) recorded as ACCEPTED by the founder with reasoning.
+
+### September 20, 2026 — Section 25.13, LOCAL-TABLES.md v1.2, test vectors, Section 22 restoration
+
+`SYNC-ARCHITECTURE.md §25.13` was written: the field-semantics specification. Contains `§25.13.1` through `§25.13.12`. The header was updated to v1.1.
+
+`LOCAL-TABLES.md` v1.2 was written. Category D rewritten with D.1 through D.8. Shape B adopted. Four new sync tables added. Summary table shows 20 local tables.
+
+`SYNC-TEST-VECTORS-v1.md` v1.0 (partially complete) was written. Nine deterministic vectors recorded. Five SPECIFIED / TO BE COMPUTED (M1, M2, V1, V4, V6). Four BLOCKED (E1 on Argon2id parameters; H1, H2, H3 on the missing `§22.19`).
+
+Section 22 restoration. The missing subsections `§22.7` through `§22.19` were recovered and inserted. Six corrections from the founder's technical reviewer were applied. Block C was applied (`§18.2` and `§11.4` amendments). The header was bumped to v1.2.
+
+`SYNC-TEST-VECTORS-v1.md` status updated: H1, H2, H3 moved from BLOCKED to SPECIFIED.
+
+### September 21, 2026 — Cloud environment built
+
+The AWS cloud Windows environment was constructed. The blocker from September 15 — Smart App Control refusing to run the signed Tauri binary on the main machine — was bypassed by running on a machine where SAC is not enforced.
+
+- **AWS EC2 instance** `Gorka-dev` (`i-0ac85da213bdaa09a`), `t3.small`, Windows Server 2025 Datacenter, Singapore. Disk 70 GiB after two resizes. RDP working. Security group allows RDP from "My IP" only.
+- **Toolchain installed:** Git 2.55.0, Node.js 24.21.0, Rust 1.98.1, Visual Studio C++ Build Tools, Strawberry Perl 5.42.3.1.
+- **`cargo build` on the Tauri backend succeeded** (18m 21s). `gorka-client.exe` produced.
+- **`npm run build` succeeded.** `dist/` produced.
+- **Backend runs**, connected to Supabase `gorka_test` through the session pooler.
+- **Tauri app launches, login succeeds, local database unlocks, Client Dashboard reached.**
+
+Eight file mismatches were found during this work. All resolved. Root cause: the main machine had months of uncommitted work in the working tree, and git was not the synchronization authority. The fix: commit the working tree as `08eac3b`, push it, pull it on the cloud machine. Both machines are now on the same commit.
+
+### September 22, 2026 — Item 4 partial test
+
+Services restarted on the cloud machine. Initial local database unlock failed with `file is not a database` because the wrong password was entered. The correct password is `Password123` — the local encryption password is distinct from the login password. Once the correct password was entered, the database unlocked.
+
+Debtor CRUD was confirmed working on the cloud machine. Create, edit, delete all functioned.
+
+Debt CRUD partially failed at the due-date field. Not yet diagnosed.
+
+Action CRUD (Phase 9 Item 4) was not fully tested. Debtor CRUD was exercised; Action CRUD was not completed because the debt due-date issue appeared first.
+
+### Operational knowledge recorded
+
+- **Supabase session pooler is required from AWS Singapore.** The direct database hostname does not resolve. The pooler hostname `aws-1-eu-west-3.pooler.supabase.com` does. Username format: `postgres.tmloklxelckicufzpzxz`.
+- **SQLCipher's `file is not a database` error means wrong key, not corrupt file.** Try the correct password before considering deletion.
+- **Supabase free tier pauses projects after 7 days of inactivity.** Gorka SaaS was paused on September 20, resumed on September 22.
+
+### Process rule established
+
+**Git is the synchronization authority between development machines.** Not file-copying, not "I think it is committed." The workflow is: main machine commits and pushes; cloud machine pulls and verifies HEAD. Both machines must show the same commit before work begins.
+
+### Unresolved questions
+
+1. **Agent App architecture.** `MULTI-USER-CONCEPT.md §9` and `GORKA-MVP-SCOPE.md §5.3` describe the Agent App as a second Tauri binary in the same repository. The founder recalls a prior-chat discussion about building it from scratch. **Not recorded in any recovery document.** Must be decided and recorded before Phase 9.5 begins.
+
+2. **An embedding that should not have happened.** The founder mentions a prior attempt to embed something into the Client Dashboard. **Not documented.** Needs investigation and recording.
+
+### Security items to address
+
+Three credentials have been written into chat logs and should be rotated: the Supabase password, the GitHub token, and the Resend API key. After rotating, update the `.env` files and redact the values from any recovery document that references them.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change to production.
+- No CI/CD touched.
+- Invariant held.
+- No application code written. All work was infrastructure, testing, and documentation.
+
+### What is still open
+
+- Debt due-date bug.
+- Phase 9 Item 4 completion (Action CRUD).
+- Persistence-across-restart test for the cloud-machine database.
+- Registration flow audit. Known UX bug in `UnlockScreen`.
+- Argon2id parameters benchmarking.
+- Test-vector computation (M1, M2, V1, V4, V6).
+- Control Plane tables not applied to `gorka_test`.
+- Agent App (Phase 9.5). Requires architecture decision.
+- Sync engine (Phase 9.6). Requires the three prerequisites.
+- Multi-user demonstration (Phase 9.7).
+
+### What comes next
+
+Two parallel workstreams are available: Phase 9 polish (fix the debt bug, complete Item 4, audit registration), and sync engine prerequisites (benchmark Argon2id, apply the Control Plane tables, compute the vectors). The Agent App waits until the architecture question is decided.
+
+---
+
+**End of entry.**
 
 
 

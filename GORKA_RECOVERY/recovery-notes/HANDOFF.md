@@ -899,6 +899,105 @@ The next workstream is to set up the V2 Cloud Windows environment, benchmark the
 - `SESSION-LOG.md` — to be updated.
 - `START-HERE.md` — to be updated.
 
+## STATUS UPDATE — September 21–22, 2026 (Cloud Environment Built)
+
+### What was achieved
+
+The AWS cloud Windows environment is built and working. This was the last item recorded in the September 15 SAC investigation as "not yet set up." As of September 21, it exists.
+
+- **AWS EC2 instance** `Gorka-dev` (`i-0ac85da213bdaa09a`), `t3.small`, Windows Server 2025 Datacenter, region Singapore. Disk 70 GiB. RDP working.
+- **Toolchain installed and verified:** Git 2.55.0, Node.js 24.21.0, Rust 1.98.1, Visual Studio C++ Build Tools, Strawberry Perl 5.42.3.1.
+- **`cargo build` on the Tauri backend succeeded** (18m 21s). `gorka-client.exe` produced.
+- **`npm run build` on the frontend succeeded.**
+- **Backend runs** and connects to Supabase `gorka_test` through the session pooler.
+- **Tauri app launches on the cloud machine.** Login succeeds. Local database unlocks. Client Dashboard reached. Collections page shows the real CRUD UI.
+- **Debtor CRUD confirmed working** on the cloud machine.
+
+### The repository synchronization problem
+
+The cloud machine was cloned at commit `c9efd44` (tag `v0.1.0`), which reflected the last commit on the main machine, not the main machine's working tree. The main machine had **months of uncommitted work**. Eight file mismatches were found and resolved as they appeared.
+
+Root cause: the main machine's working tree had become the de facto development branch, and git was not being used as the synchronization authority.
+
+Fix: the main machine's working tree was committed as `08eac3b` (114 files changed) and pushed to `origin/main`. The cloud machine's pull was blocked by an untracked `DebtorEditModal.tsx`; after moving it aside, the pull fast-forwarded to `08eac3b`.
+
+**Both machines are now on commit `08eac3b`, working trees clean.**
+
+### Process rule established
+
+**Git is the synchronization authority between development machines.**
+
+MAIN MACHINE: `git add -A`, `git commit`, `git push`.
+CLOUD MACHINE: `git pull`, `git log --oneline -1` to verify HEAD.
+
+Before starting work on either machine, verify both HEADs match. This rule would have prevented most of the September 21–22 confusion.
+
+### Operational knowledge recorded
+
+- **Supabase session pooler is required from AWS Singapore.** The direct hostname `db.tmloklxelckicufzpzxz.supabase.co` does not resolve. The pooler hostname `aws-1-eu-west-3.pooler.supabase.com` does. Pooler username format: `postgres.tmloklxelckicufzpzxz`.
+- **SQLCipher's `file is not a database` error means wrong key, not corrupt file.** Try the correct password before considering deletion.
+- **Supabase free tier pauses projects after 7 days of inactivity.** Check the dashboard if connection fails.
+
+### What is still open
+
+- **Debt due-date bug.** Adding a debt fails at the due-date field. Diagnosis not started.
+- **Phase 9 Item 4 (Action CRUD).** Not fully tested. Debtor CRUD was exercised on the cloud machine; Action CRUD was not.
+- **Persistence-across-restart test.** Not run for the cloud-machine database.
+- **Registration flow audit.** Not done. Known UX bug: `UnlockScreen` shows "Set" vs "Enter" incorrectly.
+- **Argon2id parameters.** `SYNC-ARCHITECTURE.md §7.3` and `§22.19.2` still need benchmarked values.
+- **Test-vector computation.** M1, M2, V1, V4, V6 not computed.
+- **Control Plane tables not applied to `gorka_test`.** `device_registrations` and `relay_sessions` specified but not created.
+- **Agent App (Phase 9.5) not started.** Requires an architecture decision (see below).
+- **Sync engine (Phase 9.6) not started.**
+
+### Unresolved questions
+
+Two questions have been raised and not yet decided or recorded:
+
+1. **Agent App architecture.** `MULTI-USER-CONCEPT.md §9` and `GORKA-MVP-SCOPE.md §5.3` describe the Agent App as a second Tauri binary in the same repository, sharing the Rust command layer. The founder recalls a prior-chat discussion about building it from scratch instead. **Not recorded in any recovery document.** Must be decided and recorded before Phase 9.5 begins.
+
+2. **An embedding that should not have happened.** The founder mentions a prior attempt to embed something (likely Agent App functionality) into the Client Dashboard. **Not documented in any recovery file.** Needs investigation and recording.
+
+### Security items to address
+
+Three credentials have been written into chat logs and should be rotated:
+
+1. **Supabase password** `<REDACTED>` — rotate in the Supabase dashboard.
+2. **GitHub token** `<REDACTED>` — revoke at `https://github.com/settings/tokens`, create a new one with `repo` scope.
+3. **Resend API key** `<REDACTED>` — rotate in the Resend dashboard.
+
+After rotating, update the `.env` files on both machines and redact the values from any recovery document that references them, using `<REDACTED>`.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change to production.
+- No CI/CD touched.
+- Invariant held.
+- No application code written. All work was infrastructure and testing.
+
+### The next phase
+
+Two parallel workstreams are available:
+
+1. **Phase 9 polish.** Fix the debt due-date bug. Complete Item 4. Audit the registration flow.
+2. **Sync engine prerequisites.** Benchmark the Argon2id parameters. Apply the Control Plane tables to `gorka_test`. Compute the test vectors.
+
+The Agent App (Phase 9.5) waits until the architecture question is decided and recorded.
+
+### Document status after this session
+
+- `SYNC-ARCHITECTURE.md` — v1.2, complete.
+- `SYNC-TEST-VECTORS-v1.md` — v1.0, partially complete. H1/H2/H3 unblocked. E1 still blocked on Argon2id parameters.
+- `DECISIONS.md` — updated with the September 21–22 entry.
+- `HANDOFF.md` — this entry.
+- `SESSION-LOG.md` — to be updated.
+- `START-HERE.md` — to be updated.
+
+---
+
+**End of entry.**
+
 
 
 
