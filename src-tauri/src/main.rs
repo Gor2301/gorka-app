@@ -225,7 +225,11 @@ fn get_auth_token(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[command]
-fn logout(app: tauri::AppHandle) -> Result<(), String> {
+fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
+    {
+        let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+        *db_guard = None;
+    }
     auth::logout(app)
 }
 
