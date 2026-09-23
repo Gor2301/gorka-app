@@ -6,6 +6,7 @@ import {
   LifeBuoy,
 List
 } from 'lucide-react';
+import { auth } from '../services/local.db';
 
 
 const Sidebar: React.FC = () => {
@@ -38,13 +39,13 @@ const Sidebar: React.FC = () => {
 // ──────────────────────────────────────────────────────────────────────
 
 // ─── NEW: Logout to Marketing Website ────────────────────────────────
-const handleLogout = () => {
-  // Clear localStorage
-  localStorage.clear();
-  // Clear the cookie
-  document.cookie = 'gorka_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-  // Redirect to Marketing Website login
-  // window.location.href = 'http://localhost:3001/login';
+const handleLogout = async () => {
+  try {
+    await auth.logout();
+    window.location.reload();
+  } catch (err) {
+    console.error('Logout failed:', err);
+  }
 };
 // ──────────────────────────────────────────────────────────────────────
 
