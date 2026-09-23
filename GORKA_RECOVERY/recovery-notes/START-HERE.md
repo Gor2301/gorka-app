@@ -568,6 +568,39 @@ Two unresolved questions carried forward:
 
 Security housekeeping: three credentials (Supabase password, GitHub token, Resend API key) were exposed in chat logs and should be rotated.
 
+## Update — September 23, 2026
+
+Working session on the Client Dashboard, on the local authentication and unlock flow. Three defects were found, fixed, committed, and verified. All work was local; no cloud schema, no backend, no production.
+
+- **Set/Enter bug fixed (commit `01631c6`).** The `UnlockScreen` read `localStorage.getItem('salt')`, but the salt lives in `settings.dat` (written by Rust). The two stores are unrelated, so the read always returned null and the screen always showed "Set." Fixed by adding a Rust command `database_exists` that checks for `gorka-client.db` on disk. DB absent → "Set"; DB present → "Enter." The `localStorage` read and write were removed.
+- **Logout button no-op fixed (commit `38aec9c`, superseded).** The handler cleared `localStorage` and a cookie, neither of which the Tauri app uses. The first fix called `auth.logout()` and `window.location.reload()`; the reload does not tear down the JS context in this webview, so it was replaced.
+- **Logout state reset (commit `183e8f7`).** `App` now owns the logout operation: `handleLogout` calls `auth.logout()`, then sets `isAuthenticated(false)` and `isUnlocked(false)`. The callback is threaded through `AppShell` to `Sidebar` via an `onLogout` prop. `Sidebar` contains no auth logic.
+- **Rust logout connection leak fixed (commit `40b2378`).** The actual root cause of the re-login skipping the Enter screen. `logout` cleared `settings.dat` but did not close the SQLCipher connection in `AppState.db`. The command `is_database_unlocked` reads `AppState.db`, not `settings.dat`, so it kept returning `true` after logout. Fixed by making `logout` set `AppState.db = None` before calling `auth::logout(app)`.
+
+**Verified on the cloud machine, twice:**
+
+- Fresh launch → Login → Enter Password → Dashboard.
+- Dashboard → Logout → Login screen.
+- `settings.dat` after logout: `salt` only.
+- Login → **"Enter Local Encryption Password"** (not Dashboard).
+- Enter password → Dashboard.
+- Logout → Login → Login → **"Enter Local Encryption Password"** again.
+
+**Key learning recorded.** "Unlocked" in this app means the SQLCipher connection is open in the running Rust process, held in `AppState.db`. It is not a flag in `settings.dat`. `is_database_unlocked` reads the connection. That is why quitting the app fixed the symptom: process termination destroys `AppState.db`. The design is intentional and secure — the connection being open is the true test of whether the app can read the encrypted data. The bug was that `logout` left the connection open.
+
+**Repository state:** main machine, cloud machine, and GitHub are all at `40b2378`. Working trees clean.
+
+**Deferred findings recorded today:**
+
+1. Dashboard 401 errors from `api.gorka.localhost:3000`. Separate finding, not yet investigated.
+2. Eye-icon inconsistency on the password field (WebView2 built-in reveal control disappears after an error re-render). Deferred.
+3. Debt due-date bug. Not investigated today.
+4. Dead code in `Sidebar.tsx` lines 33–37. Inert. Removal deferred.
+
+**The local registration flow — Stage 4 (login → set/enter local password) and Stage 5 (logout → login → enter → dashboard, repeatable) — is now stable and verified.**
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 23 entries.
+
 ========================================================================
 
 9. HOW TO HANDLE A NEW QUESTION OR FEATURE REQUEST
@@ -591,10 +624,14 @@ checking the rules.
 
 ========================================================================
 
-- UnlockScreen shows "Set" instead of "Enter" on some restarts.
-  Root cause: salt written during login() in auth.rs rather
-  than during set-password. Fix deferred until the whole
-  registration flow is designed.
+- UnlockScreen "Set" vs "Enter" bug. FIXED September 23, 2026
+  (commit 01631c6). The earlier diagnosis ("salt written
+  during login() rather than during set-password") is
+  superseded. The actual cause was that the frontend read
+  localStorage.getItem('salt'), while the salt lives in
+  settings.dat. The fix adds a Rust command database_exists
+  that selects the screen based on whether gorka-client.db
+  exists on disk. See the September 23 entry in DECISIONS.md.
 - Owner Dashboard calls many endpoints that do not exist
   (/clients, /analytics/overview, /audit, /billing/revenue,
   /analytics/usage, /status). Pre-existing. Separate future
@@ -614,13 +651,22 @@ checking the rules.
   level. UI/API enforcement deferred.
 - SAC (Smart App Control) blocks the signed binary on the main
   development machine. A cloud Windows environment is the
-  chosen workaround, not yet set up. See the September 15
-  entry in DECISIONS.md.
+  chosen workaround. SET UP September 21-22, 2026: AWS EC2
+  instance Gorka-dev, Windows Server 2025, Singapore. The
+  signed binary runs there. See the September 15 and
+  September 21-22 entries in DECISIONS.md.
 - Phase 9 Item 4 (action CRUD) is code complete but not yet
-  tested, for the same SAC reason.
-- The multi-user model is frozen in concept form, but
-  SYNC-ARCHITECTURE.md and GORKA-MVP-SCOPE.md are not yet
-  written. Implementation is blocked until they are.
+  fully tested. The cloud Windows environment is now available
+  (September 21-22), so the earlier SAC block no longer applies.
+  Testing is pending.
+- The multi-user model is frozen (MULTI-USER-CONCEPT.md v2.0).
+  GORKA-MVP-SCOPE.md v1.1, SYNC-ARCHITECTURE.md v1.2, and
+  THREAT-MODEL.md v1.0 are all written and frozen. The document
+  prerequisites for multi-user implementation are met. What
+  remains before implementation: Argon2id parameters (SYNC-
+  ARCHITECTURE.md §7.3, §22.19.2), test-vector computation
+  (SYNC-TEST-VECTORS-v1.md), and the Control Plane tables
+  applied to gorka_test.
 
 ========================================================================
 
@@ -678,3 +724,7 @@ implementation.
 END OF DOCUMENT
 
 ========================================================================
+
+
+
+

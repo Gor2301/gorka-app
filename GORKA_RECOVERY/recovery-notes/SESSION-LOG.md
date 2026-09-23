@@ -1221,6 +1221,108 @@ Two parallel workstreams are available: Phase 9 polish (fix the debt bug, comple
 **End of entry.**
 
 
+---
+
+## Session Extension — September 23, 2026
+
+### What this session did
+
+Working session on the Client Dashboard, on the local authentication and unlock flow. Three separate defects were found, fixed, committed, and verified. All work was local; no cloud schema, no backend, no production.
+
+The goal was to stabilize the loop a client performs after they have the installer and the app on their own machine: login → set local password (first run) → enter local password (subsequent runs) → dashboard → logout → login again → enter password → dashboard. Repeatable, without glitches.
+
+### The three fixes
+
+**Set/Enter bug — commit `01631c6`.**
+
+The `UnlockScreen` showed "Set Local Encryption Password" on returning runs. The cause was that it read `localStorage.getItem('salt')`, but the salt lives in `settings.dat`, written by the Rust side. The two stores are unrelated, so the read always returned null. Fixed by adding a Rust command `database_exists` that checks for `gorka-client.db` on disk. DB absent → "Set"; DB present → "Enter." The `localStorage` read and write were removed.
+
+**Logout state reset — commits `38aec9c` (superseded) and `183e8f7`.**
+
+The Logout button did nothing because its handler cleared `localStorage` and a cookie, neither of which the Tauri app uses. The first fix called `auth.logout()` and `window.location.reload()`, but the reload does not tear down the JavaScript context in this webview. The second fix moved ownership of logout to `App.tsx`: `handleLogout` calls `auth.logout()`, then sets `isAuthenticated(false)` and `isUnlocked(false)`. The callback is passed through `AppShell` to `Sidebar` via an `onLogout` prop.
+
+**Rust logout connection leak — commit `40b2378`.**
+
+After the frontend fix, the bug still reproduced. The real cause: `logout` cleared `settings.dat` but did not close the SQLCipher connection held in `AppState.db`. The command `is_database_unlocked` reads `AppState.db`, not `settings.dat`. So the connection was still open after logout, `is_database_unlocked` returned `true`, and the next login skipped the Enter screen. Fixed by making `logout` receive `state: tauri::State<AppState>`, lock `state.db`, set it to `None`, then call `auth::logout(app)`.
+
+### What was verified
+
+On the cloud machine, after the Rust rebuild:
+
+- Fresh launch → Login → Enter Password → Dashboard.
+- Dashboard → Logout → Login screen.
+- `settings.dat` after logout: `salt` only.
+- Login → **"Enter Local Encryption Password"** (not Dashboard).
+- Enter password → Dashboard.
+- Logout → Login → Login → **"Enter Local Encryption Password"** again.
+- Two consecutive loops, both correct.
+
+The bug that appeared at the start of the session — login going straight to the Dashboard — no longer occurs.
+
+### Two theories that were discarded
+
+This session is a record of how the true root cause was found, so the discarded theories are recorded too:
+
+1. **The Set/Enter bug was thought to be a salt-ordering issue.** The earlier `DECISIONS.md` entry said "the salt is written during `login()` rather than during `set-password`." That is true, but it was not the cause. The cause was the `localStorage` / `settings.dat` mismatch. The earlier diagnosis is now superseded.
+
+2. **The logout bug was thought to be a frontend state issue.** The first two fixes assumed the React state (`isUnlocked`) was stale. It was, but that was a symptom, not the cause. The actual cause was the open SQLCipher connection in `AppState.db`. Fixing the frontend state alone did not fix the bug; the Rust fix did.
+
+Both corrections are recorded in `DECISIONS.md`.
+
+### Key learning
+
+"Unlocked" in this app means the SQLCipher connection is open in the running Rust process, held in `AppState.db`. It is not a flag in `settings.dat`. `is_database_unlocked` reads the connection. That is why quitting the app "fixed" the symptom: process termination destroys `AppState.db`. The design is intentional and secure — the connection being open is the true test of whether the app can read the encrypted data. The bug was that `logout` left the connection open.
+
+### Deferred findings, recorded not acted on
+
+1. **Dashboard 401 errors from `api.gorka.localhost:3000`.** Separate finding, not yet investigated.
+2. **Eye-icon inconsistency on the password field.** WebView2 built-in password reveal control disappears after an error re-render. Deferred.
+3. **Debt due-date bug.** Adding a debt fails at the due-date field. Not investigated today.
+4. **Dead code in `Sidebar.tsx` lines 33–37.** Commented-out old handler. Inert. Removal deferred.
+
+### Repository state
+
+- Main machine: at `40b2378`, clean, pushed.
+- Cloud machine: at `40b2378`, clean.
+- GitHub: `origin/main` at `40b2378`.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change. No new tables. No new columns.
+- No CI/CD touched.
+- Invariant held. No debtor data crossed the boundary. All work was local.
+- No new abstraction introduced. The frontend fix threads a callback through the existing component hierarchy. The Rust fix is one function.
+- No routing redesign. No React Context.
+
+### What is still open
+
+- Debt due-date bug.
+- Phase 9 Item 4 (Action CRUD) — code complete, not fully tested.
+- Persistence-across-restart test on the cloud machine.
+- Dashboard 401 errors from `api.gorka.localhost:3000`.
+- Eye-icon inconsistency on the password field.
+- Argon2id parameters (`§7.3`, `§22.19.2`).
+- Test-vector computation (M1, M2, V1, V4, V6).
+- Control Plane tables not applied to `gorka_test`.
+- Control Plane services not implemented.
+- Agent App (Phase 9.5) not started.
+- Sync engine (Phase 9.6) not started.
+- Multi-user demonstration (Phase 9.7) not started.
+
+### What comes next
+
+Two parallel workstreams:
+
+1. **Phase 9 polish.** Fix the debt due-date bug. Complete Item 4. Test persistence across restart.
+2. **Sync engine prerequisites.** Benchmark the Argon2id parameters. Apply the Control Plane tables to `gorka_test`. Compute the test vectors.
+
+The local registration flow — Stage 4 (login → set/enter local password) and Stage 5 (logout → login → enter → dashboard, repeatable) — is now stable and verified.
+
+---
+
+**End of entry.**
+
 
 
 

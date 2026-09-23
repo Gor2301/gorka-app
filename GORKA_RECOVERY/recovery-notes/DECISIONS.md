@@ -3092,3 +3092,201 @@ This entry is a record, not a decision, except for the process rule established 
 
 **End of entry.**
 
+---
+
+## Recovery Session — September 23, 2026
+
+This entry records the September 23, 2026 session. It is a working session on the Client Dashboard, specifically on the local authentication and unlock flow. Three code fixes were made and verified, each with its own root cause. This entry records all three, plus one corrected diagnosis of an earlier entry, plus four deferred findings.
+
+### Context
+
+The goal of the session was to stabilize the local registration flow: login, set local password (first run), enter local password (subsequent runs), logout, and back again — the loop a client performs after they have the installer and the app on their machine.
+
+Three separate defects were found and fixed. They were discovered in sequence, each one only becoming visible after the previous was addressed. The record preserves the sequence, because it shows how the true root cause was found.
+
+### Fix 1 — The Set/Enter bug (commit `01631c6`)
+
+**Symptom.** The `UnlockScreen` showed "Set Local Encryption Password" on returning runs, when it should show "Enter Local Encryption Password." A returning user — one who already had an encrypted database on disk — should be asked to enter their password, not set a new one.
+
+**Root cause.** `UnlockScreen.tsx` decided which screen to show by reading `localStorage.getItem('salt')`:
+
+```typescript
+const salt = localStorage.getItem('salt');
+setIsFirstTime(!salt);
+```
+
+But the salt is stored in `settings.dat`, the Tauri store file, written by the Rust side (`auth.rs`). `localStorage` and `settings.dat` are two entirely separate stores, and the Rust code never writes to `localStorage`. So the frontend's read always returned `null`, and `setIsFirstTime` was always `true`. The screen always showed "Set."
+
+The frontend attempted to compensate by writing `localStorage.setItem('salt', 'set')` after a successful unlock, but this was writing to the wrong store and did not survive reliably.
+
+**Correction to an earlier diagnosis.** The `DECISIONS.md` entry of September 21–22 recorded the cause as: "the salt is written during `login()` rather than during `set-password`." That observation is true — the salt is created in `login()` — but it was not the cause of the Set/Enter symptom. The cause was the `localStorage` / `settings.dat` mismatch. The earlier diagnosis is superseded by this entry.
+
+**Fix.** A new Rust command was added:
+
+```rust
+pub fn database_exists() -> bool {
+    get_db_path().exists()
+}
+```
+
+Exposed as the Tauri command `database_exists`. The `UnlockScreen` now invokes this command and decides:
+
+- Database file absent → "Set Local Encryption Password."
+- Database file present → "Enter Local Encryption Password."
+
+The `localStorage` read and write were both removed.
+
+**Reasoning recorded.** The correct signal for "first run vs returning run" is the presence of the encrypted database file on disk, not the presence of a salt. A database file cannot exist unless a password has been set. The salt's presence is not the correct signal; the DB file's presence is. The unlock operation remains the authority for whether a password is correct; `database_exists` only selects which screen to show.
+
+**Verification.** On the cloud machine: fresh state (no DB) → "Set" with Confirm field; set password → Dashboard; quit and relaunch → "Enter" with no Confirm field; enter password → Dashboard. Both paths verified. Wrong password → error, screen stays on "Enter," retry with correct password succeeds.
+
+### Fix 2 — The logout button did nothing (commit `38aec9c`, superseded by `183e8f7` and `40b2378`)
+
+**Symptom.** The Logout button in the sidebar did nothing. The hover state worked (background color changed), but clicking it had no effect. The only way to exit was the OS window close button.
+
+**Root cause.** `Sidebar.tsx`'s handler cleared `localStorage` and a cookie:
+
+```typescript
+const handleLogout = () => {
+  localStorage.clear();
+  document.cookie = 'gorka_session=; ...';
+  // window.location.href = 'http://localhost:3001/login';  // commented out
+};
+```
+
+But the Tauri app does not use `localStorage` or cookies for its session. It stores the auth token in `settings.dat` and reads it via the Rust `get_token` command. So the handler was a no-op for the Tauri app. The navigation line was commented out, so nothing visible happened either.
+
+**Fix (first attempt, commit `38aec9c`).** The handler was changed to call `auth.logout()` (the Rust command that clears `settings.dat`) and then `window.location.reload()`.
+
+**Why it was superseded.** The `window.location.reload()` does not tear down the JavaScript context in this Tauri webview. This was proven by the developer console: after clicking Logout, the console retained all its prior log lines. A real page reload clears the console. So the reload did not happen, and the React state survived.
+
+### Fix 3 — Logout state reset in the frontend (commit `183e8f7`)
+
+**Symptom.** After logout and re-login **within the same app session**, the app skipped the "Enter Local Encryption Password" screen and went straight to the Dashboard.
+
+**Root cause (as understood at the time).** The frontend's React state held `isUnlocked = true` from the earlier unlock in the same session. Because the reload did not happen (see Fix 2), the state survived the logout. On the next login, `checkAuth` set `isAuthenticated = true` but did not reset `isUnlocked`, so the gate saw both true and rendered the Dashboard.
+
+**Fix.** Ownership of the logout operation was moved to `App.tsx`. A `handleLogout` was added:
+
+```typescript
+const handleLogout = async () => {
+  try {
+    await auth.logout();
+    setIsAuthenticated(false);
+    setIsUnlocked(false);
+  } catch (err) {
+    console.error('Logout failed:', err);
+  }
+};
+```
+
+The callback is passed down through `AppShell.tsx` to `Sidebar.tsx` via an `onLogout` prop. `Sidebar`'s handler now calls `onLogout()` and contains no authentication logic itself. The `window.location.reload()` was removed.
+
+**Why this was still not the whole story.** It corrected the React state, but the bug reproduced. The root cause was deeper, in Rust.
+
+### Fix 4 — The Rust logout connection leak (commit `40b2378`)
+
+**Symptom.** The bug from Fix 3, still reproducing after Fix 3 was applied. Logout → login skipped the Enter screen.
+
+**Root cause — the actual one.** The app's notion of "unlocked" is not a flag in a file. It is the **presence of an open SQLCipher connection in the running Rust process**, held in `AppState.db`:
+
+```rust
+struct AppState {
+    db: Mutex<Option<Connection>>,
+}
+```
+
+The command `is_database_unlocked` — which the frontend invokes to decide whether to show the Enter screen — reads `AppState.db`, not `settings.dat`.
+
+The `logout` command cleared `settings.dat` (via `auth::logout`) but did not close the connection in `AppState.db`. So after logout, the connection was still open. `is_database_unlocked` returned `true`. The next login skipped the Enter screen.
+
+The persistent-session side of logout was correct all along. The Rust `logout` deleted `auth_token`, `organization_id`, and `db_unlocked` from `settings.dat`. But `is_database_unlocked` does not read `settings.dat`. It reads the connection.
+
+**Why quitting the app appeared to fix it.** When the app process ends, `AppState.db` is discarded. On the next launch it starts as `None`, so `is_database_unlocked` returns `false`, and the Enter screen appears. The bug only appeared within a session where an unlock had already occurred.
+
+**Fix.** The `logout` command now closes the connection as well as clearing the session:
+
+```rust
+#[command]
+fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
+    {
+        let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+        *db_guard = None;
+    }
+    auth::logout(app)
+}
+```
+
+Setting `AppState.db = None` drops the `Connection`, and rusqlite closes the SQLCipher handle when the `Connection` is dropped. The lock is scoped with braces so it is released before `auth::logout(app)` runs. The signature follows the file convention: `AppHandle` first, `State<AppState>` second, matching `get_debtors` and the other commands.
+
+**Reasoning recorded.** "Unlocked" in this app means the SQLCipher connection is open in the running process. That is the design, and it is the more secure one: the connection being open is the true test of whether the app can read the encrypted data right now. The bug was that the connection survived logout. The fix closes it.
+
+**Verification.** On the cloud machine, after building the change: logout → `settings.dat` contains only `salt`; login → **"Enter Local Encryption Password"** (not Dashboard); enter password → Dashboard; logout → Login; login again → **"Enter Local Encryption Password"** again. Two consecutive loops, both correct.
+
+### The four commits, in order
+
+| Commit | What it fixed | Layer |
+|--------|--------------|-------|
+| `01631c6` | Set/Enter screen selection | Frontend + new Rust command |
+| `38aec9c` | Logout button no-op (superseded) | Frontend |
+| `183e8f7` | Logout React state reset | Frontend |
+| `40b2378` | Logout connection leak (actual root cause) | Rust |
+
+Both `38aec9c` and `183e8f7` are correct and remain in the code. `38aec9c`'s `window.location.reload()` was replaced by `183e8f7`'s state reset. All four commits are in `main`.
+
+### Design clarification — `db_unlocked` in `settings.dat`
+
+The `db_unlocked` field in `settings.dat` is written by `unlock_database` (via `auth::set_unlocked`) and deleted by `logout`. However, it is **not read** by the frontend's gate. The gate reads `AppState.db` via `is_database_unlocked`. So `db_unlocked` in `settings.dat` is effectively vestigial in the current design.
+
+This is recorded as an observation, not a defect. No action is taken. A future feature (for example, "remember unlocked across restarts") could legitimately use this field. Removing it now would be an unforced change.
+
+### Deferred findings, recorded not acted on
+
+1. **Dashboard 401 errors.** The Dashboard page calls `api.gorka.localhost:3000` (the web API) and receives 401 Unauthorized. This is a separate finding, **not yet investigated.** The Dashboard's data loading uses the web `api.service.ts` layer (`fetch`-based, `Authorization: Bearer` from `localStorage`), which is the web Client Dashboard's channel, not the Tauri app's. In the Tauri app, `localStorage` has no token, so the requests are unauthenticated. The finding is recorded; the fix is for a future session.
+
+2. **Eye-icon inconsistency on the password field.** On the "Enter Local Encryption Password" screen, an eye icon (the WebView2 built-in password reveal control) appears on the first typing but not after an error re-render. This is a WebView2 behavior, not the app's code. A future UX improvement would be to add an explicit show/hide toggle in the component. Deferred.
+
+3. **Debt due-date bug.** Adding a debt fails at the due-date field. Not investigated today. Still open.
+
+4. **Dead code in `Sidebar.tsx`.** Lines 33–37 contain a commented-out old logout handler. Left in place intentionally; it is inert. Removal is a separate cleanup task.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change. No new tables. No new columns.
+- No CI/CD touched.
+- Invariant held. No debtor data crossed the boundary. All work was on the local authentication and unlock flow.
+- No new abstraction introduced. The frontend fix threads a callback through the existing `App → AppShell → Sidebar` hierarchy. The Rust fix is one function.
+- No frontend routing redesign. No React Context introduced.
+
+### What is still open
+
+- **Debt due-date bug.** Not investigated. Still open.
+- **Phase 9 Item 4 (Action CRUD).** Code complete, not fully tested on the cloud machine. Still open.
+- **Persistence-across-restart test.** Not run today on the cloud machine. Still open.
+- **Dashboard 401 errors from `api.gorka.localhost:3000`.** Recorded today, not investigated. Open.
+- **Eye-icon inconsistency on the password field.** Recorded today, deferred. Open.
+- **Argon2id parameters.** `§7.3` and `§22.19.2` still need benchmarked values.
+- **Test-vector computation.** M1, M2, V1, V4, V6 not computed.
+- **Control Plane tables not applied to `gorka_test`.**
+- **Control Plane services not implemented.**
+- **Agent App (Phase 9.5) not started.** Requires architecture decision.
+- **Sync engine (Phase 9.6) not started.** Requires the three prerequisites.
+- **Multi-user demonstration (Phase 9.7) not started.**
+
+### The next workstream
+
+Two parallel workstreams remain available:
+
+1. **Phase 9 polish.** Fix the debt due-date bug. Complete Item 4. Test persistence across restart.
+2. **Sync engine prerequisites.** Benchmark the Argon2id parameters. Apply the Control Plane tables to `gorka_test`. Compute the test vectors.
+
+The local authentication and unlock flow — Stage 4 and Stage 5 of the five-stage registration flow — is now stable and verified.
+
+### Rule compliance for this entry
+
+This entry is a record. It contains three fix records (each with symptom, root cause, and reasoning), one corrected diagnosis of an earlier entry, one design clarification, and four deferred findings. No new decisions beyond the code fixes themselves.
+
+---
+
+**End of entry.**
