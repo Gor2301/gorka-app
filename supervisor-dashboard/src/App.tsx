@@ -68,6 +68,17 @@ console.log('🔍 [APP] handleLoginSuccess called');
     setIsUnlocked(true);
   };
 
+  const handleLogout = async () => {
+    try {
+      await auth.logout();
+      setIsAuthenticated(false);
+      setIsUnlocked(false);
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  };
+
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -80,21 +91,21 @@ console.log('🔍 [APP] handleLoginSuccess called');
         <UnlockScreen onUnlocked={handleUnlockSuccess} />
       ) : (
         <Routes>
-          <Route path="/" element={<AppShell><Dashboard /></AppShell>} />
-          <Route path="/dashboard" element={<AppShell><Dashboard /></AppShell>} />
-          <Route path="/agents" element={<AppShell><Agents /></AppShell>} />
-          <Route path="/collections" element={<AppShell><Collections /></AppShell>} />
-          <Route path="/collections/:id" element={<AppShell><DebtorDetail /></AppShell>} />
-          <Route path="/upload" element={<AppShell><Upload /></AppShell>} />
-          <Route path="/audit" element={<AppShell><Audit /></AppShell>} />
-          <Route path="/permissions" element={<AppShell><Permissions /></AppShell>} />
-          <Route path="/analytics" element={<AppShell><Analytics /></AppShell>} />
-          <Route path="/billing" element={<AppShell><Billing /></AppShell>} />
-          <Route path="/settings" element={<AppShell><Settings /></AppShell>} />
-          <Route path="/compliance" element={<AppShell><ComplianceReport /></AppShell>} />
-          <Route path="/data-flow-audit" element={<AppShell><DataFlowAudit /></AppShell>} />
-          <Route path="/calendar" element={<AppShell><Calendar /></AppShell>} />
-          <Route path="/connectors" element={<AppShell><Connectors /></AppShell>} />
+          <Route path="/" element={<AppShell onLogout={handleLogout}><Dashboard /></AppShell>} />
+          <Route path="/dashboard" element={<AppShell onLogout={handleLogout}><Dashboard /></AppShell>} />
+          <Route path="/agents" element={<AppShell onLogout={handleLogout}><Agents /></AppShell>} />
+          <Route path="/collections" element={<AppShell onLogout={handleLogout}><Collections /></AppShell>} />
+          <Route path="/collections/:id" element={<AppShell onLogout={handleLogout}><DebtorDetail /></AppShell>} />
+          <Route path="/upload" element={<AppShell onLogout={handleLogout}><Upload /></AppShell>} />
+          <Route path="/audit" element={<AppShell onLogout={handleLogout}><Audit /></AppShell>} />
+          <Route path="/permissions" element={<AppShell onLogout={handleLogout}><Permissions /></AppShell>} />
+          <Route path="/analytics" element={<AppShell onLogout={handleLogout}><Analytics /></AppShell>} />
+          <Route path="/billing" element={<AppShell onLogout={handleLogout}><Billing /></AppShell>} />
+          <Route path="/settings" element={<AppShell onLogout={handleLogout}><Settings /></AppShell>} />
+          <Route path="/compliance" element={<AppShell onLogout={handleLogout}><ComplianceReport /></AppShell>} />
+          <Route path="/data-flow-audit" element={<AppShell onLogout={handleLogout}><DataFlowAudit /></AppShell>} />
+          <Route path="/calendar" element={<AppShell onLogout={handleLogout}><Calendar /></AppShell>} />
+          <Route path="/connectors" element={<AppShell onLogout={handleLogout}><Connectors /></AppShell>} />
           <Route path="/support" element={<Support />} />
           <Route path="/status" element={<GORKAStatus />} />
           <Route path="/my-requests" element={<MyRequests />} />

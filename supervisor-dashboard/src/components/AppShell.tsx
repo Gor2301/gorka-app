@@ -4,9 +4,10 @@ import { apiService } from '../services/api.service';
 
 interface AppShellProps {
   children: React.ReactNode;
+  onLogout: () => void;
 }
 
-const AppShell: React.FC<AppShellProps> = ({ children }) => {
+const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
   const [user, setUser] = useState<{ name: string } | null>(null);
 
   useEffect(() => {
@@ -21,7 +22,7 @@ const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <Sidebar />
+      <Sidebar onLogout={onLogout} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* CONTENT HEADER */}

@@ -6,10 +6,13 @@ import {
   LifeBuoy,
 List
 } from 'lucide-react';
-import { auth } from '../services/local.db';
 
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  onLogout: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -39,13 +42,8 @@ const Sidebar: React.FC = () => {
 // ──────────────────────────────────────────────────────────────────────
 
 // ─── NEW: Logout to Marketing Website ────────────────────────────────
-const handleLogout = async () => {
-  try {
-    await auth.logout();
-    window.location.reload();
-  } catch (err) {
-    console.error('Logout failed:', err);
-  }
+const handleLogout = () => {
+  onLogout();
 };
 // ──────────────────────────────────────────────────────────────────────
 
