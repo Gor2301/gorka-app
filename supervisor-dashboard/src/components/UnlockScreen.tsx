@@ -16,11 +16,18 @@ export default function UnlockScreen({ onUnlocked }: UnlockScreenProps) {
   useEffect(() => {
     const checkFirstTime = async () => {
       try {
-        // If no salt exists, it's first time
-        const salt = localStorage.getItem('salt');
-        setIsFirstTime(!salt);
-      } catch {
-        setIsFirstTime(true);
+        const { invoke } = await import('@tauri-apps/api/core');
+        const exists = await invoke<boolean>('database_exists');
+        setIsFirstTime(!exists);
+      } catch (err) {
+        // If we cannot determine whether the database exists, we must NOT
+        // fall back to "set password": doing so could overwrite an existing
+        // database with a new password. Show an error state instead.
+        setError(
+          err instanceof Error
+            ? `Could not determine local database state: ${err.message}`
+            : 'Could not determine local database state'
+        );
       }
     };
     checkFirstTime();
@@ -46,11 +53,6 @@ export default function UnlockScreen({ onUnlocked }: UnlockScreenProps) {
       // Call the Rust unlock command
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('unlock_database', { password });
-      
-      // If first time, store salt indicator
-      if (isFirstTime) {
-        localStorage.setItem('salt', 'set');
-      }
       
       onUnlocked();
     } catch (err) {

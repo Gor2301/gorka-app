@@ -241,6 +241,12 @@ fn get_salt(app: tauri::AppHandle) -> Result<Vec<u8>, String> {
 
 
 #[command]
+fn database_exists() -> bool {
+    db::database_exists()
+}
+
+
+#[command]
 fn unlock_database(password: String, app: tauri::AppHandle) -> Result<(), String> {
     println!("========================================");
     println!("🔑 [RUST] unlock_database STARTED");
@@ -1366,6 +1372,7 @@ fn main() {
             login,
             get_auth_token,
             get_salt,
+            database_exists,
             logout,
             get_organization_id,
             unlock_database,

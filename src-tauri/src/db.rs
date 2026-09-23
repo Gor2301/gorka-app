@@ -21,6 +21,21 @@ pub fn get_db_path() -> PathBuf {
     data_dir.join("gorka-client.db")
 }
 
+/// Returns true if the local encrypted database file exists on disk.
+///
+/// The existence of the file is the authoritative signal that selects
+/// between "set local password" (first run) and "enter local password"
+/// (returning run). It is NOT a claim that the database is valid or
+/// that the password is correct. The unlock operation is responsible
+/// for determining that.
+///
+/// Side effect note: this calls get_db_path(), which creates the data
+/// directory if it does not exist. The directory existing is not the
+/// same as the database file existing; this function checks the file.
+pub fn database_exists() -> bool {
+    get_db_path().exists()
+}
+
 pub fn get_files_dir() -> PathBuf {
     let proj_dirs = ProjectDirs::from("com", "gorka", "client")
         .expect("Failed to get project directories");
