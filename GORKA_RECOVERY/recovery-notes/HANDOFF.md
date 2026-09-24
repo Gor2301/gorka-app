@@ -1215,6 +1215,91 @@ No CI/CD touched.
 Invariant held. All debtor data stayed on the local machine.
 
 
+STATUS UPDATE - September 24, 2026 (Argon2id freeze)
+
+WHAT THIS SESSION DID
+
+Froze the Argon2id parameters for the MVP enrollment package. The benchmark was written, run twice on the cloud machine, and the values were chosen and recorded in SYNC-ARCHITECTURE.md section 22.7.1 and section 22.19.2.
+
+THE BENCHMARK
+
+One file, src-tauri/src/bin/argon2bench.rs, 137 lines. Commit bd50fbc. It measures Argon2id key derivation for nine (m_cost, t_cost, p_cost) triples in one process on the cloud machine (AWS EC2 t3.small, 2 vCPU, 2 GiB RAM). It uses the same argon2 crate version (0.5.3) and call shape that the enrollment package will use.
+
+Two runs. Checksums matched row for row, confirming deterministic derivation.
+
+THE CHOSEN VALUES
+
+  argon2_memory_kib  = 131072    (128 MiB)
+  argon2_iterations  = 4
+  argon2_parallelism = 1
+
+Run 2 median: 461 ms on the cloud machine.
+
+WHY 128/4
+
+461 ms sits comfortably inside the 250-1000 ms target. 128 MiB leaves memory headroom for weaker client machines. The cloud machine is a floor; a client machine at its capability must not fail. Within 128 MiB, four iterations is more computational work than three at the same memory. 256 MiB was rejected on the weaker-machine risk.
+
+THE FREEZE
+
+The three integers were written into SYNC-ARCHITECTURE.md section 22.7.1 and section 22.19.2. The trailing placeholder sentences were replaced with a short note pointing at DECISIONS.md. No other section was changed.
+
+NEXT WORKSTREAM
+
+Phase D - implement the enrollment package against the frozen parameters. Export command, import command, 63-byte header, Argon2id at 128/4/1, XChaCha20-Poly1305 with the header as AAD, inner content {organization_id, organization_key}. Add chacha20poly1305 and hkdf to Cargo.toml. Separate task, own spec.
+
+Then Phase E - E1.
+
+WHAT IS STILL OPEN
+
+Enrollment package implementation - Phase D. Not started.
+
+E1 test vector. Blocked on Phase D.
+
+Excel and TXT implementation. Deferred by conscious decision.
+
+Debt due-date bug. Not reproducible. Not closed.
+
+supervisor-dashboard\dist\ stale build. Housekeeping.
+
+dataType dropdown offers CSV and JSON. JSON is not implemented.
+
+.txt entry in unstructured accept advertises a route that does not work.
+
+Dashboard 401s from /api/auth/me and /api/connectors/types.
+
+Control Plane tables not applied to gorka_test.
+
+Control Plane services not implemented.
+
+Agent App (Phase 9.5) not started.
+
+Sync engine (Phase 9.6) not started.
+
+Multi-user demonstration (Phase 9.7) not started.
+
+All items from the September 23 and September 24 Dashboard entries, unchanged.
+
+REPOSITORY STATE
+
+Main machine: at bd50fbc, clean before the freeze commit.
+
+Cloud machine: at bd50fbc, clean.
+
+GitHub origin/main: at bd50fbc.
+
+Note: the freeze commit (SYNC-ARCHITECTURE.md, DECISIONS.md, HANDOFF.md, SESSION-LOG.md, START-HERE.md) follows after all five documents are written.
+
+RULE COMPLIANCE
+
+No production touched.
+
+No cloud schema change. No new tables. No new columns.
+
+No CI/CD touched.
+
+Invariant held. All debtor data stayed on the local machine. Instance B (db.rs) was not touched.
+
+
 
 
 

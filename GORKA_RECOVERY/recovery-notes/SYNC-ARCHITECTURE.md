@@ -9365,16 +9365,19 @@ inner content.
 The Argon2id parameter values used for MVP package creation are
 fixed protocol configuration values:
 
-  argon2_memory_kib = [TO BE BENCHMARKED — see Section 22.19.2]
-  argon2_iterations = [TO BE BENCHMARKED — see Section 22.19.2]
-  argon2_parallelism = [TO BE BENCHMARKED — see Section 22.19.2]
+  argon2_memory_kib = 131072
+  argon2_iterations = 4
+  argon2_parallelism = 1
 
 These values MUST be used for all newly created MVP enrollment
 packages. They are serialized into the package header. The
 importer MUST use the values encoded in the header, not any
 default value configured on the importing device.
 
-The benchmarked values will be recorded here once chosen.
+These values were frozen on September 24, 2026. The benchmark
+evidence and the reasoning are recorded in DECISIONS.md. The
+enrollment package implementation is a separate task; E1
+remains pending until the package exists.
 
 22.7.2 The Package Encryption
 
@@ -10624,14 +10627,14 @@ are fixed protocol configuration values. They are chosen and
 benchmarked for the supported GORKA desktop environment, then
 recorded here and in Section 22.7.1:
 
-  argon2_memory_kib = [TO BE BENCHMARKED]
-  argon2_iterations = [TO BE BENCHMARKED]
-  argon2_parallelism = [TO BE BENCHMARKED]
+  argon2_memory_kib = 131072
+  argon2_iterations = 4
+  argon2_parallelism = 1
 
-Until those values are recorded, the deterministic test vector
-E1 in SYNC-TEST-VECTORS-v1 remains PENDING. The values are not
-to be invented; they are to be benchmarked and selected for
-the supported environment, then frozen.
+These values were frozen on September 24, 2026. The benchmark
+evidence and the reasoning are recorded in DECISIONS.md. The
+enrollment package implementation is a separate task; E1
+remains pending until the package exists.
 
 The protocol depends only on the values encoded in the package
 header, not on any default value configured in an

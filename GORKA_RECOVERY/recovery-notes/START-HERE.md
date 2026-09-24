@@ -644,9 +644,11 @@ The determining question for the next session: is the MVP a stepping stone that 
 
 Repository state: main machine, cloud machine, and GitHub are all at 66c6f12. The documentation commit for this session follows separately, after all five documents are written.
 
-Next workstream: Argon2id parameters. Benchmark and freeze the values for the enrollment package (SYNC-ARCHITECTURE.md section 7.3 and section 22.19.2). Those values block E1, which blocks the test vectors, which blocks the sync engine.
+Argon2id parameters - FROZEN. The benchmark was written, run twice on the cloud machine, and the values were chosen and recorded. Chosen values: argon2_memory_kib = 131072, argon2_iterations = 4, argon2_parallelism = 1. Run 2 median: 461 ms on the cloud machine. The values were written into SYNC-ARCHITECTURE.md section 22.7.1 and section 22.19.2.
 
-See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 24 entries.
+Next workstream: Phase D - implement the enrollment package against the frozen parameters. Export command, import command, 63-byte header, Argon2id at 128/4/1, XChaCha20-Poly1305 with the header as AAD, inner content {organization_id, organization_key}. Add chacha20poly1305 and hkdf to Cargo.toml. Separate task, own spec. Then Phase E - E1.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 24 entries, including the Argon2id freeze.
 
 ========================================================================
 
@@ -709,11 +711,12 @@ checking the rules.
 - The multi-user model is frozen (MULTI-USER-CONCEPT.md v2.0).
   GORKA-MVP-SCOPE.md v1.1, SYNC-ARCHITECTURE.md v1.2, and
   THREAT-MODEL.md v1.0 are all written and frozen. The document
-  prerequisites for multi-user implementation are met. What
-  remains before implementation: Argon2id parameters (SYNC-
-  ARCHITECTURE.md §7.3, §22.19.2), test-vector computation
-  (SYNC-TEST-VECTORS-v1.md), and the Control Plane tables
-  applied to gorka_test.
+  prerequisites for multi-user implementation are met. The
+  Argon2id parameters were frozen on September 24, 2026
+  (SYNC-ARCHITECTURE.md §7.3, §22.19.2). What remains before
+  implementation: the enrollment package (Phase D), test-vector
+  computation (SYNC-TEST-VECTORS-v1.md), and the Control Plane
+  tables applied to gorka_test.
 
 ========================================================================
 

@@ -1473,5 +1473,93 @@ Invariant held. All debtor data stayed on the local machine.
 
 End of entry.
 
+Session Extension — September 24, 2026 (Argon2id freeze)
+
+### What this session did
+
+Froze the Argon2id parameters for the MVP enrollment package. The benchmark was written, run twice on the cloud machine, and the values were chosen and recorded in SYNC-ARCHITECTURE.md section 22.7.1 and section 22.19.2. This is the second half of the September 24 session; the first half completed the Dashboard local-stats task and wrote the Excel/TXT upload specification.
+
+### The reconnaissance finding
+
+The enrollment package code does not exist. src-tauri/src/ contains exactly three Rust files — main.rs, db.rs, auth.rs. A whole-tree search for enrollment, GORKAEP, package_encryption_key, and XChaCha returned zero matches.
+
+This changed the shape of the work. The benchmark could not measure an existing call site; it had to be a standalone harness. The sequence became: benchmark, freeze the values, implement the package, compute E1.
+
+### What was decided before the benchmark
+
+- Sequence: benchmark first, then freeze, then implement, then E1.
+- Crates for the eventual package: chacha20poly1305 and hkdf, both RustCrypto.
+- Harness location: src-tauri/src/bin/argon2bench.rs.
+- Harness crate: argon2 0.5.3.
+- Harness call shape: Argon2::new with explicit Params, raw 16-byte salt to hash_password_into, Algorithm::Argon2id, Version::V0x13, 32-byte output.
+- Instance B (db.rs) out of scope.
+- Cloud machine as floor.
+- Memory ceiling roughly 1/4 of 2 GiB.
+- Target 250-1000 ms, aim low end.
+
+### The harness
+
+One file, 137 lines. Commit bd50fbc. Nine (m_cost, t_cost, p_cost) triples, one process, one warm-up per triple, ten timed runs, min/median/max. Output buffer consumed after timing. Measures only the Argon2id derivation.
+
+Phase A boundary held. Only src-tauri/src/bin/ was touched.
+
+### The benchmark results
+
+Two runs on the cloud machine. Checksums matched row for row.
+
+| m_cost (MiB) | t_cost | p_cost | Run 1 median | Run 2 median |
+|---|---|---|---|---|
+| 32 | 2 | 1 | 62.17 ms | 65.08 ms |
+| 32 | 3 | 1 | 85.00 ms | 110.79 ms |
+| 64 | 2 | 1 | 130.17 ms | 128.60 ms |
+| 64 | 3 | 1 | 178.31 ms | 171.91 ms |
+| 64 | 4 | 1 | 220.62 ms | 224.75 ms |
+| 128 | 3 | 1 | 361.64 ms | 363.31 ms |
+| 128 | 4 | 1 | 447.72 ms | 461.49 ms |
+| 256 | 3 | 1 | 735.49 ms | 783.80 ms |
+| 256 | 4 | 1 | 925.78 ms | 946.33 ms |
+
+Four rows fall in the target window: 128/3, 128/4, 256/3, 256/4.
+
+### The decision
+
+Chosen: 131072 KiB, 4 iterations, 1 lane (128 MiB / 4 / 1). Run 2 median: 461 ms.
+
+Reasoning: 461 ms is mid-target. 128 MiB is memory-safe on a weaker client machine where 256 MiB would be tight. Four iterations at the same memory is more work than three. 256 MiB rejected on the weaker-machine risk.
+
+### The freeze
+
+The three integers written into SYNC-ARCHITECTURE.md section 22.7.1 and section 22.19.2. The trailing placeholder sentences replaced with a short note pointing at DECISIONS.md.
+
+### Terminal-display artifacts
+
+Three confirmed instances of a terminal rendering a correct UTF-8 file as mojibake. The section sign, the em-dash, and the arrow. None is a file problem. Notepad confirmed the files are correct.
+
+### Files changed this session
+
+src-tauri/src/bin/argon2bench.rs — new, 137 lines, commit bd50fbc.
+
+### Files changed by the freeze commit
+
+SYNC-ARCHITECTURE.md section 22.7.1 and section 22.19.2. DECISIONS.md. HANDOFF.md. SESSION-LOG.md. START-HERE.md.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change. No new tables. No new columns.
+- No CI/CD touched.
+- Invariant held. All debtor data stayed on the local machine.
+- Instance B (db.rs) was not touched.
+- No enrollment package code exists yet.
+
+### What comes next
+
+Phase D: implement the enrollment package against the frozen parameters. Separate task, own spec.
+
+Then Phase E: E1.
+
+End of entry.
+
+
 
 

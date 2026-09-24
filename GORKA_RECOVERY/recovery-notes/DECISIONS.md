@@ -3474,3 +3474,261 @@ GORKA_RECOVERY/recovery-notes/SESSION-LOG.md - session extension
 GORKA_RECOVERY/recovery-notes/START-HERE.md - September 24 update subsection
 
 End of entry.
+
+---
+
+## Recovery Session — September 24, 2026 (Argon2id freeze)
+
+This entry records the freeze of the Argon2id parameters for the
+MVP enrollment package. It is a continuation of the September 24
+session, which earlier in the day completed the Dashboard
+local-stats task and wrote the Excel/TXT upload specification.
+
+### What this workstream was for
+
+SYNC-ARCHITECTURE.md §22.7.1 and §22.19.2 carried three
+placeholders:
+
+  argon2_memory_kib  = [TO BE BENCHMARKED]
+  argon2_iterations  = [TO BE BENCHMARKED]
+  argon2_parallelism = [TO BE BENCHMARKED]
+
+They are fixed protocol configuration values for the enrollment
+package, the file that carries the 32-byte organization key from
+the admin's device to the agent's device, protected by a
+passphrase the admin chooses. The Argon2id parameters are the
+only defense between an attacker who has the package file and
+the organization key it protects.
+
+The values block E1, the first deterministic test vector, which
+blocks the remaining test vectors, which block the sync engine
+implementation (Phase 9.6).
+
+### The reconnaissance finding
+
+The enrollment package code does not exist. `src-tauri/src/`
+contains exactly three Rust files — `main.rs`, `db.rs`,
+`auth.rs`. A whole-tree search for `enrollment`, `GORKAEP`,
+`package_encryption_key`, and `XChaCha` returned zero matches.
+The package is specified (§7.3, §22.7, §22.19.2) but not
+implemented.
+
+This changed the shape of the work. The benchmark could not
+measure an existing call site; it had to be a standalone
+harness. The sequence became: benchmark → freeze the values →
+implement the package → compute E1.
+
+### What was decided before the benchmark
+
+- Sequence: benchmark first, then freeze, then implement the
+  package, then E1. Confirmed September 24.
+- Crates for the eventual package: `chacha20poly1305` and
+  `hkdf`, both RustCrypto.
+- Harness location: `src-tauri/src/bin/argon2bench.rs`.
+- Harness crate: `argon2` 0.5.3, already declared in
+  `Cargo.toml` and resolved in `Cargo.lock`.
+- Harness call shape: `Argon2::new(Algorithm::Argon2id,
+  Version::V0x13, Params::new(m_cost, t_cost, p_cost,
+  Some(32))?)`, with the raw 16-byte salt passed directly to
+  `hash_password_into`. Not `SaltString::encode_b64`, not
+  `Argon2::default()`.
+- Instance B (the SQLCipher key derivation in `db.rs`) is out
+  of scope and was not touched. Its shape differs from the
+  package's (it uses `SaltString::encode_b64` and
+  `Argon2::default()`), and the two must not be conflated.
+- Benchmark target: the cloud machine (AWS EC2 `Gorka-dev`,
+  `t3.small`, 2 vCPU, 2 GiB RAM, Windows Server 2025
+  Datacenter, Singapore), treated as a floor, not as a
+  representative desktop.
+- Memory ceiling: roughly 1/4 of 2 GiB, realistically lower.
+- Target derive time: 250–1000 ms, aim low end. Up to 2 s
+  tolerable if the security margin justifies it.
+
+The full task specification is in the conversation record; it
+was not committed as a separate file.
+
+### The harness
+
+One file, `src-tauri/src/bin/argon2bench.rs`, 137 lines.
+Commit `bd50fbc`, pushed to `origin/main`.
+
+It iterates nine `(m_cost, t_cost, p_cost)` triples in one
+process. For each triple: one warm-up run (discarded), ten
+timed runs, min / median / max reported. The output buffer is
+consumed after the timing loop so the derivation result remains
+observable. The harness measures only the Argon2id derivation —
+no XChaCha20-Poly1305, no HKDF, no package header, no AAD, no
+import path.
+
+Phase A boundary held. Only `src-tauri/src/bin/` was touched.
+`db.rs`, `auth.rs`, `main.rs`, `Cargo.toml`, `Cargo.lock`, and
+all recovery documents were untouched.
+
+### The benchmark results
+
+Two runs on the cloud machine, release build. Checksums matched
+row for row across both runs, confirming deterministic
+derivation.
+
+| m_cost (MiB) | t_cost | p_cost | Run 1 median | Run 2 median |
+|---|---|---|---|---|
+| 32 | 2 | 1 | 62.17 ms | 65.08 ms |
+| 32 | 3 | 1 | 85.00 ms | 110.79 ms |
+| 64 | 2 | 1 | 130.17 ms | 128.60 ms |
+| 64 | 3 | 1 | 178.31 ms | 171.91 ms |
+| 64 | 4 | 1 | 220.62 ms | 224.75 ms |
+| 128 | 3 | 1 | 361.64 ms | 363.31 ms |
+| 128 | 4 | 1 | 447.72 ms | 461.49 ms |
+| 256 | 3 | 1 | 735.49 ms | 783.80 ms |
+| 256 | 4 | 1 | 925.78 ms | 946.33 ms |
+
+Seven of nine rows drifted by less than 5% between runs. The
+two outliers (32/3 at +30%, 256/3 at +6.6%) are shared-vCPU
+scheduling noise on a t3.small. The four candidate rows are
+stable within ~5%.
+
+Four rows fall in the target window (250–1000 ms): 128/3,
+128/4, 256/3, 256/4.
+
+### The decision
+
+Chosen:
+
+  argon2_memory_kib  = 131072    (128 MiB)
+  argon2_iterations  = 4
+  argon2_parallelism = 1
+
+Run 2 median: 461 ms. Memory: 128 MiB.
+
+Reasoning:
+
+- 461 ms sits comfortably inside the 250–1000 ms target.
+- 128 MiB leaves memory headroom for weaker client machines.
+  The cloud machine is a floor; a client machine at its
+  capability, running a browser and the Tauri app, must not
+  fail. 256 MiB would be tight on such a machine. 128 MiB is
+  not.
+- Within 128 MiB, four Argon2id iterations increase the
+  computational cost compared with the 128 MiB / t=3 candidate
+  (three iterations), while retaining the same 128 MiB memory
+  requirement.
+- 256 MiB / t=3 and 256 MiB / t=4 were rejected on the
+  weaker-machine risk. The benchmark does not establish that
+  the additional memory cost is justified for the MVP, whose
+  requirement is to work reliably on a range of client
+  machines.
+- 128 MiB / t=3 was a defensible alternative. It is 100 ms
+  faster and equally memory-safe. The choice of four
+  iterations over three at the same memory is a preference
+  for more computational work at no additional memory cost.
+
+The benchmark proves that 128/4 is practical on the floor
+machine. It does not prove mathematically that 128/4 is the
+most secure possible choice. The security choice is a
+trade-off between memory hardness and the machines that must
+actually run GORKA. The MVP chooses the strongest defensible
+balance.
+
+The 250–1000 ms target is selection evidence, not a protocol
+requirement. The frozen protocol values are three integers.
+The timing is recorded here, not in the architecture.
+
+### The freeze
+
+The three integers were written into:
+
+- `SYNC-ARCHITECTURE.md` §22.7.1
+- `SYNC-ARCHITECTURE.md` §22.19.2
+
+The trailing placeholder sentences in both sections were
+replaced with a short note pointing at this entry, per the
+founder's choice of option B on September 24, 2026.
+
+No other section of `SYNC-ARCHITECTURE.md` was changed.
+
+### Terminal-display artifacts encountered
+
+Three confirmed instances in this project of a terminal
+rendering a correct UTF-8 file as mojibake. None is a file
+problem.
+
+1. The section sign `§` (bytes `C2 A7`) rendered as `┬º` in
+   cmd.exe `type` and `findstr` output. Notepad confirmed the
+   file is correct.
+2. The em-dash `—` (bytes `E2 80 94`) rendered as `â€"` in the
+   same way. Notepad confirmed the file is correct.
+3. The same two characters, plus the arrow `→` (bytes
+   `E2 86 92`), rendered as `Â§`, `â€"`, and `â†'` in PowerShell
+   `Get-Content` output through cmd.exe. Notepad confirmed the
+   file is correct.
+
+Recorded so a future session does not chase the same artifact.
+When a character looks wrong in cmd.exe or PowerShell console
+output, open the file in Notepad before concluding the file
+is wrong.
+
+### Open items
+
+- Excel and TXT upload implementation. Deferred by conscious
+  decision. Spec written.
+- Debt due-date bug. Not reproducible on the current build.
+  Not closed.
+- `supervisor-dashboard\dist\` stale build containing the old
+  cloud-post code. Housekeeping.
+- The `dataType` dropdown in `Upload.tsx` offers CSV and JSON.
+  JSON is not implemented. UI honesty issue.
+- The `.txt` entry in the unstructured accept list advertises
+  a route that does not work.
+- Dashboard 401s from `/api/auth/me` and
+  `/api/connectors/types`. Separate task.
+- Test-vector computation (M1, M2, V1, V4, V6). Blocked by
+  the package implementation (Phase D).
+- Control Plane tables not applied to `gorka_test`.
+- Control Plane services not implemented.
+- Agent App (Phase 9.5) not started. Requires architecture
+  decision.
+- Sync engine (Phase 9.6) not started. Requires the package,
+  the test vectors, and the Control Plane tables.
+- Multi-user demonstration (Phase 9.7) not started.
+
+### The next workstream
+
+Phase D: implement the enrollment package against the frozen
+parameters. Export command, import command, 63-byte header,
+Argon2id at 128/4/1, XChaCha20-Poly1305 with the header as
+AAD, inner content `{organization_id, organization_key}`. Add
+`chacha20poly1305` and `hkdf` to `Cargo.toml`. This is a
+separate task with its own spec.
+
+Phase E follows: compute E1 against the implemented package.
+Then the remaining test vectors. Then Phase 9.6.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change. No new tables. No new columns.
+- No CI/CD touched.
+- Invariant held. No debtor data touched the boundary.
+- Instance B (`db.rs`) was not touched.
+- No enrollment package code exists yet. It is Phase D.
+- The benchmark measured; the founder chose. The harness did
+  not choose.
+- The benchmark result is not the implementation validation.
+  Phase A does not validate the package. Phase D produces the
+  package; Phase E validates it against E1.
+
+### Files changed this session
+
+- `src-tauri/src/bin/argon2bench.rs` — new file, 137 lines.
+  Commit `bd50fbc`, pushed to `origin/main`.
+
+### Files to be changed by the freeze commit
+
+- `SYNC-ARCHITECTURE.md` §22.7.1 and §22.19.2 — the three
+  integers and the note.
+- `DECISIONS.md` — this entry.
+- `HANDOFF.md` — status update.
+- `SESSION-LOG.md` — session extension.
+- `START-HERE.md` — update.
+
+End of entry.
