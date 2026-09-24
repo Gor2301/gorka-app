@@ -1442,6 +1442,99 @@ fn delete_document(
     Ok(affected > 0)
 }
 
+#[command]
+fn export_enrollment_package(
+    passphrase: String,
+    file_path: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<String, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+
+    let (key_org_id, key_material): (String, Vec<u8>) = conn
+        .query_row(
+            "SELECT organization_id, key_material FROM organization_keys WHERE id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Sync is not enabled for this organization".to_string())?;
+
+    if key_org_id != organization_id {
+        return Err("Organization mismatch".to_string());
+    }
+
+    if key_material.len() != 32 {
+        return Err("Invalid organization key length".to_string());
+    }
+
+    // Fresh random salt (16 bytes) and nonce (24 bytes).
+    let mut salt = [0u8; 16];
+    let mut nonce_bytes = [0u8; 24];
+    rand::rngs::OsRng.fill_bytes(&mut salt);
+    rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
+
+    // Derive the package encryption key with Argon2id at the frozen parameters.
+    let params = Params::new(131072, 4, 1, Some(32))
+        .map_err(|e| format!("Key derivation failed: {}", e))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut package_key = [0u8; 32];
+    argon2
+        .hash_password_into(passphrase.as_bytes(), &salt, &mut package_key)
+        .map_err(|e| format!("Key derivation failed: {}", e))?;
+
+    // Build the inner content: org_id_len (u32 BE) || org_id || org_key.
+    let org_id_bytes = key_org_id.as_bytes();
+    let mut inner = Vec::with_capacity(4 + org_id_bytes.len() + 32);
+    inner.extend_from_slice(&(org_id_bytes.len() as u32).to_be_bytes());
+    inner.extend_from_slice(org_id_bytes);
+    inner.extend_from_slice(&key_material);
+
+    // Ciphertext length = plaintext length + 16-byte Poly1305 tag.
+    let encrypted_payload_len = (inner.len() + 16) as u32;
+
+    // Build the 63-byte header exactly as it will be transmitted.
+    let mut header = Vec::with_capacity(63);
+    header.extend_from_slice(b"GORKAEP\0");
+    header.extend_from_slice(&1u16.to_be_bytes());
+    header.extend_from_slice(&131072u32.to_be_bytes());
+    header.extend_from_slice(&4u32.to_be_bytes());
+    header.push(1u8);
+    header.extend_from_slice(&salt);
+    header.extend_from_slice(&nonce_bytes);
+    header.extend_from_slice(&encrypted_payload_len.to_be_bytes());
+
+    if header.len() != 63 {
+        return Err("Internal error: header length is not 63 bytes".to_string());
+    }
+
+    // Encrypt with XChaCha20-Poly1305, using the full header as AAD.
+    let cipher = XChaCha20Poly1305::new_from_slice(&package_key)
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+    let xnonce = XNonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher
+        .encrypt(
+            xnonce,
+            Payload {
+                msg: &inner,
+                aad: &header,
+            },
+        )
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+
+    // Assemble the full package: header || ciphertext (which includes the tag).
+    let mut package = Vec::with_capacity(header.len() + ciphertext.len());
+    package.extend_from_slice(&header);
+    package.extend_from_slice(&ciphertext);
+
+    std::fs::write(&file_path, &package)
+        .map_err(|e| format!("Failed to save file: {}", e))?;
+
+    Ok(file_path)
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -1483,6 +1576,7 @@ fn main() {
             upload_document,
             get_documents,
             delete_document,
+            export_enrollment_package,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
