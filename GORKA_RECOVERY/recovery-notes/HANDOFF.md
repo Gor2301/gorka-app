@@ -1299,7 +1299,123 @@ No CI/CD touched.
 
 Invariant held. All debtor data stayed on the local machine. Instance B (db.rs) was not touched.
 
+STATUS UPDATE - September 24, 2026 (Phase D.1 and D.2)
 
+WHAT THIS SESSION DID
+
+Started Phase D: the enrollment package and its prerequisites.
+D.1 added the organization_keys table. D.2 added the enable_sync
+command. Both verified on the cloud machine.
+
+D.1 - THE organization_keys MIGRATION
+
+Commit adcab50. src-tauri/src/db.rs, 20 insertions.
+
+A new migration v4 creates the single-row organization_keys
+table per LOCAL-TABLES.md Category D.5. The block follows the
+exact structure of the existing migrations. No command, no key
+generation, no package code.
+
+Verified: build succeeded (1m 28s incremental). App launched,
+database unlocked, migration ran, existing debtors unaffected.
+
+D.2 - THE enable_sync COMMAND
+
+Commit 941917a. src-tauri/src/main.rs, 36 insertions.
+
+Three edits: the rand::RngCore import, the enable_sync command
+between is_database_unlocked and get_debtors, the registration
+in generate_handler!.
+
+The command reads the trusted organization id, requires the
+database to be unlocked, refuses if a key already exists,
+generates 32 random bytes with the OS CSPRNG, and inserts the
+row into organization_keys. It does not report to the Control
+Plane.
+
+Verified via the app's devtools console: is_database_unlocked
+returned true. The first enable_sync returned OK null. The
+second returned "ERR Sync is already enabled for this
+organization" - the refusal path works. The successful insert
+also confirms the D.1 migration created the table correctly.
+
+THE cargo.exe BLOCK ON THE MAIN MACHINE
+
+New finding. cargo build on the main machine fails with:
+
+  'C:\Users\kucha\.cargo\bin\cargo.exe' was blocked by your
+  organization's Device Guard policy.
+
+This is different from the September 15 SAC block. That was on
+the built binary. This is on cargo.exe itself.
+
+The chosen response: the cloud machine is the sole build
+environment. The main machine is the editor and the repository
+host. Recorded in TAURI-DEV-WORKFLOW.md section 8.
+
+NEXT WORKSTREAM
+
+D.3 - the export_enrollment_package command. Needs the
+chacha20poly1305 crate, the 63-byte header, the Argon2id call at
+131072 / 4 / 1, XChaCha20-Poly1305 with the header as AAD, the
+inner content {organization_id, organization_key}.
+
+D.4 - the import_enrollment_package command.
+
+Then Phase E - E1.
+
+WHAT IS STILL OPEN
+
+Enrollment package export - D.3. Not started.
+
+Enrollment package import - D.4. Not started.
+
+E1 test vector. Blocked on D.3 and D.4.
+
+Excel and TXT implementation. Deferred by conscious decision.
+
+Debt due-date bug. Not reproducible. Not closed.
+
+supervisor-dashboard\dist\ stale build. Housekeeping.
+
+dataType dropdown offers CSV and JSON. JSON is not implemented.
+
+.txt entry in unstructured accept advertises a route that does
+not work.
+
+Dashboard 401s from /api/auth/me and /api/connectors/types.
+
+Control Plane tables not applied to gorka_test.
+
+Control Plane services not implemented.
+
+Agent App (Phase 9.5) not started.
+
+Sync engine (Phase 9.6) not started.
+
+Multi-user demonstration (Phase 9.7) not started.
+
+All items from the September 23 and September 24 Dashboard
+entries, unchanged.
+
+REPOSITORY STATE
+
+Main machine: at 941917a, clean, pushed.
+
+Cloud machine: at 941917a, clean.
+
+GitHub origin/main: at 941917a.
+
+RULE COMPLIANCE
+
+No production touched.
+
+No cloud schema change. No new tables. No new columns.
+
+No CI/CD touched.
+
+Invariant held. The organization key is local-only. Instance B
+(db.rs::derive_key) was not touched.
 
 
 

@@ -306,6 +306,95 @@ signed binary loads the new frontend from the Vite dev server.
 Rust changes require the cloud environment until SAC is
 resolved.
 
+============================================================
+8. UPDATE — September 24, 2026: CARGO.EXE BLOCKED
+============================================================
+
+A new block. Different from the Section 7 SAC block.
+
+## What happens
+
+Running cargo build on the main machine fails with:
+
+  'C:\Users\kucha\.cargo\bin\cargo.exe' was blocked by your
+  organization's Device Guard policy.
+  Contact your support person for more info.
+
+The block is on cargo.exe itself, at invocation, before any
+build happens.
+
+## How this differs from Section 7
+
+Section 7 recorded a block on the built binary
+(gorka-client.exe) at run time. The workaround there was to
+sign the binary, and the remaining problem was that SAC
+rejected the self-signed certificate at execution.
+
+This section records a block on the compiler toolchain itself.
+The binary is never produced. The signing workaround does not
+apply, because there is no output to sign.
+
+## The cause
+
+The same enforcement family as Section 7: Smart App Control,
+Policy ID {0283ac0f-fff1-49ae-ada1-8a933130cad6}, the
+VerifiedAndReputableDesktop policy.
+
+A Rust project issue (rust-lang/rust#160163) documents the
+same problem: freshly downloaded or updated toolchains are
+blocked by SAC after their cloud reputation is evaluated. The
+block can appear days after a toolchain worked.
+
+## The chosen response
+
+The cloud machine is the sole build environment. The main
+machine is the editor and the repository host.
+
+The development model:
+
+  main machine:
+    - edit files
+    - git add, git commit, git push
+
+  cloud machine:
+    - git pull
+    - cargo build
+    - run the binary
+    - verify
+
+This extends the September 15 and September 21-22 model one
+step. Before, the main machine could not run binaries. Now it
+cannot build them either.
+
+## Workarounds considered and not adopted
+
+1. Re-download the toolchain via rustup. Buys a window before
+   SAC flags the new cargo.exe. Not a fix; the block returns.
+
+2. Toggle SAC off via the KB5074105 toggle. Changes the
+   machine's security posture. The September 15 investigation
+   found the toggle unreliable on some machines.
+
+3. Move CARGO_TARGET_DIR. Addresses a different class of
+   block (build scripts in %TEMP%), not cargo.exe itself.
+
+## What to do if the block appears
+
+Do not fight it on the main machine. Move to the cloud machine.
+The cloud machine has SAC off or controllable, and cargo build
+works there.
+
+If a future session needs to compile on the main machine, the
+first step is to check whether cargo.exe is still blocked.
+If it is, the cloud machine is the only path.
+
+## What does not change
+
+- The signing workflow in Sections 2 through 6 still applies
+  on the cloud machine.
+- Frontend-only changes on the main machine still work: the
+  existing signed binary loads the new frontend from the Vite
+  dev server, if a signed binary is available.
 
 ============================================================
 

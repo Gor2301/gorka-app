@@ -1560,6 +1560,100 @@ Then Phase E: E1.
 
 End of entry.
 
+Session Extension — September 24, 2026 (Phase D.1 and D.2)
+
+### What this session did
+
+Started Phase D: the enrollment package and its prerequisites.
+D.1 added the organization_keys table. D.2 added the enable_sync
+command. Both verified on the cloud machine.
+
+The Argon2id parameters were frozen earlier in this session at
+commit d77e2da. That freeze was the prerequisite for Phase D.
+
+### The reconnaissance finding
+
+The enrollment package code did not exist. src-tauri/src/
+contains exactly three Rust files: main.rs, db.rs, auth.rs. The
+organization_keys table did not exist. No key-generation command
+existed. A whole-tree search for enrollment, GORKAEP,
+package_encryption_key, and XChaCha returned zero matches.
+
+### The Phase D spec
+
+A Phase D specification was written and revised to v1.1. Key
+decisions: combine prerequisites with the package, defer the
+Control Plane report, no Sync Settings UI. Eight open questions
+closed. Two structural requirements added: the organization key
+is organization-wide, and import is atomic.
+
+### D.1 — the organization_keys migration (v4)
+
+Commit adcab50. src-tauri/src/db.rs, 20 insertions.
+
+A migration v4 creates the single-row organization_keys table
+per LOCAL-TABLES.md Category D.5. The block follows the existing
+migration structure. No command, no key generation, no package
+code.
+
+Verified: build succeeded (1m 28s incremental). App launched,
+database unlocked, migration ran, existing data unaffected.
+
+### D.2 — the enable_sync command
+
+Commit 941917a. src-tauri/src/main.rs, 36 insertions.
+
+The rand::RngCore import, the enable_sync command between
+is_database_unlocked and get_debtors, the registration in
+generate_handler!.
+
+The command reads the trusted organization id, requires the
+database unlocked, refuses if a key exists, generates 32 random
+bytes with OsRng, and inserts the row. No Control Plane report.
+
+Verified via devtools: is_database_unlocked true. First
+enable_sync returned OK null. Second returned "ERR Sync is
+already enabled for this organization". The refusal path works.
+The successful insert confirms the D.1 migration created the
+table correctly.
+
+### The cargo.exe block on the main machine
+
+New finding. cargo build on the main machine fails:
+'cargo.exe' was blocked by Device Guard policy.
+
+Different from the September 15 SAC block, which was on the
+built binary. This is on cargo.exe itself.
+
+The cloud machine is the sole build environment. Recorded in
+TAURI-DEV-WORKFLOW.md section 8.
+
+### Files changed this session
+
+src-tauri/src/db.rs — the v4 migration, commit adcab50.
+
+src-tauri/src/main.rs — the enable_sync command, commit
+941917a.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change.
+- No CI/CD touched.
+- Invariant held. The organization key is local-only.
+- Instance B (db.rs::derive_key) was not touched.
+
+### What comes next
+
+D.3 — the export_enrollment_package command.
+
+D.4 — the import_enrollment_package command.
+
+Then Phase E — E1.
+
+End of entry.
+
+
 
 
 

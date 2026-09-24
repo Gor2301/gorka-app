@@ -3732,3 +3732,229 @@ Then the remaining test vectors. Then Phase 9.6.
 - `START-HERE.md` — update.
 
 End of entry.
+
+---
+
+## Recovery Session — September 24, 2026 (Phase D.1 and D.2)
+
+This entry records the first two steps of Phase D: the
+organization_keys migration (D.1) and the enable_sync command
+(D.2). Phase D is the enrollment package and its prerequisites.
+The Argon2id parameters were frozen earlier in this session, at
+commit d77e2da.
+
+### The reconnaissance finding
+
+The enrollment package code did not exist. src-tauri/src/
+contains exactly three Rust files — main.rs, db.rs, auth.rs. A
+whole-tree search for enrollment, GORKAEP,
+package_encryption_key, and XChaCha returned zero matches. The
+organization_keys table did not exist. No key-generation command
+existed. No sync table existed.
+
+This made Phase D larger than the freeze entry's Phase D
+paragraph described. The freeze entry said "implement the
+enrollment package: export, import, header, Argon2id,
+XChaCha20-Poly1305." The reconnaissance found that the package
+cannot exist without a key and without a home for the key.
+
+### The Phase D spec
+
+A Phase D specification was written, reviewed, and revised to
+v1.1. The three decisions that shaped it:
+
+D1 — Combine prerequisites with the package. The
+organization_keys table and the key-generation command are the
+first two items of Phase D, not separate phases.
+
+D2 — Defer the Control Plane report. The enable_sync command
+generates and stores the key locally. It does not report to the
+Control Plane. The report is deferred until the Control Plane
+tables and services exist.
+
+D3 — Command only; no UI. No Sync Settings UI is built in Phase
+D. The commands are invoked directly for testing.
+
+The spec also closed eight questions: command names, caller-
+supplied file paths, refusal on existing key, HKDF deferred,
+String passphrase handling, the trusted org-ID path, error
+categories, and weak-passphrase UX deferral.
+
+The spec added two structural requirements:
+
+- The organization key is organization-wide, not device-
+  specific. Each authorized device stores its own local copy
+  inside its own SQLCipher database.
+- Import is atomic. The key installation and the package
+  deletion happen in a single transaction. The package is
+  deleted only after the transaction commits.
+
+The spec is not on disk as a separate file. Its content is in
+the conversation record and is reflected in the commits below.
+
+### D.1 — the organization_keys migration (v4)
+
+Commit adcab50. One file changed: src-tauri/src/db.rs, 20
+insertions.
+
+A new migration block was added to run_migrations, after the v3
+block, before Ok(()). It creates the single-row
+organization_keys table per LOCAL-TABLES.md Category D.5:
+
+  CREATE TABLE IF NOT EXISTS organization_keys (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      organization_id TEXT NOT NULL,
+      key_material BLOB NOT NULL,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME
+  )
+
+The block follows the exact structure of the existing migrations:
+conn.transaction(), tx.execute with CREATE TABLE IF NOT EXISTS,
+tx.execute PRAGMA user_version = 4, tx.commit().
+
+No command, no key generation, no package code. The migration
+only.
+
+Verified on the cloud machine. The build succeeded
+(incremental, 1m 28s). The app launched, the database unlocked,
+the migration ran, and the existing data was unaffected — the
+debtors remained in place.
+
+### D.2 — the enable_sync command
+
+Commit 941917a. One file changed: src-tauri/src/main.rs, 36
+insertions.
+
+Three edits:
+
+1. Added use rand::RngCore; to the imports.
+2. Added the enable_sync command between is_database_unlocked
+   and get_debtors.
+3. Registered enable_sync in the generate_handler! list.
+
+The command:
+
+- Reads the trusted organization id via
+  get_trusted_organization_id. The Q6 verification confirmed
+  this helper is JWT-derived: auth::login writes the
+  organization_id from the login response to settings.dat,
+  auth::get_organization_id reads it, and
+  get_trusted_organization_id calls auth::get_organization_id.
+  No second authentication path was created.
+- Locks AppState.db and requires the database to be unlocked.
+- Checks whether organization_keys already contains a row.
+  If it does, returns an error. No silent replacement.
+- Generates 32 random bytes with rand::rngs::OsRng.
+- Inserts the row into organization_keys.
+- Does not report to the Control Plane.
+
+Verified on the cloud machine via the app's devtools console.
+The build succeeded (incremental, 1m 45s). With the database
+unlocked:
+
+- is_database_unlocked returned true.
+- enable_sync returned OK null — success, the unit type
+  serialized.
+- A second enable_sync returned "ERR Sync is already enabled
+  for this organization" — the refusal path works.
+
+The second call also confirms the D.1 migration created the
+table correctly: the first call's insert succeeded, which would
+have failed if the table were missing or malformed.
+
+### The cargo.exe block on the main machine
+
+New finding, September 24, 2026. The main machine can no longer
+compile.
+
+When cargo build was run on the main machine, the error was:
+
+  'C:\Users\kucha\.cargo\bin\cargo.exe' was blocked by your
+  organization's Device Guard policy.
+  Contact your support person for more info.
+
+This is a different failure from the September 15 SAC block.
+That block was on the built binary (gorka-client.exe) at run
+time. This block is on cargo.exe itself, at invocation, before
+any build happens.
+
+The same class of enforcement: Smart App Control, Policy ID
+{0283ac0f-fff1-49ae-ada1-8a933130cad6}, the
+VerifiedAndReputableDesktop policy. A Rust issue
+(rust-lang/rust#160163) documents the same problem: freshly
+downloaded toolchains are blocked by SAC after their cloud
+reputation is evaluated.
+
+The chosen response: the cloud machine is the sole build
+environment. The main machine is the editor and the repository
+host. This extends the September 15 and September 21-22 model
+one step — the main machine could not run binaries, now it
+cannot build them either.
+
+Workarounds considered and not adopted: re-downloading the
+toolchain via rustup (buys a window before SAC flags the new
+cargo.exe, not a fix), toggling SAC off via the KB5074105
+toggle (changes the machine's security posture; unreliable on
+some machines per the September 15 investigation), moving
+CARGO_TARGET_DIR (addresses a different class of block).
+
+The finding is recorded in TAURI-DEV-WORKFLOW.md section 8.
+
+### The git commit editor behavior
+
+Housekeeping note. On the main machine, running git commit
+without -m opens VS Code as the commit message editor. The
+commit waits for the editor to close. This is not a problem, but
+it means git commit should always be run with -m to avoid the
+interactive editor. The pattern used throughout this session is
+git commit -m "message".
+
+### Repository state
+
+Main machine: at 941917a, clean, pushed.
+Cloud machine: at 941917a, clean.
+GitHub origin/main: at 941917a.
+
+### What is still open in Phase D
+
+D.3 — the export_enrollment_package command. Not started. Needs
+the chacha20poly1305 crate added to Cargo.toml, the package
+layout (63-byte header), the Argon2id call at the frozen
+parameters (131072 / 4 / 1, raw 16-byte salt), the
+XChaCha20-Poly1305 encryption with the header as AAD, the inner
+content {organization_id, organization_key}, the file write.
+
+D.4 — the import_enrollment_package command. Not started. The
+mirror of D.3, plus the atomic key installation and the
+package deletion only after commit.
+
+Then Phase E — E1, the deterministic test vector.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change. No new tables. No new columns.
+- No CI/CD touched.
+- Invariant held. The organization key is local-only.
+- Instance B (db.rs::derive_key) was not touched.
+- The frozen parameters are used as-is: 131072 / 4 / 1.
+- The organization_keys schema is quoted from LOCAL-TABLES.md
+  D.5, not reconstructed.
+- The enable sync flow is quoted from SYNC-ARCHITECTURE.md
+  section 6.6, not reconstructed.
+- The import command is designed to be atomic. It installs the
+  key and deletes the package only after the transaction
+  commits. This is a D.4 requirement, not yet implemented.
+- Only one new crate is planned: chacha20poly1305. Added in
+  D.3, not in D.1 or D.2.
+- The organization key is organization-wide; each authorized
+  device stores its own local copy.
+
+### Files changed this session
+
+- src-tauri/src/db.rs — the v4 migration. Commit adcab50.
+- src-tauri/src/main.rs — the enable_sync command, the import,
+  the registration. Commit 941917a.
+
+End of entry.
