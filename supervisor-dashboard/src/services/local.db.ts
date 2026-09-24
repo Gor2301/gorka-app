@@ -90,6 +90,15 @@ export interface DebtorInput {
   data?: any;
 }
 
+// DASHBOARD TYPES
+// Mirror of the Rust DashboardStats struct in src-tauri/src/main.rs.
+
+export interface DashboardStats {
+  total_debtors: number;
+  total_debt: number;
+  total_actions: number;
+}
+
 // ─── LOCAL DB (Debtor CRUD) ───────────────────────────────────────────
 // Wraps the Rust commands registered in src-tauri/src/main.rs.
 // organization_id is derived on the Rust side; the frontend never
@@ -153,6 +162,9 @@ export const localDB = {
     return await invoke<number>('get_debtor_count');
   },
 
+  async getDashboardStats(): Promise<DashboardStats> {
+    return await invoke<DashboardStats>('get_dashboard_stats');
+  },
 
   async uploadDocument(input: DocumentInput): Promise<Document> {
     return await invoke<Document>('upload_document', { input });

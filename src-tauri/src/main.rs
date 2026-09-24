@@ -143,6 +143,14 @@ pub struct ActionInput {
 }
 
 
+#[derive(Debug, Serialize)]
+pub struct DashboardStats {
+    pub total_debtors: i64,
+    pub total_debt: f64,
+    pub total_actions: i64,
+}
+
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum DocumentCategory {
     ProfilePhoto,
@@ -652,6 +660,39 @@ fn get_debtor_count(
     ).map_err(|e| e.to_string())?;
 
     Ok(count)
+}
+
+#[command]
+fn get_dashboard_stats(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<DashboardStats, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+
+    let stats = conn.query_row(
+        "SELECT
+            (SELECT COUNT(*) FROM debtors
+               WHERE organization_id = ?1) AS total_debtors,
+            (SELECT COALESCE(SUM(d.amount), 0)
+               FROM debts d
+               INNER JOIN debtors b ON b.id = d.debtor_id
+               WHERE b.organization_id = ?1
+                 AND d.status NOT IN ('PAID', 'CANCELLED')) AS total_debt,
+            (SELECT COUNT(*) FROM actions a
+               INNER JOIN debtors b ON b.id = a.debtor_id
+               WHERE b.organization_id = ?1) AS total_actions",
+        params![&organization_id],
+        |row| Ok(DashboardStats {
+            total_debtors: row.get(0)?,
+            total_debt: row.get(1)?,
+            total_actions: row.get(2)?,
+        }),
+    ).map_err(|e| e.to_string())?;
+
+    Ok(stats)
 }
 
 #[command]
@@ -1389,6 +1430,7 @@ fn main() {
             delete_debtor,
             search_debtors,
             get_debtor_count,
+            get_dashboard_stats,
             get_debts,
             insert_debt,
             update_debt,

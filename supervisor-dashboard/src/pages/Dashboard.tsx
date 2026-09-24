@@ -7,25 +7,21 @@ import {
   Clock,
   ArrowRight
 } from 'lucide-react';
-import { api } from '../services/api.service';
+import { localDB } from '../services/local.db';
 import { useNavigate } from 'react-router-dom';
 
 interface DashboardStats {
-  totalDebtors: number;
-  totalDebt: number;
-  totalAgents: number;
-  totalActions: number;
-  recentActivities: any[];
+  total_debtors: number;
+  total_debt: number;
+  total_actions: number;
 }
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
-    totalDebtors: 0,
-    totalDebt: 0,
-    totalAgents: 0,
-    totalActions: 0,
-    recentActivities: []
+    total_debtors: 0,
+    total_debt: 0,
+    total_actions: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -38,28 +34,9 @@ const Dashboard: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      
-// ─── DISABLED: Old localStorage auth check ────────────────────────────
-// const token = localStorage.getItem('token') || localStorage.getItem('supervisor_token');
-// 
-// if (!token) {
-//   setError('Please log in to view dashboard');
-//   setLoading(false);
-//   return;
-// }
-// ──────────────────────────────────────────────────────────────────────
 
-      const response = await api.get('/dashboard/stats');
-      
-      if (response && response.success && response.data) {
-        setStats({
-          totalDebtors: response.data.totalDebtors || 0,
-          totalDebt: response.data.totalDebt || 0,
-          totalAgents: response.data.totalAgents || 0,
-          totalActions: response.data.totalActions || 0,
-          recentActivities: response.data.recentActivities || []
-        });
-      }
+      const data = await localDB.getDashboardStats();
+      setStats(data);
     } catch (err: any) {
       console.error('Error fetching dashboard stats:', err);
       setError(err.message || 'Failed to load dashboard data');
@@ -67,7 +44,7 @@ const Dashboard: React.FC = () => {
       setLoading(false);
     }
   };
-
+      
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -122,10 +99,11 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  // Total Agents card — deferred. No local source of truth. See spec D2.
   const cards = [
     {
       title: 'Total Debtors',
-      value: stats.totalDebtors,
+      value: stats.total_debtors,
       icon: Users,
       iconBg: '#f3e8ff',
       iconColor: '#7C3AED',
@@ -134,7 +112,7 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'Total Debt',
-      value: formatCurrency(stats.totalDebt),
+      value: formatCurrency(stats.total_debt),
       icon: DollarSign,
       iconBg: '#dcfce7',
       iconColor: '#16a34a',
@@ -142,17 +120,8 @@ const Dashboard: React.FC = () => {
       subtitle: 'Outstanding balance'
     },
     {
-      title: 'Total Agents',
-      value: stats.totalAgents,
-      icon: UserCheck,
-      iconBg: '#dbeafe',
-      iconColor: '#2563eb',
-      path: '/agents',
-      subtitle: 'Active agents'
-    },
-    {
       title: 'Total Actions',
-      value: stats.totalActions,
+      value: stats.total_actions,
       icon: Activity,
       iconBg: '#ffedd5',
       iconColor: '#ea580c',
@@ -223,50 +192,7 @@ const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Recent Activity */}
-      <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Clock size={18} style={{ color: '#9ca3af' }} />
-            <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>Recent Activity</h2>
-          </div>
-          <button 
-            onClick={() => navigate('/audit')}
-            style={{ color: '#7C3AED', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}
-          >
-            View All →
-          </button>
-        </div>
-        <div>
-          {stats.recentActivities && stats.recentActivities.length > 0 ? (
-            stats.recentActivities.slice(0, 5).map((activity: any, index: number) => (
-              <div key={index} style={{ 
-                padding: '12px 24px', 
-                borderBottom: index < 4 ? '1px solid #f3f4f6' : 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px'
-              }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7C3AED' }} />
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: '14px', fontWeight: '500', color: '#374151', margin: 0 }}>{activity.action || 'Activity'}</p>
-                  <p style={{ fontSize: '12px', color: '#9ca3af', margin: '2px 0 0 0' }}>
-                    {activity.user || 'Unknown'} • {new Date(activity.createdAt).toLocaleString()}
-                  </p>
-                </div>
-                <span style={{ fontSize: '12px', color: '#9ca3af' }}>
-                  {new Date(activity.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            ))
-          ) : (
-            <div style={{ padding: '32px 24px', textAlign: 'center', color: '#6b7280' }}>
-              <Activity size={32} style={{ margin: '0 auto 8px', color: '#d1d5db' }} />
-              <p>No recent activity</p>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Recent Activity block — deferred. Requires attribution. See spec D3. */}
 
       <style>{`
         @keyframes spin {
