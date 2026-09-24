@@ -1699,6 +1699,7 @@ fn main() {
             get_documents,
             delete_document,
             export_enrollment_package,
+            import_enrollment_package,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
