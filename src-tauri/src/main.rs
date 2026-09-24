@@ -10,6 +10,8 @@ use uuid::Uuid;
 use chrono::Utc;
 use std::sync::Mutex;
 use rand::RngCore;
+use argon2::{Algorithm, Argon2, Params, Version};
+use chacha20poly1305::{aead::{Aead, KeyInit, Payload}, XChaCha20Poly1305, XNonce};
 
 mod db;
 mod auth;
