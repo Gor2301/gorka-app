@@ -9,6 +9,7 @@ use tauri::{command, State, Manager};
 use uuid::Uuid;
 use chrono::Utc;
 use std::sync::Mutex;
+use rand::RngCore;
 
 mod db;
 mod auth;
@@ -341,6 +342,40 @@ fn unlock_database(password: String, app: tauri::AppHandle) -> Result<(), String
 fn is_database_unlocked(state: tauri::State<AppState>) -> Result<bool, String> {
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     Ok(db_guard.is_some())
+}
+
+#[command]
+fn enable_sync(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+
+    let existing: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM organization_keys WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if existing.is_some() {
+        return Err("Sync is already enabled for this organization".to_string());
+    }
+
+    let mut key_material = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut key_material);
+
+    conn.execute(
+        "INSERT INTO organization_keys (id, organization_id, key_material, created_at)
+         VALUES (1, ?1, ?2, ?3)",
+        params![&organization_id, &key_material[..], Utc::now().to_rfc3339()],
+    ).map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[command]
@@ -1422,6 +1457,7 @@ fn main() {
             get_organization_id,
             unlock_database,
             is_database_unlocked,
+            enable_sync,
             get_debtors,
             get_debtor,
             insert_debtor,
