@@ -1625,8 +1625,8 @@ fn import_enrollment_package(
     }
 
     // Begin the transaction.
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let mut conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     // Check for an existing key inside the transaction.
