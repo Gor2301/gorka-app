@@ -3290,3 +3290,187 @@ This entry is a record. It contains three fix records (each with symptom, root c
 ---
 
 **End of entry.**
+
+Recovery Session - September 24, 2026
+
+This entry records the September 24, 2026 session. Two workstreams: completion of the Dashboard local-stats task, and the writing of the Excel/TXT upload specification. The second is documented, not implemented - the implementation is deferred by conscious decision.
+
+CONTEXT
+
+The session continues directly from September 23, which stabilized the local authentication and unlock flow (four fixes, commit 40b2378, docs 54c6a90). The September 23 session left two workstreams open: the debtor data upload path, and the Argon2id parameters that block the sync engine prerequisites.
+
+This session completed the first and produced the plan for a second. The Argon2id work is the next session's focus.
+
+PART 1 - THE DASHBOARD LOCAL-STATS TASK
+
+Goal. The Client Dashboard's home page called a cloud endpoint (/api/dashboard/stats) and received 401 Unauthorized on every load, because the Tauri app holds no cloud session token. The page was empty. The task was to make the Dashboard read from the local SQLCipher database, the same way Collections does.
+
+What the Dashboard needed. Four values and a list: totalDebtors, totalDebt, totalAgents, totalActions, and recentActivities[]. Two had no clean local source. Agents live only in the cloud; the local schema has no agents table. recentActivities expects a user field the local audit_log does not have, because attribution is not populated anywhere in the app.
+
+Step 0 - Reconnaissance. Three questions were read on disk before any edit:
+
+Q1 - Organization isolation. The existing read commands use INNER JOIN debtors b ON b.id = X.debtor_id WHERE b.organization_id = ?1 for tables that reference a debtor (debts, actions, communications), and a direct WHERE organization_id = ?1 for debtors itself. Confirmed against get_debts (lines 669-673), get_actions (lines 864-868), and get_debtor_count (line 649). The new stats command matches this pattern exactly.
+
+Q2 - Monetary representation. amount is f64 end to end: the debts.amount REAL column, the Debt and DebtInput struct fields in main.rs (lines 74 and 87), the insert_debt binding (line 732), the update_debt binding (line 793), and the get_debts read (row.get(2)? at line 681). The frontend's Debt.amount is number. The new struct uses f64.
+
+Q3 - localDB convention. Single object, invoke<T> wrappers, snake_case wire fields, no logging, no try/catch inside localDB. The new method matches.
+
+The spec. A task spec was written, reviewed, and revised. The revision corrected four things: the over-broad "no 401 in console" acceptance criterion; the unsupported equivalence claim about Reading 2.5 and Reading 3; the missing f64 verification; and the missing organization-isolation verification. The revised spec was approved with those corrections.
+
+The decisions, as applied:
+
+D1 - totalDebt is Reading 2.5. SUM(amount) over the org's debts, excluding PAID and CANCELLED. Include ACTIVE and OVERDUE. This is the most accurate number the current schema can produce. Reading 3 (amount minus paid) cannot be computed because the schema records no payment data. When payment data exists, the SQL changes by one line; the Dashboard page does not change.
+
+D1b - Monetary representation follows the existing pattern. f64 throughout, matching the rest of the code.
+
+D2 - The Total Agents card is removed, deferred. No local source of truth. A local agent cache is a separate task.
+
+D3 - The Recent Activity block is removed, deferred. Its user field cannot be filled truthfully today. Attribution is a separate, unstarted workstream.
+
+D4 - One command returns a struct. get_dashboard_stats returns DashboardStats. One invocation, one SQL statement.
+
+D5 - totalActions counts all actions for the org. No status filter.
+
+D6 - Cancelled and paid debts are excluded from totalDebt. Verified by the four-case test matrix.
+
+D7 - Organization isolation follows the existing read pattern. Confirmed by reconnaissance, matched in the SQL.
+
+The edit. Three files changed. src-tauri/src/main.rs: DashboardStats struct added after ActionInput; get_dashboard_stats command added after get_debtor_count; registered in generate_handler!. supervisor-dashboard/src/services/local.db.ts: DashboardStats interface; getDashboardStats() method. supervisor-dashboard/src/pages/Dashboard.tsx: import swapped; interface and state reduced to three snake_case fields; fetchDashboardStats reduced to localDB.getDashboardStats(); Total Agents card removed; Recent Activity block removed; two deferral comments added.
+
+Two mistakes caught before commit:
+
+A stray blank line was inserted in main.rs between DebtInput and Communication. Caught by reading the git diff before commit. Removed.
+
+An orphaned fetchDashboardStats body was left in Dashboard.tsx after the first edit - the old cloud function survived underneath the new local one. Caught by a findstr check for api.get and recentActivities, which returned matches where there should have been none. Removed.
+
+The process lesson, recorded: in both cases, the replacement text was written against remembered content, not against the file as it actually was at that moment. The rule for the rest of the task, and going forward: read the exact region on disk immediately before proposing any replacement. Do not write against memory, and do not write against an earlier read.
+
+Verification, on the cloud machine:
+
+Dashboard loads. Three cards render: Total Debtors, Total Debt, Total Actions. No Total Agents card, no Recent Activity block.
+
+Total Debtors = 11, matching the count on Collections.
+
+Total Debt = $11,800, reading the local debts table.
+
+Total Actions = 0, correct - no actions have been created in this database.
+
+A debt was created, edited, and deleted; the numbers updated correctly.
+
+A debt was changed to PAID; Total Debt fell by its amount. The status filter (D1/D6) works.
+
+The /api/dashboard/stats 401 is gone from the console. It no longer appears.
+
+The pre-existing /api/auth/me and /api/connectors/types 401s remain. Those are the September 23 deferred finding #1, out of scope for this task.
+
+The commit. 66c6f12 - "Dashboard: wire to local database via get_dashboard_stats. Add get_dashboard_stats command in main.rs (Reading 2.5 for total_debt: SUM(amount) excluding PAID and CANCELLED, per spec D1/D6). Add DashboardStats struct and localDB.getDashboardStats() wrapper. Dashboard.tsx: replace cloud /dashboard/stats call with local call. Remove Total Agents card (D2) and Recent Activity block (D3), both deferred, no local source of truth yet."
+
+The commit was amended once because the initial commit captured only the first line of the message. Amended to 66c6f12. Pushed to origin/main.
+
+PART 2 - UPLOAD PATH RECONNAISSANCE
+
+The upload path was inspected before any work on it was planned. Findings:
+
+CSV upload works end-to-end. A real CSV file was uploaded through the Upload page; 10 debtors appeared in Collections. The path is Upload.tsx -> uploadService.uploadStructuredData -> parseCsv -> localDB.bulkInsertDebtors -> invoke('bulk_insert_debtors') -> Rust transaction -> SQLCipher. No cloud call. Verified on the cloud machine.
+
+The debt due-date bug did not reproduce. The September 22 entry recorded that adding a debt failed at the due-date field. On the current build (66c6f12 and its predecessor 54c6a90), adding debts works, with both CSV-imported and manually created debtors. The bug is recorded as not reproducible on the current build. It may have been an artifact of a pre-fix build. It is not closed - if it recurs, it should be diagnosed with the actual error captured.
+
+The shipped bundle is clean. C:\Users\kucha\gorka-app\dist\ (the folder Tauri serves from, per tauri.conf.json frontendDist: "../dist") contains one JS bundle and one CSS bundle. A search for debtors/bulk and documents/upload returns zero matches. The old cloud-post upload code is not in the shipped bundle.
+
+A stale build exists elsewhere. supervisor-dashboard\dist\assets\index-DxMiQndA.js contains the pre-rewrite cloud-post upload service. This folder is not the folder Tauri serves from. It is leftover build output. Recorded as an observation, not acted on. It is a housekeeping item, not a correctness or boundary issue.
+
+PART 3 - EXCEL AND TXT UPLOAD SPECIFICATION (WRITTEN, NOT IMPLEMENTED)
+
+A specification for adding .txt and .xlsx/.xls support to the local-only structured upload path was written and reviewed. The full text is in UPLOAD-EXCEL-TXT-SPEC.md. This section records the decisions and the reasons.
+
+Why the task was written and not implemented today. The session's remaining time is allocated to the Argon2id parameters, which are on the critical path for the sync engine. The Excel/TXT work is documented in full so that a future session can pick it up without re-deriving the reasoning.
+
+The key decisions from the spec:
+
+Bulk upload, not one-by-one. The formats feed the same local insert path as CSV: file -> parse locally -> localDB.bulkInsertDebtors -> SQLCipher. No schema change. No cloud.
+
+One shared mapper. parseCsv is refactored into a parser and a shared rowsToDebtors mapper. TXT and Excel use the same mapper. One interpretation of debtor columns, not three.
+
+TXT is extension-only. No dataType entry. The existing delimiter detection (tab, semicolon, comma) applies. Four or five lines of change.
+
+Excel cell normalization. Excel numeric cells may already have lost information (for example, a phone number with a leading zero stored as a number). The parser must not attempt to reconstruct information that is not present in the workbook. The normalization rules are specified precisely in the spec.
+
+Boundary check, static and runtime. A findstr for fetch, api., and supervisor_token is one check. Runtime network inspection during an upload is the other. Both are required.
+
+Resource limits. Explicit maximum file size and row count, enforced before the full workbook is materialized.
+
+The Excel parser location - the open decision, recorded with a lean:
+
+Option 1 - Frontend (SheetJS). Parses Excel in the WebView. Faster to build and iterate. No Rust rebuild for parser changes. Suitable for the MVP stage. Weaker for production: parse and insert are separate steps; the batch is not a first-class object; the parser is tested outside the Rust test surface.
+
+Option 2 - Backend (calamine, Rust). Parses Excel in the Tauri process. Parse and insert can be one transaction. The batch is a first-class object, which fits the future sync event model. Tested in the same crate as the local data layer. Weaker for the MVP stage: every parser change requires cargo build, and on the main machine, the signing workflow.
+
+Lean: backend (calamine). Based on the reconnaissance - transactionality, the event model, and the test surface favor Rust for the long term.
+
+Implementation deferred. The MVP keeps CSV-only at this stage. This is a conscious decision, not a backlog item. The UI currently advertises Excel, JSON, and XML, which do not work. Fixing the UI without implementing the formats would leave the UI pointing at nothing. The UI is left as it is, and the mismatch is recorded as a known limitation of the current MVP stage.
+
+What determines the final decision: whether the MVP is a stepping stone that will be rewritten for production, or the production version with features turned off. If the former, the MVP choice is pragmatic and SheetJS is fine. If the latter, the choice is permanent, and calamine is preferable now.
+
+What does not change either way: the shape of the code. Both options produce string[][] and feed the same rowsToDebtors mapper, then localDB.bulkInsertDebtors(). If the parser moves from JavaScript to Rust later, the mapper moves with it, and the insert command does not change. The migration is a rewrite of the parser, not a redesign of the path.
+
+WHAT IS STILL OPEN
+
+Excel and TXT implementation. Deferred by conscious decision. The spec is written. The parser-location decision is open with a lean toward backend.
+
+Debt due-date bug. Not reproducible on the current build. Not closed.
+
+supervisor-dashboard\dist\ - stale build containing the old cloud-post code. Not the folder Tauri serves from. Housekeeping, not correctness.
+
+The dataType dropdown in Upload.tsx offers CSV and JSON. JSON is not implemented. Recorded as a UI honesty issue, not fixed today.
+
+The .txt entry in the unstructured accept list advertises a route that does not work. Recorded, not fixed today.
+
+Dashboard 401 errors from api.gorka.localhost:3000 - the /api/auth/me and /api/connectors/types calls. Recorded September 23, still open, separate task.
+
+Argon2id parameters. SYNC-ARCHITECTURE.md section 7.3 and section 22.19.2. This is the next session's focus.
+
+All previously open items from the September 23 entry, unchanged.
+
+THE NEXT WORKSTREAM
+
+Argon2id parameters. The next session benchmarks and freezes the Argon2id parameters used by the enrollment package (SYNC-ARCHITECTURE.md section 7.3, section 22.19.2). Those values block the E1 deterministic test vector, which blocks the test-vector computation, which blocks the sync engine implementation.
+
+The benchmark must run on the supported GORKA desktop environment. The values are chosen, recorded in SYNC-ARCHITECTURE.md, and then the test vectors can be computed.
+
+RULE COMPLIANCE
+
+No production touched.
+
+No cloud schema change. No new tables. No new columns.
+
+No CI/CD touched.
+
+Invariant held. All debtor data stayed on the local machine. The Dashboard stats are local aggregates. The upload reconnaissance confirmed the shipped bundle is clean.
+
+The Dashboard change introduced no new abstraction. One struct, one command, one method, one page change.
+
+The Excel/TXT spec introduces no code. It is a plan.
+
+FILES CHANGED THIS SESSION
+
+src-tauri/src/main.rs - DashboardStats struct, get_dashboard_stats command, registration
+
+supervisor-dashboard/src/services/local.db.ts - DashboardStats interface, getDashboardStats method
+
+supervisor-dashboard/src/pages/Dashboard.tsx - local call, interface reduction, Agents card removal, Recent Activity block removal
+
+Commit 66c6f12, pushed to origin/main
+
+FILES WRITTEN THIS SESSION (DOCUMENTATION)
+
+GORKA_RECOVERY/recovery-notes/DECISIONS.md - this entry
+
+GORKA_RECOVERY/recovery-notes/UPLOAD-EXCEL-TXT-SPEC.md - the upload specification
+
+GORKA_RECOVERY/recovery-notes/HANDOFF.md - status update
+
+GORKA_RECOVERY/recovery-notes/SESSION-LOG.md - session extension
+
+GORKA_RECOVERY/recovery-notes/START-HERE.md - September 24 update subsection
+
+End of entry.

@@ -601,6 +601,53 @@ Working session on the Client Dashboard, on the local authentication and unlock 
 
 See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 23 entries.
 
+Update - September 24, 2026
+Two workstreams: completion of the Dashboard local-stats task, and the writing of the Excel/TXT upload specification. The Excel/TXT implementation is deferred by conscious decision.
+
+Dashboard local-stats task - COMPLETE. The Client Dashboard's home page no longer calls the cloud. It reads from the local SQLCipher database.
+
+A new Rust command get_dashboard_stats returns a DashboardStats struct: total_debtors, total_debt, total_actions.
+
+total_debt uses Reading 2.5: SUM(amount) over the org's debts, excluding PAID and CANCELLED.
+
+The Total Agents card was removed. No local agents table exists. Deferred.
+
+The Recent Activity block was removed. No local attribution exists. Deferred.
+
+The /api/dashboard/stats 401 is gone from the console. Other 401s (/api/auth/me, /api/connectors/types) remain. Those are the September 23 deferred finding #1.
+
+Verified on the cloud machine: 11 debtors, $11,800 total debt, 0 actions. A debt changed to PAID fell by its amount. The status filter works.
+
+Commit 66c6f12. Pushed to origin/main.
+
+Upload path reconnaissance - DONE.
+
+CSV upload verified end-to-end on the cloud machine. 10 debtors.
+
+The debt due-date bug did not reproduce on the current build. Not closed.
+
+The shipped dist/ bundle is clean of the pre-rewrite cloud-post upload code.
+
+The stale supervisor-dashboard\dist\ contains the old cloud-post code. Not the folder Tauri serves from. Housekeeping.
+
+Excel and TXT upload specification - WRITTEN, NOT IMPLEMENTED. Full text in UPLOAD-EXCEL-TXT-SPEC.md.
+
+TXT is trivial: extension-only, reuses the existing CSV delimiter detection.
+
+Excel requires a parser. The parser location is an open decision.
+
+Lean: backend (calamine, in Rust). For transactionality, the future sync event model, and the test surface.
+
+MVP keeps CSV-only at this stage. This is a conscious decision, not a backlog item. The UI currently advertises Excel, JSON, and XML, which do not work. That mismatch is recorded as a known limitation.
+
+The determining question for the next session: is the MVP a stepping stone that will be rewritten for production, or the production version with features turned off?
+
+Repository state: main machine, cloud machine, and GitHub are all at 66c6f12. The documentation commit for this session follows separately, after all five documents are written.
+
+Next workstream: Argon2id parameters. Benchmark and freeze the values for the enrollment package (SYNC-ARCHITECTURE.md section 7.3 and section 22.19.2). Those values block E1, which blocks the test vectors, which blocks the sync engine.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 24 entries.
+
 ========================================================================
 
 9. HOW TO HANDLE A NEW QUESTION OR FEATURE REQUEST

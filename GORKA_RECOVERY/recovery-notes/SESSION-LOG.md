@@ -1323,6 +1323,155 @@ The local registration flow — Stage 4 (login → set/enter local password) and
 
 **End of entry.**
 
+Session Extension - September 24, 2026
+
+WHAT THIS SESSION DID
+
+Two workstreams. First, completion of the Dashboard local-stats task. Second, the writing of the Excel/TXT upload specification, with implementation deferred by conscious decision.
+
+DASHBOARD LOCAL-STATS TASK
+
+The problem. The Client Dashboard's home page called /api/dashboard/stats and received 401 Unauthorized on every load. The page was empty. Two of its four values had no clean local source: totalAgents (no local agents table) and recentActivities (no user attribution locally).
+
+Reconnaissance. Three questions read on disk before any edit:
+
+Organization isolation: existing read commands join through debtors on organization_id for debts, actions, communications; and query debtors directly for debtors itself.
+
+Monetary representation: amount is f64 end to end - column, struct, bindings, read.
+
+localDB convention: single object, invoke<T> wrappers, snake_case fields, no logging.
+
+The spec. Written, reviewed, revised. The revision corrected four things: the "no 401" criterion was narrowed; the Reading 2.5/Reading 3 equivalence claim was removed; the f64 verification was added; the organization-isolation verification was added.
+
+Decisions applied:
+
+D1: totalDebt = Reading 2.5. SUM(amount) excluding PAID and CANCELLED.
+
+D2: Total Agents card removed, deferred.
+
+D3: Recent Activity block removed, deferred.
+
+D4: One command returns one struct.
+
+D5: totalActions counts all actions.
+
+D6: PAID and CANCELLED excluded.
+
+D7: Organization isolation matches existing read pattern.
+
+The edit. Three files:
+
+src-tauri/src/main.rs: DashboardStats struct; get_dashboard_stats command; registration.
+
+supervisor-dashboard/src/services/local.db.ts: DashboardStats interface; getDashboardStats method.
+
+supervisor-dashboard/src/pages/Dashboard.tsx: local call; three snake_case fields; Agents card removed; Activity block removed.
+
+Two mistakes caught before commit:
+
+A stray blank line in main.rs between DebtInput and Communication. Caught by reading the git diff.
+
+An orphaned fetchDashboardStats body in Dashboard.tsx. Caught by findstr for api.get and recentActivities, which returned matches where none should exist.
+
+The process lesson, recorded: read the exact region on disk immediately before proposing a replacement. Do not write against memory.
+
+Verification on the cloud machine:
+
+Dashboard loads. Three cards render.
+
+Total Debtors = 11. Total Debt = $11,800. Total Actions = 0.
+
+Create, edit, delete debtor and debt. Numbers update correctly.
+
+A debt changed to PAID fell by its amount. Status filter works.
+
+/api/dashboard/stats 401 gone. Other 401s remain, out of scope.
+
+Commit. 66c6f12. Amended once because the first commit captured only the summary line. Pushed to origin/main.
+
+UPLOAD PATH RECONNAISSANCE
+
+CSV upload verified end-to-end on the cloud machine. 10 debtors in Collections.
+
+Debt due-date bug did not reproduce on the current build. Not closed.
+
+Shipped dist bundle is clean of the pre-rewrite cloud-post upload code.
+
+Stale supervisor-dashboard\dist contains the old cloud-post code. Not the folder Tauri serves from. Recorded, not acted on.
+
+EXCEL AND TXT SPECIFICATION
+
+Written, not implemented. Full text in UPLOAD-EXCEL-TXT-SPEC.md.
+
+Key decisions from the spec:
+
+Bulk upload, not one-by-one. Same local insert path as CSV.
+
+One shared mapper. parseCsv split into parseCsvToCells and rowsToDebtors. TXT and Excel use the same mapper.
+
+TXT is extension-only. Four or five lines of change.
+
+Excel cell normalization: preserve strings, convert numbers non-exponentially, use workbook date formatting. Do not reconstruct information not present in the workbook.
+
+Boundary check: static (findstr) and runtime (network inspection during upload).
+
+Resource limits: 10 MB file size, 10,000 rows.
+
+Open decision - Excel parser location:
+
+Option 1: Frontend (SheetJS). Faster to build.
+
+Option 2: Backend (calamine, Rust). Stronger for production.
+
+Lean: backend, for transactionality, the event model, and the test surface.
+
+Implementation deferred. MVP keeps CSV-only at this stage. Conscious decision, not a backlog item.
+
+Determining question: is the MVP a stepping stone or the production version with features turned off?
+
+WHY EXCEL AND TXT WERE DEFERRED
+
+The session's remaining time is allocated to the Argon2id parameters, which are on the critical path for the sync engine. Documented in full so a future session can pick it up without re-deriving the reasoning.
+
+NEXT WORKSTREAM
+
+Argon2id parameters. Benchmark and freeze the values for the enrollment package (SYNC-ARCHITECTURE.md section 7.3 and section 22.19.2). Those values block E1, which blocks the test vectors, which blocks the sync engine.
+
+DOCUMENTATION WRITTEN THIS SESSION
+
+DECISIONS.md - the September 24 entry
+
+UPLOAD-EXCEL-TXT-SPEC.md - new file, the upload spec
+
+HANDOFF.md - status update
+
+SESSION-LOG.md - this entry
+
+START-HERE.md - September 24 update subsection
+
+DOCUMENTATION COMMIT
+
+All five documents are committed together, after all are written. The commit is the record of the session.
+
+REPOSITORY STATE
+
+Main machine: at 66c6f12, clean, pushed.
+
+Cloud machine: needs git pull to reach 66c6f12.
+
+GitHub origin/main: at 66c6f12.
+
+RULE COMPLIANCE
+
+No production touched.
+
+No cloud schema change. No new tables. No new columns.
+
+No CI/CD touched.
+
+Invariant held. All debtor data stayed on the local machine.
+
+End of entry.
 
 
 

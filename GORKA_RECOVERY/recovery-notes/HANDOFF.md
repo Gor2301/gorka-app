@@ -1104,5 +1104,117 @@ The local registration flow — Stage 4 (login → set/enter local password) and
 **End of entry.**
 
 
+STATUS UPDATE - September 24, 2026 (Dashboard local-stats task)
+
+WHAT THIS SESSION DID
+
+Completed the Dashboard local-stats task, and wrote the Excel/TXT upload specification. The implementation of Excel and TXT is deferred by conscious decision.
+
+THE DASHBOARD TASK
+
+The Client Dashboard's home page called a cloud endpoint (/api/dashboard/stats) and received 401 Unauthorized on every load. The task was to make the Dashboard read from the local SQLCipher database, the same way Collections does.
+
+Delivered:
+
+get_dashboard_stats Rust command in src-tauri/src/main.rs, returning a DashboardStats struct.
+
+DashboardStats interface and getDashboardStats() method in supervisor-dashboard/src/services/local.db.ts.
+
+Dashboard.tsx rewritten to call localDB.getDashboardStats(). Total Agents card removed. Recent Activity block removed. Both deferred.
+
+Verified on the cloud machine:
+
+Dashboard loads. Three cards: Total Debtors (11), Total Debt ($11,800), Total Actions (0).
+
+A debt was created, edited, deleted. Numbers updated correctly.
+
+A debt was changed to PAID. Total Debt fell by its amount. The status filter works.
+
+The /api/dashboard/stats 401 is gone from the console.
+
+The pre-existing /api/auth/me and /api/connectors/types 401s remain. Those are the September 23 deferred finding #1, out of scope.
+
+Commit: 66c6f12. Pushed to origin/main.
+
+UPLOAD PATH RECONNAISSANCE
+
+CSV upload works end-to-end on the cloud machine. 10 debtors inserted, visible in Collections.
+
+The debt due-date bug did not reproduce on the current build. Not closed. If it recurs, capture the actual error.
+
+The shipped bundle (C:\Users\kucha\gorka-app\dist) is clean of the old cloud-post upload code.
+
+The stale supervisor-dashboard\dist\ contains the old cloud-post code. Not the folder Tauri serves from. Housekeeping, not correctness.
+
+EXCEL AND TXT SPECIFICATION
+
+The full spec is in UPLOAD-EXCEL-TXT-SPEC.md in this folder. Key points:
+
+TXT is trivial: extension-only, reuses the existing delimiter detection. Four or five lines of change.
+
+Excel is one to two hours: needs a parser. The parser location is an open decision.
+
+One shared mapper (rowsToDebtors) for CSV, TXT, and Excel. One interpretation of debtor columns.
+
+Boundary check is static (findstr) and runtime (network inspection during upload).
+
+Resource limits: 10 MB file size, 10,000 rows.
+
+OPEN DECISION - EXCEL PARSER LOCATION
+
+Two options, not chosen today. Lean: backend (calamine, in Rust), for transactionality, the future sync event model, and the test surface. The MVP keeps CSV-only at this stage. This is a conscious decision, not a backlog item.
+
+The determining question for the next session: is the MVP a stepping stone that will be rewritten for production, or the production version with features turned off? If the former, SheetJS (frontend) is fine. If the latter, calamine is preferable now.
+
+WHY THE DECISION WAS DEFERRED
+
+The session's remaining time is allocated to the Argon2id parameters, which are on the critical path for the sync engine. The Excel/TXT work is documented in full so a future session can pick it up without re-deriving the reasoning.
+
+NEXT WORKSTREAM
+
+Argon2id parameters. Benchmark and freeze the values used by the enrollment package (SYNC-ARCHITECTURE.md section 7.3 and section 22.19.2). Those values block the E1 deterministic test vector, which blocks the test-vector computation, which blocks the sync engine implementation.
+
+The benchmark must run on the supported GORKA desktop environment.
+
+WHAT IS STILL OPEN
+
+Excel and TXT implementation. Deferred by conscious decision. Spec written.
+
+Debt due-date bug. Not reproducible. Not closed.
+
+supervisor-dashboard\dist\ stale build. Housekeeping.
+
+dataType dropdown offers CSV and JSON. JSON is not implemented. UI honesty issue.
+
+.txt entry in unstructured accept advertises a route that does not work.
+
+Dashboard 401s from /api/auth/me and /api/connectors/types. Separate task.
+
+Argon2id parameters. Next session's focus.
+
+All items from the September 23 entry, unchanged.
+
+REPOSITORY STATE
+
+Main machine: at 66c6f12, clean, pushed.
+
+Cloud machine: needs git pull to reach 66c6f12.
+
+GitHub origin/main: at 66c6f12.
+
+Note: the documentation commit for this session (DECISIONS.md, UPLOAD-EXCEL-TXT-SPEC.md, HANDOFF.md, SESSION-LOG.md, START-HERE.md) is separate and is committed after all five documents are written.
+
+RULE COMPLIANCE
+
+No production touched.
+
+No cloud schema change. No new tables. No new columns.
+
+No CI/CD touched.
+
+Invariant held. All debtor data stayed on the local machine.
+
+
+
 
 
