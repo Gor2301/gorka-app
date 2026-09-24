@@ -1653,7 +1653,82 @@ Then Phase E — E1.
 
 End of entry.
 
+Session Extension — September 24-25, 2026 (Phase D.3 and D.4.1)
 
+### What this session did
+
+Completed D.3, the export_enrollment_package command. Wrote
+D.4.1, the import_enrollment_package function. D.4.1 compiles.
+D.4.2 through D.4.4 remain.
+
+### D.3 - the export command
+
+Commits d3e5fee (crate), edbaa3a (imports), 5be2599 (command
+and registration), d426bba (Cargo.lock).
+
+Added chacha20poly1305 = "0.10" to Cargo.toml. Added the
+imports. Added the export command, placed after delete_document
+and before fn main().
+
+The command reads the organization key from organization_keys,
+validates it, generates a salt and nonce, derives the package
+key with Argon2id at 131072 / 4 / 1 with the raw 16-byte salt,
+builds the 63-byte header, encrypts with XChaCha20-Poly1305
+using the full header as AAD, and writes the package file.
+
+The cloud build took 3m 17s and updated Cargo.lock. Tested via
+devtools: the export produced a 140-byte file. 63 header + 4
+org_id_len + 25 org_id + 32 org_key + 16 tag = 140.
+
+### D.4.1 - the import function
+
+Commits dc7bd54 (the function), 70b8cd8 (the borrow fix).
+
+The function reads the package, verifies magic/version/length,
+derives the key with the parameters from the header, decrypts
+with the header as AAD, parses the inner content, rejects
+trailing bytes, compares the organization id before the
+transaction, refuses if a key already exists, inserts the key
+atomically, and deletes the package after commit.
+
+Not yet registered. That is D.4.2.
+
+The first compile failed with E0596, the borrow error for
+conn.transaction(). Fixed in 70b8cd8 by changing as_ref() to
+as_mut() and db_guard to mut. The cloud build then succeeded
+in 54.83s.
+
+### Files changed this session
+
+src-tauri/Cargo.toml — the crate. Commit d3e5fee.
+
+src-tauri/src/main.rs — the imports, the export command, the
+export registration, the import function, the borrow fix.
+Commits edbaa3a, 5be2599, dc7bd54, 70b8cd8.
+
+src-tauri/Cargo.lock — the resolved crate versions. Commit
+d426bba.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change.
+- No CI/CD touched.
+- Invariant held. The organization key is local-only.
+- Instance B (db.rs::derive_key) was not touched.
+
+### What comes next
+
+D.4.2 — register import_enrollment_package in
+generate_handler!.
+
+D.4.3 — build.
+
+D.4.4 — test the import.
+
+Then Phase E — E1.
+
+End of entry.
 
 
 

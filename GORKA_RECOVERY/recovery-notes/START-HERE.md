@@ -646,7 +646,7 @@ Repository state: main machine, cloud machine, and GitHub are all at 66c6f12. Th
 
 Argon2id parameters - FROZEN. The benchmark was written, run twice on the cloud machine, and the values were chosen and recorded. Chosen values: argon2_memory_kib = 131072, argon2_iterations = 4, argon2_parallelism = 1. Run 2 median: 461 ms on the cloud machine. The values were written into SYNC-ARCHITECTURE.md section 22.7.1 and section 22.19.2.
 
-Next workstream: Phase D - the enrollment package and its prerequisites. D.1 (the organization_keys migration, commit adcab50) and D.2 (the enable_sync command, commit 941917a) are COMPLETE and verified on the cloud machine. D.3 (export_enrollment_package) and D.4 (import_enrollment_package) remain. Add chacha20poly1305 to Cargo.toml in D.3; hkdf is deferred to Phase 9.6. Then Phase E - E1.
+Next workstream: Phase D - the enrollment package. D.1 (the organization_keys migration), D.2 (the enable_sync command), and D.3 (the export_enrollment_package command) are COMPLETE and verified on the cloud machine. D.4.1 (the import_enrollment_package function) is written and compiles; D.4.2 (registration), D.4.3 (build), and D.4.4 (test) remain. hkdf is deferred to Phase 9.6. Then Phase E - E1.
 
 See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 24 entries, including the Argon2id freeze.
 
@@ -714,10 +714,11 @@ checking the rules.
   prerequisites for multi-user implementation are met. The
   Argon2id parameters were frozen on September 24, 2026
   (SYNC-ARCHITECTURE.md §7.3, §22.19.2). Phase D is in
-  progress: D.1 and D.2 are complete. What remains before
-  implementation: D.3 and D.4 (the enrollment package export
-  and import), E1 (the deterministic test vector), and the
-  Control Plane tables applied to gorka_test.
+  progress: D.1, D.2, and D.3 are complete. D.4.1 is written
+  and compiles. What remains before implementation: D.4.2
+  through D.4.4 (the import command registration, build, and
+  test), E1 (the deterministic test vector), and the Control
+  Plane tables applied to gorka_test.
 
 ========================================================================
 

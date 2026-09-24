@@ -1417,5 +1417,113 @@ No CI/CD touched.
 Invariant held. The organization key is local-only. Instance B
 (db.rs::derive_key) was not touched.
 
+STATUS UPDATE - September 24-25, 2026 (Phase D.3 and D.4.1)
+
+WHAT THIS SESSION DID
+
+Completed D.3, the export_enrollment_package command. Wrote
+D.4.1, the import_enrollment_package function. D.4.1 compiles.
+D.4.2 through D.4.4 remain.
+
+D.3 - THE EXPORT COMMAND
+
+Commits d3e5fee (crate), edbaa3a (imports), 5be2599 (command
+and registration), d426bba (Cargo.lock).
+
+Added the chacha20poly1305 crate. Added the export command,
+which builds the 63-byte header, derives the key with Argon2id
+at 131072 / 4 / 1 with the raw 16-byte salt, encrypts with
+XChaCha20-Poly1305 using the full header as AAD, and writes the
+package file.
+
+Verified on the cloud machine via devtools. The export produced
+a 140-byte file. The arithmetic: 63 header + 4 org_id_len + 25
+org_id + 32 org_key + 16 tag = 140. Every byte accounted for.
+
+The bytes are not yet verified against a fixed expected output.
+That is E1 in Phase E.
+
+D.4.1 - THE IMPORT FUNCTION
+
+Commits dc7bd54 (the function), 70b8cd8 (the borrow fix).
+
+The function reads the package, verifies magic/version/length,
+derives the key with the parameters from the header, decrypts
+with the header as AAD, parses the inner content, rejects
+trailing bytes, compares the organization id before the
+transaction, refuses if a key already exists, inserts the key
+atomically, and deletes the package after commit.
+
+Not yet registered in generate_handler!. That is D.4.2.
+
+The first compile failed with E0596, the borrow error. Fixed in
+70b8cd8. The cloud build then succeeded in 54.83s.
+
+NEXT WORKSTREAM
+
+D.4.2 - register import_enrollment_package in
+generate_handler!.
+
+D.4.3 - build with the registration.
+
+D.4.4 - test the import via devtools.
+
+Then Phase E - E1.
+
+WHAT IS STILL OPEN
+
+Enrollment package import - D.4.2 through D.4.4. Not done.
+
+E1 test vector. Blocked on D.4.
+
+Excel and TXT implementation. Deferred by conscious decision.
+
+Debt due-date bug. Not reproducible. Not closed.
+
+supervisor-dashboard\dist\ stale build. Housekeeping.
+
+dataType dropdown offers CSV and JSON. JSON is not implemented.
+
+.txt entry in unstructured accept advertises a route that does
+not work.
+
+Dashboard 401s from /api/auth/me and /api/connectors/types.
+
+Control Plane tables not applied to gorka_test.
+
+Control Plane services not implemented.
+
+Agent App (Phase 9.5) not started.
+
+Sync engine (Phase 9.6) not started.
+
+Multi-user demonstration (Phase 9.7) not started.
+
+check-columns.ts, untracked, on the cloud machine only. A
+leftover diagnostic from September 22. Not part of any phase.
+Left in place.
+
+All items from the September 23 and September 24 Dashboard
+entries, unchanged.
+
+REPOSITORY STATE
+
+Main machine: at 70b8cd8, clean, pushed.
+
+Cloud machine: at 70b8cd8, clean.
+
+GitHub origin/main: at 70b8cd8.
+
+RULE COMPLIANCE
+
+No production touched.
+
+No cloud schema change.
+
+No CI/CD touched.
+
+Invariant held. The organization key is local-only. Instance B
+(db.rs::derive_key) was not touched.
+
 
 

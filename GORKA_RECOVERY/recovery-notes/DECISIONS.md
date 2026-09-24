@@ -3958,3 +3958,183 @@ Then Phase E — E1, the deterministic test vector.
   the registration. Commit 941917a.
 
 End of entry.
+
+---
+
+## Recovery Session — September 24-25, 2026 (Phase D.3 and D.4.1)
+
+This entry records D.3, the export_enrollment_package command,
+complete and verified, and D.4.1, the import_enrollment_package
+function, written and compiled. D.4.2 through D.4.4 remain.
+
+### D.3 - the export_enrollment_package command
+
+Commits: d3e5fee (crate), edbaa3a (imports), 5be2599 (command
+and registration), d426bba (Cargo.lock from the cloud build).
+
+D.3 added one crate to Cargo.toml:
+
+  chacha20poly1305 = "0.10"
+
+It added two import lines to main.rs:
+
+  use argon2::{Algorithm, Argon2, Params, Version};
+  use chacha20poly1305::{aead::{Aead, KeyInit, Payload},
+    XChaCha20Poly1305, XNonce};
+
+It added the export_enrollment_package command, placed after
+delete_document and before fn main(). The command:
+
+- Reads the organization key from organization_keys.
+- Checks the organization_id matches the trusted id.
+- Checks the key is exactly 32 bytes.
+- Generates a 16-byte salt and a 24-byte nonce with OsRng.
+- Derives the package key with Argon2id at the frozen
+  parameters (131072 / 4 / 1), using the raw 16-byte salt.
+- Builds the inner content: org_id_len (u32 BE) || org_id ||
+    org_key (32 bytes).
+- Computes the encrypted payload length as inner length + 16.
+- Builds the 63-byte header: magic "GORKAEP\0", format_version
+  0x0001, the three frozen parameters, salt, nonce, payload
+  length. All integers big-endian.
+- Encrypts with XChaCha20-Poly1305, using the derived key, the
+  nonce, and the full 63-byte header as AAD.
+- Assembles the package as header || ciphertext+tag.
+- Writes the file to the caller-supplied path.
+- Returns the file path.
+
+Registered in generate_handler! after delete_document.
+
+The cloud build added chacha20poly1305 and its transitive
+dependencies. Build time: 3m 17s. No errors. Cargo.lock updated
+and committed as d426bba.
+
+Tested on the cloud machine via devtools:
+
+  invoke('export_enrollment_package',
+    { passphrase: 'test-passphrase-001',
+      filePath: 'C:\\gorka-app\\test-package.gorka' })
+
+Returned OK C:\gorka-app\test-package.gorka. The file was 140
+bytes. The arithmetic: 63 header + 4 org_id_len + 25 org_id +
+32 org_key + 16 tag = 140. Every byte accounted for.
+
+The bytes are not yet verified against a fixed expected output.
+That is E1 in Phase E.
+
+### D.4.1 - the import_enrollment_package function
+
+Commit dc7bd54 (the function), 70b8cd8 (the borrow fix).
+
+The function was added after export_enrollment_package and
+before fn main(). It is not yet registered in generate_handler!.
+That is D.4.2.
+
+The function:
+
+- Reads the package file.
+- Verifies the file is at least 63 bytes.
+- Verifies the magic bytes are "GORKAEP\0".
+- Reads format_version. Rejects if not 0x0001.
+- Reads the header fields: argon2_memory_kib (u32 BE),
+  argon2_iterations (u32 BE), argon2_parallelism (u8), the
+  16-byte salt, the 24-byte nonce, and encrypted_payload_len
+  (u32 BE).
+- Verifies the file is exactly 63 + encrypted_payload_len
+  bytes.
+- Derives the key with Argon2id using the parameters from the
+  header, per SYNC-ARCHITECTURE.md section 22.7.1. The
+  importer does not assume the frozen values; it uses what the
+  header carries. No new importer bounds policy is invented.
+  Params::new validates the values.
+- Decrypts with XChaCha20-Poly1305, using the derived key, the
+  nonce, and the 63-byte header as AAD.
+- Parses the inner content: org_id_len (u32 BE), org_id, and
+  the 32-byte org_key.
+- Rejects any trailing bytes after the org_key. The format is
+  exactly 4 + org_id_len + 32 bytes.
+- Compares the package's organization_id against the trusted
+  id. This happens before the transaction begins.
+- Locks the database and opens a transaction.
+- Checks for an existing key inside the transaction. Refuses
+  if one exists. No silent replacement.
+- Inserts the key.
+- Commits.
+- Deletes the package file after commit. Failure is logged
+  with eprintln!, not fatal.
+
+### The borrow fix
+
+The first compile on the cloud machine failed with E0596:
+
+  cannot borrow `*conn` as mutable, as it is behind a `&`
+  reference
+
+The original code used:
+
+  let mut conn = db_guard.as_ref().ok_or(...)?;
+  let tx = conn.transaction()?;
+
+The fix:
+
+  let mut db_guard = state.db.lock()...?;
+  let conn = db_guard.as_mut().ok_or(...)?;
+  let tx = conn.transaction()?;
+
+Committed as 70b8cd8. Matches the pattern in db.rs
+run_migrations, where conn is &mut Connection for the
+transaction() call. The build then succeeded in 54.83s.
+
+### The checkpoint after D.4.1
+
+- main.rs compiles. Yes.
+- The new function compiles against the actual project APIs.
+  Yes.
+- No unrelated files modified. Yes - only main.rs.
+- No new dependency. Yes.
+- No generate_handler! change. Yes - D.4.2 not done.
+
+### What remains in D.4
+
+D.4.2 - register import_enrollment_package in
+generate_handler!.
+
+D.4.3 - build with the registration.
+
+D.4.4 - test the import via devtools.
+
+Then Phase E - E1.
+
+### Repository state
+
+Main machine: at 70b8cd8, clean, pushed.
+Cloud machine: at 70b8cd8, clean.
+GitHub origin/main: at 70b8cd8.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change.
+- No CI/CD touched.
+- Invariant held. The organization key is local-only.
+- Instance B (db.rs::derive_key) was not touched.
+- The frozen parameters are used as-is in the export.
+- The import uses the header's parameters per section 22.7.1.
+- The import refuses if a key already exists.
+- The key installation is atomic within the SQLite
+  transaction. The package file is deleted only after the
+  database transaction commits successfully.
+- The passphrase is never logged, never stored, never included
+  in an error, never printed.
+
+### Files changed this session
+
+- src-tauri/Cargo.toml - the chacha20poly1305 crate. Commit
+  d3e5fee.
+- src-tauri/src/main.rs - the imports, the export command, the
+  export registration, the import function, the borrow fix.
+  Commits edbaa3a, 5be2599, dc7bd54, 70b8cd8.
+- src-tauri/Cargo.lock - the resolved crate versions. Commit
+  d426bba.
+
+End of entry.
