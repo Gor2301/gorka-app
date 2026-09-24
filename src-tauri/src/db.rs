@@ -295,6 +295,26 @@ fn run_migrations(conn: &mut Connection) -> Result<(), String> {
         tx.commit().map_err(|e| e.to_string())?;
     }
 
+    if current_version < 4 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS organization_keys (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                organization_id TEXT NOT NULL,
+                key_material BLOB NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute("PRAGMA user_version = 4", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 
