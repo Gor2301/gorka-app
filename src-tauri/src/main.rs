@@ -1535,6 +1535,128 @@ fn export_enrollment_package(
     Ok(file_path)
 }
 
+#[command]
+fn import_enrollment_package(
+    passphrase: String,
+    file_path: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+
+    // Read the package file.
+    let file = std::fs::read(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    // Verify minimum length: 63-byte header.
+    if file.len() < 63 {
+        return Err("Invalid package: file too short".to_string());
+    }
+
+    // Verify magic bytes.
+    if &file[0..8] != b"GORKAEP\0" {
+        return Err("Invalid package: bad magic bytes".to_string());
+    }
+
+    // Read format_version (u16 BE, bytes 8..10).
+    let format_version = u16::from_be_bytes([file[8], file[9]]);
+    if format_version != 0x0001 {
+        return Err("Unsupported package version".to_string());
+    }
+
+    // Read the header fields.
+    let argon2_memory_kib = u32::from_be_bytes([file[10], file[11], file[12], file[13]]);
+    let argon2_iterations = u32::from_be_bytes([file[14], file[15], file[16], file[17]]);
+    let argon2_parallelism = file[18];
+    let argon2_salt = &file[19..35];
+    let aead_nonce = &file[35..59];
+    let encrypted_payload_len =
+        u32::from_be_bytes([file[59], file[60], file[61], file[62]]) as usize;
+
+    // Verify total length.
+    if file.len() != 63 + encrypted_payload_len {
+        return Err("Invalid package: length mismatch".to_string());
+    }
+
+    // Derive the package key with the header's parameters.
+    let params = Params::new(
+        argon2_memory_kib,
+        argon2_iterations,
+        argon2_parallelism as u32,
+        Some(32),
+    )
+    .map_err(|e| format!("Key derivation failed: {}", e))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut package_key = [0u8; 32];
+    argon2
+        .hash_password_into(passphrase.as_bytes(), argon2_salt, &mut package_key)
+        .map_err(|e| format!("Key derivation failed: {}", e))?;
+
+    // Decrypt with the full header as AAD.
+    let cipher = XChaCha20Poly1305::new_from_slice(&package_key)
+        .map_err(|e| format!("Decryption failed: {}", e))?;
+    let xnonce = XNonce::from_slice(aead_nonce);
+    let plaintext = cipher
+        .decrypt(
+            xnonce,
+            Payload {
+                msg: &file[63..],
+                aad: &file[0..63],
+            },
+        )
+        .map_err(|_| "Wrong passphrase or corrupted package".to_string())?;
+
+    // Parse the inner content: org_id_len (u32 BE) || org_id || org_key (32).
+    if plaintext.len() < 4 {
+        return Err("Invalid package: malformed inner content".to_string());
+    }
+    let org_id_len = u32::from_be_bytes([plaintext[0], plaintext[1], plaintext[2], plaintext[3]]) as usize;
+    let expected_len = 4 + org_id_len + 32;
+    if plaintext.len() != expected_len {
+        return Err("Invalid package: malformed inner content".to_string());
+    }
+    let package_org_id = std::str::from_utf8(&plaintext[4..4 + org_id_len])
+        .map_err(|_| "Invalid package: malformed inner content".to_string())?;
+    let organization_key = &plaintext[4 + org_id_len..4 + org_id_len + 32];
+
+    // Compare the package's organization id to the trusted id.
+    if package_org_id != organization_id {
+        return Err("Organization mismatch".to_string());
+    }
+
+    // Begin the transaction.
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let mut conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    // Check for an existing key inside the transaction.
+    let existing: Option<i64> = tx
+        .query_row("SELECT id FROM organization_keys WHERE id = 1", [], |row| row.get(0))
+        .ok();
+
+    if existing.is_some() {
+        return Err("Sync is already enabled for this organization".to_string());
+    }
+
+    // Insert the key.
+    tx.execute(
+        "INSERT INTO organization_keys (id, organization_id, key_material, created_at)
+         VALUES (1, ?1, ?2, ?3)",
+        params![&package_org_id, organization_key, Utc::now().to_rfc3339()],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Commit.
+    tx.commit().map_err(|e| e.to_string())?;
+
+    // Delete the package file after commit. Failure is logged, not fatal.
+    if let Err(e) = std::fs::remove_file(&file_path) {
+        eprintln!("Failed to delete package file: {}", e);
+    }
+
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
