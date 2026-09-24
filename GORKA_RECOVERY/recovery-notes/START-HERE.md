@@ -649,6 +649,34 @@ Argon2id parameters - FROZEN. The benchmark was written, run twice on the cloud 
 Next workstream: Phase D - the enrollment package. D.1 (the organization_keys migration), D.2 (the enable_sync command), and D.3 (the export_enrollment_package command) are COMPLETE and verified on the cloud machine. D.4.1 (the import_enrollment_package function) is written and compiles; D.4.2 (registration), D.4.3 (build), and D.4.4 (test) remain. hkdf is deferred to Phase 9.6. Then Phase E - E1.
 
 See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 24 entries, including the Argon2id freeze.
+Update - September 25, 2026
+
+Phase D - the enrollment package - is COMPLETE. D.4.2 (the
+registration of import_enrollment_package in generate_handler!),
+D.4.3 (the build with the registration), and D.4.4 (the import
+test via devtools) are done and verified on the cloud machine.
+D.1, D.2, D.3, and D.4.1 were completed earlier. The whole of
+Phase D is now done: commit b5af889.
+
+The import was tested against the existing key. It refused with
+"Sync is already enabled for this organization" - the expected
+outcome, and the path the handoff predicted. The refusal proves
+the decryption path ran to completion: file read, 63-byte header
+verified, Argon2id derivation, XChaCha20-Poly1305 decryption
+with the header as AAD, inner content parsed, organization id
+compared, key check reached. The import refused at the correct
+point, for the correct reason.
+
+The success path (no key present, install and delete) was not
+tested, because a key exists and removing it is out of scope.
+The package file was not deleted, because the refusal path does
+not commit. C:\gorka-app\test-package.gorka remains, 140 bytes.
+
+Phase E - E1, the first deterministic test vector - is next. It
+was blocked on the package not existing. It is now unblocked.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
+September 25 entries.
 
 ========================================================================
 
@@ -713,13 +741,11 @@ checking the rules.
   THREAT-MODEL.md v1.0 are all written and frozen. The document
   prerequisites for multi-user implementation are met. The
   Argon2id parameters were frozen on September 24, 2026
-  (SYNC-ARCHITECTURE.md §7.3, §22.19.2). Phase D is in
-  progress: D.1, D.2, and D.3 are complete. D.4.1 is written
-  and compiles. What remains before implementation: D.4.2
-  through D.4.4 (the import command registration, build, and
-  test), E1 (the deterministic test vector), and the Control
-  Plane tables applied to gorka_test.
-
+  (SYNC-ARCHITECTURE.md section 7.3, section 22.19.2). Phase D
+  is complete: D.1 through D.4.4 are done and verified. What
+  remains before implementation: E1 (the deterministic test
+  vector), and the Control Plane tables applied to gorka_test.
+  
 ========================================================================
 
 11. IF YOU ARE AN AI STARTING A NEW SESSION

@@ -1525,5 +1525,166 @@ No CI/CD touched.
 Invariant held. The organization key is local-only. Instance B
 (db.rs::derive_key) was not touched.
 
+STATUS UPDATE - September 25, 2026 (Phase D.4.2 through D.4.4)
+
+WHAT THIS SESSION DID
+
+Completed Phase D. D.4.2 registered the import_enrollment_package
+command in generate_handler!. D.4.3 built with the registration
+on the cloud machine. D.4.4 tested the import via the devtools
+console. All three steps completed and verified.
+
+Phase D is now complete. D.1 through D.4.4 are all done.
+
+D.4.2 - REGISTRATION
+
+Commit b5af889. One file, one insertion: src-tauri/src/main.rs.
+
+A single line added to the generate_handler! block, after the
+existing export_enrollment_package registration:
+
+  import_enrollment_package,
+
+Twelve spaces of indent. Trailing comma. No comma adjustment
+elsewhere.
+
+The function and its #[command] attribute were already in place
+from D.4.1. The registration was the only change.
+
+The edit was verified on disk before committing, with findstr
+and with a PowerShell read of the handler block. The staged
+diff showed exactly one insertion. One file. One line.
+
+D.4.3 - BUILD
+
+The commit was pushed, pulled on the cloud machine, and built
+there. The main machine cannot compile (TAURI-DEV-WORKFLOW.md
+section 8).
+
+  cargo build
+
+Result: Finished dev profile [unoptimized + debuginfo] target(s)
+in 1m 17s. No errors, no warnings.
+
+D.4.4 - IMPORT TEST
+
+Test conditions: backend running against gorka_test through the
+session pooler with the inline DATABASE_URL override; Vite dev
+server running; gorka-client.exe running, logged in, database
+unlocked, Dashboard reached; devtools console open.
+
+The Tauri global was not window.__TAURI__.core in this build.
+The working form:
+
+  const invoke = window.__TAURI_INTERNALS__.invoke;
+
+Preconditions:
+
+  await invoke('is_database_unlocked');
+  -> true
+
+  await invoke('get_organization_id');
+  -> 'cmty0xrxw0000c4q4mvtpqjqv'
+
+The org id is 25 characters, matching the D.3 package
+arithmetic.
+
+  await invoke('enable_sync');
+  -> "Sync is already enabled for this organization"
+
+A key exists. The handoff's predicted path is the one tested.
+
+The import call:
+
+  await invoke('import_enrollment_package', {
+    passphrase: 'test-passphrase-001',
+    filePath: 'C:\\gorka-app\\test-package.gorka'
+  }).then(r => ({ ok: true, value: r }))
+    .catch(e => ({ ok: false, error: e }));
+
+Result:
+
+  { ok: false, error: 'Sync is already enabled for this
+    organization' }
+
+The refusal is the expected outcome. It proves every stage
+before the refusal ran to completion: the file was read, the
+63-byte header was verified, the Argon2id derivation ran, the
+XChaCha20-Poly1305 decryption succeeded, the inner content was
+parsed, the trailing-byte check passed, the organization id
+comparison passed, and the function refused at the "key already
+exists" check inside the transaction.
+
+The success path (no key present, install and delete) was not
+tested, because a key exists and removing it is out of scope.
+
+The package file was not deleted, because the refusal path does
+not commit. C:\gorka-app\test-package.gorka remains, 140 bytes.
+
+PHASE D STATUS
+
+All of Phase D is complete:
+
+- D.1 organization_keys migration (adcab50)
+- D.2 enable_sync command (941917a)
+- D.3 export_enrollment_package (d3e5fee, edbaa3a, 5be2599,
+  d426bba)
+- D.4.1 import_enrollment_package function (dc7bd54, 70b8cd8)
+- D.4.2 registration (b5af889)
+- D.4.3 build (1m 17s)
+- D.4.4 import test (refusal path)
+
+WHAT IS STILL OPEN
+
+E1 test vector. Unblocked now that the package exists.
+
+Excel and TXT implementation. Deferred by conscious decision.
+
+Debt due-date bug. Not reproducible. Not closed.
+
+supervisor-dashboard\dist\ stale build. Housekeeping.
+
+dataType dropdown offers CSV and JSON. JSON is not implemented.
+
+.txt entry in unstructured accept advertises a route that does
+not work.
+
+Dashboard 401s from /api/auth/me and /api/connectors/types.
+
+Control Plane tables not applied to gorka_test.
+
+Control Plane services not implemented.
+
+Agent App (Phase 9.5) not started.
+
+Sync engine (Phase 9.6) not started.
+
+Multi-user demonstration (Phase 9.7) not started.
+
+check-columns.ts, untracked, on the cloud machine only.
+
+All items from the September 23 and September 24 entries,
+unchanged.
+
+REPOSITORY STATE
+
+Main machine: at b5af889, clean, pushed.
+
+Cloud machine: at b5af889, clean, built.
+
+GitHub origin/main: at b5af889.
+
+RULE COMPLIANCE
+
+No production touched.
+
+No cloud schema change.
+
+No CI/CD touched.
+
+Invariant held. The organization key is local-only. Instance B
+(db.rs::derive_key) was not touched.
+
+
 
 

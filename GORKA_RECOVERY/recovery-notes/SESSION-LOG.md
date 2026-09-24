@@ -1730,5 +1730,168 @@ Then Phase E — E1.
 
 End of entry.
 
+## Session Extension — September 25, 2026 (Phase D.4.2–D.4.4)
+
+### What this session did
+
+Completed Phase D. Registered the import_enrollment_package
+command in generate_handler! (D.4.2), built with the
+registration (D.4.3), and tested the import via the devtools
+console (D.4.4). All three steps completed and verified. Phase D
+is now complete.
+
+### D.4.2 — registration
+
+Commit b5af889. One file changed: src-tauri/src/main.rs, one
+insertion.
+
+A single line was added to the generate_handler! block, after
+the existing export_enrollment_package registration:
+
+  import_enrollment_package,
+
+Twelve spaces of indent. Trailing comma. No comma adjustment
+elsewhere, because every entry in the block already ends in a
+comma.
+
+The function and its #[command] attribute were already in place
+from D.4.1. The registration is the only change.
+
+Verified on disk before committing. findstr and a PowerShell
+read of the handler block confirmed the line. The staged diff
+showed exactly one insertion:
+
+  +            import_enrollment_package,
+
+One file. One line. Nothing else touched.
+
+### D.4.3 — build
+
+The commit was pushed to origin/main, pulled on the cloud
+machine, and built there. The main machine cannot compile
+(TAURI-DEV-WORKFLOW.md section 8).
+
+  cargo build
+
+Result: Finished dev profile [unoptimized + debuginfo] target(s)
+in 1m 17s. No errors, no warnings.
+
+The time is consistent with the change: only main.rs changed,
+and no dependency was added, so no crate resolution was needed.
+
+### D.4.4 — import test
+
+Test conditions on the cloud machine: backend running against
+gorka_test through the session pooler with the inline
+DATABASE_URL override; Vite dev server running;
+gorka-client.exe running, logged in as test@example.com, local
+database unlocked, Dashboard reached; devtools console open.
+
+The Tauri global was not window.__TAURI__.core in this build.
+The working form:
+
+  const invoke = window.__TAURI_INTERNALS__.invoke;
+
+Preconditions checked before the import:
+
+  await invoke('is_database_unlocked');
+  -> true
+
+  await invoke('get_organization_id');
+  -> 'cmty0xrxw0000c4q4mvtpqjqv'
+
+The org id is 25 characters, matching the 25-byte org id in the
+D.3 package arithmetic (63 + 4 + 25 + 32 + 16 = 140). The
+package's inner organization_id therefore matches the trusted
+id, and the pre-transaction comparison will pass.
+
+  await invoke('enable_sync');
+  -> "Sync is already enabled for this organization"
+
+A key exists. The handoff's predicted D.4.4 path — the import
+will refuse on the "key already exists" check — is the path
+being tested.
+
+The import call:
+
+  await invoke('import_enrollment_package', {
+    passphrase: 'test-passphrase-001',
+    filePath: 'C:\\gorka-app\\test-package.gorka'
+  }).then(r => ({ ok: true, value: r }))
+    .catch(e => ({ ok: false, error: e }));
+
+Result:
+
+  { ok: false, error: 'Sync is already enabled for this
+    organization' }
+
+### What the result proves
+
+The refusal is the expected outcome, and it proves every stage
+before the refusal ran to completion:
+
+- The package file was read.
+- The 63-byte header was verified: magic "GORKAEP\0", format
+  version 0x0001, header length.
+- The Argon2id key derivation ran with the header's parameters
+  (131072 / 4 / 1) and the header's 16-byte salt.
+- XChaCha20-Poly1305 decryption succeeded with the header as AAD.
+- The inner content was parsed: org_id_len, org_id, org_key, and
+  the trailing-byte rejection passed.
+- The organization id comparison passed.
+- The function entered the transaction, checked
+  organization_keys, found a key, and refused.
+
+The import refused at the correct point, for the correct reason.
+D.4.1's spec says: "refuses if a key already exists. No silent
+replacement."
+
+The success path (no key present, install and delete) was not
+tested, because a key exists and removing it is out of scope.
+
+The package file was not deleted, because the refusal path does
+not commit. C:\gorka-app\test-package.gorka remains, 140 bytes.
+
+### Phase D is complete
+
+All of Phase D:
+
+- D.1 organization_keys migration (adcab50)
+- D.2 enable_sync command (941917a)
+- D.3 export_enrollment_package (d3e5fee, edbaa3a, 5be2599,
+  d426bba)
+- D.4.1 import_enrollment_package function (dc7bd54, 70b8cd8)
+- D.4.2 registration (b5af889)
+- D.4.3 build (1m 17s)
+- D.4.4 import test (refusal path)
+
+### Repository state
+
+Main machine: at b5af889, clean, pushed.
+
+Cloud machine: at b5af889, clean, built.
+
+GitHub origin/main: at b5af889.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change. No new tables. No new columns.
+- No CI/CD touched.
+- Invariant held. The organization key is local-only.
+- Instance B (db.rs::derive_key) was not touched.
+- The passphrase is never logged, never stored, never included
+  in an error, never printed.
+
+### What comes next
+
+Phase E — E1, the first deterministic test vector. It computes
+the enrollment package from fixed inputs and verifies the bytes
+against the expected output in SYNC-TEST-VECTORS-v1.md. The
+package now exists, so E1 is unblocked.
+
+End of entry.
+
+
 
 

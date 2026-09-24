@@ -4138,3 +4138,198 @@ GitHub origin/main: at 70b8cd8.
   d426bba.
 
 End of entry.
+
+powershell -Command "$entry = @'
+
+## Recovery Session — September 25, 2026 (Phase D.4.2–D.4.4)
+
+This entry records the completion of Phase D. The session
+registered the import_enrollment_package command in
+generate_handler! (D.4.2), built with the registration (D.4.3),
+and tested the import via the devtools console (D.4.4). All
+three steps completed and verified.
+
+Phase D is now complete. D.1, D.2, D.3, and D.4.1 through D.4.4
+are all done.
+
+### D.4.2 — registration
+
+Commit b5af889. One file changed: src-tauri/src/main.rs, one
+insertion.
+
+A single line was added to the generate_handler! block, after
+the existing export_enrollment_package registration:
+
+  import_enrollment_package,
+
+Twelve spaces of indent. Trailing comma. No comma adjustment was
+needed elsewhere, because every entry in the block already ends
+in a comma, including export_enrollment_package.
+
+The function and its #[command] attribute were already in place
+from D.4.1. The registration is the only change.
+
+### The edit was verified before committing
+
+The registration line was confirmed on disk, twice: once with a
+findstr search of the whole file, and once with a PowerShell
+read of the generate_handler! region. Before and after the edit.
+The diff was then read with git diff --cached, which showed
+exactly one insertion:
+
+  +            import_enrollment_package,
+
+One file. One line. Nothing else touched.
+
+### D.4.3 — build
+
+The commit was pushed to origin/main, pulled on the cloud
+machine, and built there. The main machine cannot compile
+(TAURI-DEV-WORKFLOW.md section 8).
+
+  cargo build
+
+Result: Finished dev profile [unoptimized + debuginfo] target(s)
+in 1m 17s. No errors. No warnings.
+
+The time is consistent with the change: only main.rs changed,
+and no dependency was added, so no crate resolution was needed.
+
+### D.4.4 — import test
+
+Test conditions on the cloud machine:
+
+- Backend running, connected to gorka_test through the session
+  pooler, inline DATABASE_URL override.
+- Vite dev server running.
+- gorka-client.exe running, logged in as test@example.com,
+  local database unlocked, Dashboard reached.
+- Devtools console open.
+
+The Tauri global was not present as window.__TAURI__.core in this
+build. The working form was:
+
+  const invoke = window.__TAURI_INTERNALS__.invoke;
+
+Preconditions checked before the import:
+
+  await invoke('is_database_unlocked');
+  -> true
+
+  await invoke('get_organization_id');
+  -> 'cmty0xrxw0000c4q4mvtpqjqv'
+
+The organization id is 25 characters, matching the 25-byte org
+id in the D.3 package arithmetic (63 + 4 + 25 + 32 + 16 = 140).
+The package's inner organization_id therefore matches the
+trusted id, and the pre-transaction comparison will pass.
+
+The enable_sync command was called to confirm a key already
+exists:
+
+  await invoke('enable_sync');
+  -> \"Sync is already enabled for this organization\"
+
+The key is present. The handoff's predicted D.4.4 path — the
+import will refuse on the \"key already exists\" check — is
+therefore the path being tested.
+
+The import call:
+
+  await invoke('import_enrollment_package', {
+    passphrase: 'test-passphrase-001',
+    filePath: 'C:\\\\gorka-app\\\\test-package.gorka'
+  }).then(r => ({ ok: true, value: r }))
+    .catch(e => ({ ok: false, error: e }));
+
+Result:
+
+  { ok: false, error: 'Sync is already enabled for this
+    organization' }
+
+### What the result proves
+
+The refusal is the expected outcome, and it proves every stage
+before the refusal ran to completion:
+
+- The package file was read.
+- The 63-byte header was verified: magic \"GORKAEP\\0\", format
+  version 0x0001, header length.
+- The Argon2id key derivation ran with the header's parameters
+  (131072 / 4 / 1) and the header's 16-byte salt.
+- XChaCha20-Poly1305 decryption succeeded with the header as AAD.
+  A wrong passphrase or a tampered payload would have failed
+  here with a different error.
+- The inner content was parsed: org_id_len, org_id, org_key, and
+  the trailing-byte rejection passed.
+- The organization id comparison passed: the package's
+  organization_id matched the trusted id.
+- The function entered the transaction, checked
+  organization_keys, found a key, and refused. That refusal is
+  the string returned.
+
+The import refused at the correct point, for the correct reason.
+D.4.1's spec says: \"refuses if a key already exists. No silent
+replacement.\" That is what happened.
+
+The success path (no key present, import installs the key and
+deletes the package) was not tested, because a key exists on
+this database and removing it is out of scope. It is the same
+code path after the refusal check; the only untested branch is
+the insert-and-delete.
+
+The package file was not deleted, because the refusal path does
+not commit. C:\\gorka-app\\test-package.gorka remains, 140 bytes.
+
+### Phase D is complete
+
+| Step | Status |
+|------|--------|
+| D.1 — organization_keys migration (v4) | DONE (adcab50) |
+| D.2 — enable_sync command | DONE (941917a) |
+| D.3 — export_enrollment_package | DONE (d3e5fee, edbaa3a, 5be2599, d426bba) |
+| D.4.1 — import_enrollment_package function | DONE (dc7bd54, 70b8cd8) |
+| D.4.2 — registration in generate_handler! | DONE (b5af889) |
+| D.4.3 — build with the registration | DONE (1m 17s) |
+| D.4.4 — import test via devtools | DONE (refusal path) |
+
+### Repository state
+
+Main machine: at b5af889, clean, pushed.
+Cloud machine: at b5af889, clean, built.
+GitHub origin/main: at b5af889.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change. No new tables. No new columns.
+- No CI/CD touched.
+- Invariant held. The organization key is local-only.
+- Instance B (db.rs::derive_key) was not touched.
+- The frozen parameters are used as-is in the export.
+- The import uses the header's parameters per section 22.7.1.
+- The import refuses if a key already exists.
+- The passphrase is never logged, never stored, never included
+  in an error, never printed. The console output contains only
+  the returned error string, which does not contain the
+  passphrase or any key material.
+- Do not propose redesigns. None was proposed.
+- Do not touch db.rs outside the migration, auth.rs, or
+  Cargo.toml outside the crates already added. None was touched.
+
+### Files changed this session
+
+- src-tauri/src/main.rs — one line added to
+  generate_handler!. Commit b5af889.
+
+### What comes next
+
+Phase E — E1, the first deterministic test vector. It computes
+the enrollment package from fixed inputs and verifies the bytes
+against the expected output in SYNC-TEST-VECTORS-v1.md. The
+package now exists, so E1 is unblocked.
+
+End of entry.
+
+
+
