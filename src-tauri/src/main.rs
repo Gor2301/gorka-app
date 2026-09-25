@@ -2135,6 +2135,8 @@ mod tests {
 
         let hex: String = session_key.iter().map(|b| format!("{:02x}", b)).collect();
         println!("H1 session key (32 bytes): {}", hex);
+        let expected = hex::decode("09f86098b9d761d7ce69fba650ff46ec8be6ace240cde3034b4428d0c6d60530").expect("H1: recorded hex is not valid");
+        assert_eq!(session_key, expected.as_slice(), "H1: session key differs from recorded vector");
     }
 
     #[test]
@@ -2188,6 +2190,8 @@ mod tests {
 
         let hex: String = tag.iter().map(|b| format!("{:02x}", b)).collect();
         println!("H2 REPLY tag (32 bytes): {}", hex);
+        let expected = hex::decode("20e675fa720171aa1b49c530ed5e1c5e54cd1e41a89f4ab691a1980e88bbc9eb").expect("H2: recorded hex is not valid");
+        assert_eq!(tag, expected.as_slice(), "H2: tag differs from recorded vector");
     }
 
     #[test]
@@ -2248,5 +2252,7 @@ mod tests {
 
         let hex: String = confirm_tag.iter().map(|b| format!("{:02x}", b)).collect();
         println!("H3 CONFIRM tag (32 bytes): {}", hex);
+        let expected = hex::decode("e37ba7454ebf9b85d12c9e0156d5ec7bc9dc3b2d7f2c10ca689b1e6b45891fd5").expect("H3: recorded hex is not valid");
+        assert_eq!(confirm_tag, expected.as_slice(), "H3: tag differs from recorded vector");
     }
 }

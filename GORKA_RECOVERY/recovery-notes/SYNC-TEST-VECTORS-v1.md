@@ -14,7 +14,7 @@ Version:     1.0 (partially complete)
 
 Date:        September 20, 2026
 
-Status:      PARTIALLY COMPLETE — E1 recorded; H1, H2, H3 and
+Status:      PARTIALLY COMPLETE — E1, H1, H2, H3 recorded;
 
 &#x20;            the M and V vectors pending computation
 
@@ -480,9 +480,9 @@ H1 — Session-key derivation
 
 
 
-Specification status:  BLOCKED — HKDF domain-separation labels not confirmed in §22.19
+Specification status:  SPECIFIED
 
-Expected-bytes status: PENDING
+Expected-bytes status: FROZEN
 
 
 
@@ -492,47 +492,59 @@ Inputs:
 
 &#x20; organization\_key:     organization\_key\_zero
 
-&#x20; nonce\_A:              nonce\_zero
+&#x20; initiator\_nonce:      nonce\_zero
 
-&#x20; nonce\_B:              nonce\_structured
+&#x20; responder\_nonce:      nonce\_structured
 
-&#x20; device\_id\_A:          "device-test-A"
+&#x20; organization\_id:      organization\_id\_A ("org-test-A")
 
-&#x20; device\_id\_B:          "device-test-B"
+&#x20; initiator\_device\_id:  device\_id\_A ("device-test-A")
 
-&#x20; organization\_id\_A:    "org-test-A"
-
-&#x20; organization\_id\_B:    "org-test-B"
-
-&#x20; domain-separation:    NOT YET CONFIRMED (see SYNC-ARCHITECTURE.md §22.19)
+&#x20; responder\_device\_id:  device\_id\_B ("device-test-B")
 
 Operation:
 
 &#x20; Derive the 256-bit session key using HKDF-SHA256 with input key
 
-&#x20; material = organization\_key, salt = the two nonces with the
+&#x20; material = organization\_key, salt = initiator\_nonce ||
 
-&#x20; session-key domain-separation prefix, info = the session-key
+&#x20; responder\_nonce (48 bytes, initiator first), info =
 
-&#x20; domain-separation label concatenated with the two
+&#x20; "GORKA-MVP-SESSION-v1" || u16\_be(len(organization\_id)) ||
 
-&#x20; organization\_ids and the two device\_ids.
+&#x20; organization\_id || u16\_be(len(initiator\_device\_id)) ||
+
+&#x20; initiator\_device\_id || u16\_be(len(responder\_device\_id)) ||
+
+&#x20; responder\_device\_id.
+
+&#x20; The session-key info contains exactly ONE organization id, the
+
+&#x20; id of the session's organization, shared by both peers. An
+
+&#x20; earlier version of this entry listed both organization\_id\_A and
+
+&#x20; organization\_id\_B; that was an error in the vector definition.
+
+&#x20; Corrected per SYNC-ARCHITECTURE section 22.11.1 and section
+
+&#x20; 22.19.1. This is a documentation repair; the protocol was
+
+&#x20; already frozen.
 
 Expected output:
 
-&#x20; PENDING — cannot be computed until SYNC-ARCHITECTURE.md §22.19
+&#x20; FROZEN. The 32-byte session key, computed by the conforming
 
-&#x20; contains the literal HKDF domain-separation label strings.
+&#x20; implementation on 2026-09-25. Hex:
 
-Blocking amendment:
+&#x20; 09f86098b9d761d7ce69fba650ff46ec8be6ace240cde3034b4428d0c6d60530
 
-&#x20; SYNC-ARCHITECTURE.md §22.19 must contain the exact label
+&#x20; Note: this is a reference value recorded by the first
 
-&#x20; strings. If §22.19 does not exist or does not contain literal
+&#x20; conforming implementation. It is not independent
 
-&#x20; strings, it must be added or completed first.
-
-
+&#x20; cryptographic validation. See Section 1 of this artifact.
 
 \------------------------------------------------------------------------
 
@@ -542,9 +554,9 @@ H2 — Handshake proof tag, REPLY
 
 
 
-Specification status:  BLOCKED — HKDF domain-separation labels not confirmed in §22.19
+Specification status:  SPECIFIED
 
-Expected-bytes status: PENDING
+Expected-bytes status: FROZEN
 
 
 
@@ -552,21 +564,21 @@ Tests:    Section 22.9.3 — HANDSHAKE\_REPLY proof tag.
 
 Inputs:
 
-&#x20; handshake\_auth\_key:   handshake\_auth\_key\_zero
+&#x20; handshake\_key:             handshake\_auth\_key\_zero
 
-&#x20; nonce\_A:              nonce\_zero
+&#x20; protocol\_version:          0x0001
 
-&#x20; nonce\_B:              nonce\_structured
+&#x20; initiator\_organization\_id: "org-test-A"
 
-&#x20; device\_id\_A:          "device-test-A"
+&#x20; initiator\_device\_id:       "device-test-A"
 
-&#x20; device\_id\_B:          "device-test-B"
+&#x20; initiator\_nonce:           nonce\_zero
 
-&#x20; organization\_id\_A:    "org-test-A"
+&#x20; responder\_organization\_id: "org-test-B"
 
-&#x20; organization\_id\_B:    "org-test-B"
+&#x20; responder\_device\_id:       "device-test-B"
 
-&#x20; protocol\_version:     0x0001
+&#x20; responder\_nonce:           nonce\_structured
 
 Operation:
 
@@ -576,15 +588,47 @@ Operation:
 
 &#x20; key directly (supplied by this artifact, not derived).
 
+&#x20; proof\_input =
+
+&#x20;     "GORKA-MVP-HANDSHAKE-REPLY-v1"
+
+&#x20;     || u16\_be(protocol\_version)
+
+&#x20;     || u16\_be(len(initiator\_organization\_id))
+
+&#x20;     || initiator\_organization\_id
+
+&#x20;     || u16\_be(len(initiator\_device\_id))
+
+&#x20;     || initiator\_device\_id
+
+&#x20;     || initiator\_nonce
+
+&#x20;     || u16\_be(len(responder\_organization\_id))
+
+&#x20;     || responder\_organization\_id
+
+&#x20;     || u16\_be(len(responder\_device\_id))
+
+&#x20;     || responder\_device\_id
+
+&#x20;     || responder\_nonce
+
+&#x20; proof\_tag = HMAC-SHA256(handshake\_key, proof\_input)
+
 Expected output:
 
-&#x20; PENDING — same blocking amendment as H1.
+&#x20; FROZEN. The 32-byte REPLY tag, computed by the conforming
 
-Blocking amendment:
+&#x20; implementation on 2026-09-25. Hex:
 
-&#x20; SYNC-ARCHITECTURE.md §22.19.
+&#x20; 20e675fa720171aa1b49c530ed5e1c5e54cd1e41a89f4ab691a1980e88bbc9eb
 
+&#x20; Note: this is a reference value recorded by the first
 
+&#x20; conforming implementation. It is not independent
+
+&#x20; cryptographic validation. See Section 1 of this artifact.
 
 \------------------------------------------------------------------------
 
@@ -594,9 +638,9 @@ H3 — Handshake proof tag, CONFIRM
 
 
 
-Specification status:  BLOCKED — HKDF domain-separation labels not confirmed in §22.19
+Specification status:  SPECIFIED
 
-Expected-bytes status: PENDING
+Expected-bytes status: FROZEN
 
 
 
@@ -604,25 +648,41 @@ Tests:    Section 22.10.2 — HANDSHAKE\_CONFIRM proof tag.
 
 Inputs:
 
-&#x20; Same transcript and handshake\_auth\_key as H2.
+&#x20; Same as H2: handshake\_auth\_key\_zero, protocol\_version 0x0001,
+
+&#x20; initiator\_organization\_id "org-test-A", initiator\_device\_id
+
+&#x20; "device-test-A", initiator\_nonce nonce\_zero,
+
+&#x20; responder\_organization\_id "org-test-B", responder\_device\_id
+
+&#x20; "device-test-B", responder\_nonce nonce\_structured.
 
 Operation:
 
-&#x20; Compute the CONFIRM proof tag over the same transcript as
+&#x20; Compute the CONFIRM proof tag over the same transcript as H2,
 
-&#x20; defined in Section 22.10.2, using the same handshake
+&#x20; using the same handshake authentication key. Identical to H2
 
-&#x20; authentication key. The result MUST differ from H2's tag.
+&#x20; except the leading domain-separation string is
+
+&#x20; "GORKA-MVP-HANDSHAKE-CONFIRM-v1". The result MUST differ from
+
+&#x20; H2's tag.
 
 Expected output:
 
-&#x20; PENDING — same blocking amendment as H1.
+&#x20; FROZEN. The 32-byte CONFIRM tag, computed by the conforming
 
-Blocking amendment:
+&#x20; implementation on 2026-09-25. Hex:
 
-&#x20; SYNC-ARCHITECTURE.md §22.19.
+&#x20; e37ba7454ebf9b85d12c9e0156d5ec7bc9dc3b2d7f2c10ca689b1e6b45891fd5
 
+&#x20; Note: this is a reference value recorded by the first
 
+&#x20; conforming implementation. It is not independent
+
+&#x20; cryptographic validation. See Section 1 of this artifact.
 
 \------------------------------------------------------------------------
 
@@ -934,11 +994,11 @@ Verification:
 
 &#x20; E1       SPECIFIED              FROZEN           None
 
-&#x20; H1       SPECIFIED              TO BE COMPUTED   None
+&#x20; H1       SPECIFIED              FROZEN 	   None
 
-&#x20; H2       SPECIFIED              TO BE COMPUTED   None
+&#x20; H2       SPECIFIED              FROZEN 	   None
 
-&#x20; H3       SPECIFIED              TO BE COMPUTED   None
+&#x20; H3       SPECIFIED              FROZEN 	   None
 
 &#x20; M1       SPECIFIED              TO BE COMPUTED   None
 
