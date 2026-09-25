@@ -12,6 +12,9 @@ use std::sync::Mutex;
 use rand::RngCore;
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::{aead::{Aead, KeyInit, Payload}, XChaCha20Poly1305, XNonce};
+use hkdf::Hkdf;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
 mod db;
 mod auth;
@@ -1572,6 +1575,190 @@ fn export_enrollment_package(
 
     Ok(file_path)
 }
+
+/// Derive the session key for a sync session.
+///
+/// This is the H1 operation. It is the shared session-key
+/// derivation used by the handshake. It performs no I/O and
+/// generates no randomness: every input is supplied by the
+/// caller.
+///
+/// Per §22.11.1 and §22.19.1:
+///   session_key = HKDF-SHA256(
+///       IKM  = organization_key,
+///       salt = initiator_nonce || responder_nonce,
+///       info = "GORKA-MVP-SESSION-v1"
+///              || u16_be(len(organization_id))
+///              || organization_id
+///              || u16_be(len(initiator_device_id))
+///              || initiator_device_id
+///              || u16_be(len(responder_device_id))
+///              || responder_device_id,
+///       output_length = 32
+///   )
+fn derive_session_key(
+    organization_key: &[u8; 32],
+    initiator_nonce: &[u8; 24],
+    responder_nonce: &[u8; 24],
+    organization_id: &str,
+    initiator_device_id: &str,
+    responder_device_id: &str,
+) -> Result<[u8; 32], String> {
+    // salt = initiator_nonce || responder_nonce, 48 bytes.
+    let mut salt = [0u8; 48];
+    salt[0..24].copy_from_slice(initiator_nonce);
+    salt[24..48].copy_from_slice(responder_nonce);
+
+    // info = "GORKA-MVP-SESSION-v1"
+    //        || u16_be(len(organization_id)) || organization_id
+    //        || u16_be(len(initiator_device_id)) || initiator_device_id
+    //        || u16_be(len(responder_device_id)) || responder_device_id
+    let mut info = Vec::new();
+    info.extend_from_slice(b"GORKA-MVP-SESSION-v1");
+    let org_id_bytes = organization_id.as_bytes();
+    info.extend_from_slice(&(org_id_bytes.len() as u16).to_be_bytes());
+    info.extend_from_slice(org_id_bytes);
+    let init_dev_bytes = initiator_device_id.as_bytes();
+    info.extend_from_slice(&(init_dev_bytes.len() as u16).to_be_bytes());
+    info.extend_from_slice(init_dev_bytes);
+    let resp_dev_bytes = responder_device_id.as_bytes();
+    info.extend_from_slice(&(resp_dev_bytes.len() as u16).to_be_bytes());
+    info.extend_from_slice(resp_dev_bytes);
+
+    let hk = Hkdf::<Sha256>::new(Some(&salt), organization_key);
+    let mut out = [0u8; 32];
+    hk.expand(&info, &mut out)
+        .map_err(|e| format!("HKDF expand failed: {}", e))?;
+    Ok(out)
+}
+
+/// Compute the H2 proof tag: the HANDSHAKE_REPLY transcript
+/// bound to the REPLY role.
+///
+/// Per §22.9.3 and §22.19.1:
+///   proof_input =
+///       "GORKA-MVP-HANDSHAKE-REPLY-v1"
+///       || u16_be(protocol_version)
+///       || u16_be(len(initiator_organization_id))
+///       || initiator_organization_id
+///       || u16_be(len(initiator_device_id))
+///       || initiator_device_id
+///       || initiator_nonce
+///       || u16_be(len(responder_organization_id))
+///       || responder_organization_id
+///       || u16_be(len(responder_device_id))
+///       || responder_device_id
+///       || responder_nonce
+///   proof_tag = HMAC-SHA256(handshake_key, proof_input)
+fn compute_handshake_reply_tag(
+    handshake_key: &[u8; 32],
+    protocol_version: u16,
+    initiator_organization_id: &str,
+    initiator_device_id: &str,
+    initiator_nonce: &[u8; 24],
+    responder_organization_id: &str,
+    responder_device_id: &str,
+    responder_nonce: &[u8; 24],
+) -> Result<[u8; 32], String> {
+    let input = build_handshake_proof_input(
+        b"GORKA-MVP-HANDSHAKE-REPLY-v1",
+        protocol_version,
+        initiator_organization_id,
+        initiator_device_id,
+        initiator_nonce,
+        responder_organization_id,
+        responder_device_id,
+        responder_nonce,
+    );
+
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(handshake_key)
+        .map_err(|e| format!("HMAC init failed: {}", e))?;
+    mac.update(&input);
+    let result = mac.finalize().into_bytes();
+
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&result);
+    Ok(out)
+}
+
+/// Compute the H3 proof tag: the HANDSHAKE_CONFIRM transcript
+/// bound to the CONFIRM role.
+///
+/// Identical to compute_handshake_reply_tag, except the leading
+/// domain-separation string is
+/// "GORKA-MVP-HANDSHAKE-CONFIRM-v1".
+fn compute_handshake_confirm_tag(
+    handshake_key: &[u8; 32],
+    protocol_version: u16,
+    initiator_organization_id: &str,
+    initiator_device_id: &str,
+    initiator_nonce: &[u8; 24],
+    responder_organization_id: &str,
+    responder_device_id: &str,
+    responder_nonce: &[u8; 24],
+) -> Result<[u8; 32], String> {
+    let input = build_handshake_proof_input(
+        b"GORKA-MVP-HANDSHAKE-CONFIRM-v1",
+        protocol_version,
+        initiator_organization_id,
+        initiator_device_id,
+        initiator_nonce,
+        responder_organization_id,
+        responder_device_id,
+        responder_nonce,
+    );
+
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(handshake_key)
+        .map_err(|e| format!("HMAC init failed: {}", e))?;
+    mac.update(&input);
+    let result = mac.finalize().into_bytes();
+
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&result);
+    Ok(out)
+}
+
+/// Build the shared handshake proof input for H2 and H3.
+///
+/// The only difference between the REPLY and CONFIRM inputs is
+/// the leading domain-separation string.
+fn build_handshake_proof_input(
+    domain: &[u8],
+    protocol_version: u16,
+    initiator_organization_id: &str,
+    initiator_device_id: &str,
+    initiator_nonce: &[u8; 24],
+    responder_organization_id: &str,
+    responder_device_id: &str,
+    responder_nonce: &[u8; 24],
+) -> Vec<u8> {
+    let mut input = Vec::new();
+    // domain-separation string, ASCII, no length prefix
+    input.extend_from_slice(domain);
+    // protocol_version, u16 BE
+    input.extend_from_slice(&protocol_version.to_be_bytes());
+    // initiator_organization_id, u16 BE length prefix
+    let b = initiator_organization_id.as_bytes();
+    input.extend_from_slice(&(b.len() as u16).to_be_bytes());
+    input.extend_from_slice(b);
+    // initiator_device_id, u16 BE length prefix
+    let b = initiator_device_id.as_bytes();
+    input.extend_from_slice(&(b.len() as u16).to_be_bytes());
+    input.extend_from_slice(b);
+    // initiator_nonce, 24 bytes, no prefix
+    input.extend_from_slice(initiator_nonce);
+    // responder_organization_id, u16 BE length prefix
+    let b = responder_organization_id.as_bytes();
+    input.extend_from_slice(&(b.len() as u16).to_be_bytes());
+    input.extend_from_slice(b);
+    // responder_device_id, u16 BE length prefix
+    let b = responder_device_id.as_bytes();
+    input.extend_from_slice(&(b.len() as u16).to_be_bytes());
+    input.extend_from_slice(b);
+    // responder_nonce, 24 bytes, no prefix
+    input.extend_from_slice(responder_nonce);
+    input
+}
 /// Parse and decrypt an enrollment package.
 ///
 /// This is the shared package-parsing operation. It is the single
@@ -1769,7 +1956,7 @@ fn main() {
 }
 #[cfg(test)]
 mod tests {
-    use super::{build_enrollment_package, parse_enrollment_package};
+    use super::{build_enrollment_package, parse_enrollment_package, derive_session_key, compute_handshake_reply_tag, compute_handshake_confirm_tag};
 
     #[test]
     fn e1_enrollment_package_creation() {
@@ -1903,4 +2090,163 @@ mod tests {
         );
     }
 
+    #[test]
+    fn h1_session_key_derivation() {
+        let organization_key = [0u8; 32];
+        let initiator_nonce: [u8; 24] = [0u8; 24];
+        let responder_nonce: [u8; 24] = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+        ];
+        let organization_id = "org-test-A";
+        let initiator_device_id = "device-test-A";
+        let responder_device_id = "device-test-B";
+
+        // Byte-width assertions (spec §7).
+        assert_eq!(
+            (organization_id.len() as u16).to_be_bytes(),
+            [0x00, 0x0A],
+            "H1: org-test-A length prefix must be 00 0A"
+        );
+
+        let session_key = derive_session_key(
+            &organization_key,
+            &initiator_nonce,
+            &responder_nonce,
+            organization_id,
+            initiator_device_id,
+            responder_device_id,
+        )
+        .expect("H1: session key derivation failed");
+
+        assert_eq!(session_key.len(), 32, "H1: session key length");
+
+        let session_key2 = derive_session_key(
+            &organization_key,
+            &initiator_nonce,
+            &responder_nonce,
+            organization_id,
+            initiator_device_id,
+            responder_device_id,
+        )
+        .expect("H1: second derivation failed");
+        assert_eq!(session_key, session_key2, "H1: not deterministic");
+
+        let hex: String = session_key.iter().map(|b| format!("{:02x}", b)).collect();
+        println!("H1 session key (32 bytes): {}", hex);
+    }
+
+    #[test]
+    fn h2_handshake_reply_tag() {
+        let handshake_key = [0u8; 32];
+        let protocol_version: u16 = 0x0001;
+        let initiator_organization_id = "org-test-A";
+        let initiator_device_id = "device-test-A";
+        let initiator_nonce: [u8; 24] = [0u8; 24];
+        let responder_organization_id = "org-test-B";
+        let responder_device_id = "device-test-B";
+        let responder_nonce: [u8; 24] = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+        ];
+
+        // Byte-width assertion (spec §7).
+        assert_eq!(
+            protocol_version.to_be_bytes(),
+            [0x00, 0x01],
+            "H2: protocol_version must be 00 01"
+        );
+
+        let tag = compute_handshake_reply_tag(
+            &handshake_key,
+            protocol_version,
+            initiator_organization_id,
+            initiator_device_id,
+            &initiator_nonce,
+            responder_organization_id,
+            responder_device_id,
+            &responder_nonce,
+        )
+        .expect("H2: proof tag failed");
+
+        assert_eq!(tag.len(), 32, "H2: tag length");
+
+        let tag2 = compute_handshake_reply_tag(
+            &handshake_key,
+            protocol_version,
+            initiator_organization_id,
+            initiator_device_id,
+            &initiator_nonce,
+            responder_organization_id,
+            responder_device_id,
+            &responder_nonce,
+        )
+        .expect("H2: second tag failed");
+        assert_eq!(tag, tag2, "H2: not deterministic");
+
+        let hex: String = tag.iter().map(|b| format!("{:02x}", b)).collect();
+        println!("H2 REPLY tag (32 bytes): {}", hex);
+    }
+
+    #[test]
+    fn h3_handshake_confirm_tag() {
+        let handshake_key = [0u8; 32];
+        let protocol_version: u16 = 0x0001;
+        let initiator_organization_id = "org-test-A";
+        let initiator_device_id = "device-test-A";
+        let initiator_nonce: [u8; 24] = [0u8; 24];
+        let responder_organization_id = "org-test-B";
+        let responder_device_id = "device-test-B";
+        let responder_nonce: [u8; 24] = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+        ];
+
+        let confirm_tag = compute_handshake_confirm_tag(
+            &handshake_key,
+            protocol_version,
+            initiator_organization_id,
+            initiator_device_id,
+            &initiator_nonce,
+            responder_organization_id,
+            responder_device_id,
+            &responder_nonce,
+        )
+        .expect("H3: proof tag failed");
+
+        // H3 independently constructs the H2 tag and checks they differ.
+        let reply_tag = compute_handshake_reply_tag(
+            &handshake_key,
+            protocol_version,
+            initiator_organization_id,
+            initiator_device_id,
+            &initiator_nonce,
+            responder_organization_id,
+            responder_device_id,
+            &responder_nonce,
+        )
+        .expect("H3: H2 tag for comparison failed");
+
+        assert_eq!(confirm_tag.len(), 32, "H3: tag length");
+        assert_ne!(confirm_tag, reply_tag, "H3: tag must differ from H2 tag");
+
+        let confirm_tag2 = compute_handshake_confirm_tag(
+            &handshake_key,
+            protocol_version,
+            initiator_organization_id,
+            initiator_device_id,
+            &initiator_nonce,
+            responder_organization_id,
+            responder_device_id,
+            &responder_nonce,
+        )
+        .expect("H3: second tag failed");
+        assert_eq!(confirm_tag, confirm_tag2, "H3: not deterministic");
+
+        let hex: String = confirm_tag.iter().map(|b| format!("{:02x}", b)).collect();
+        println!("H3 CONFIRM tag (32 bytes): {}", hex);
+    }
 }
