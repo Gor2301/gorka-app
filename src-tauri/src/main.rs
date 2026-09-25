@@ -2546,6 +2546,8 @@ mod tests {
 
         let hex: String = framed.iter().map(|b| format!("{:02x}", b)).collect();
         println!("M1 framed message ({} bytes): {}", framed.len(), hex);
+        let expected = hex::decode("0010000000e9000000000000000000000000000000000000000000000000689f9689e5308cf0e7bb8fc5c5349f48ef18a13e418888afdadd97a7693a987e9e81ecd5c1d82affd1af49650d8021a8e04104a0db119aa3a9e8333903e2c0fea4937a85652313ccf9e84193bff5bd2aa17e97c33a2ad487f778f8dc6b032ba59cbe3be778ea2e50bb5908d8921c4fec2d93532e71892d17cba49060dec4d6c84c7a09e634d6362546dff5763d47ba8c8837090f06b4cb8ea0322e6a3965b70fc7b3e5b63f12ffb636ecf14f6947142f3112855b80a303f3cbe443f5fa2b77ebba8e126abff95d1b728e7a830570621147").expect("M1: recorded hex is not valid");
+        assert_eq!(framed, expected, "M1: framed message differs from recorded vector");
     }
 
     #[test]
@@ -2585,6 +2587,8 @@ mod tests {
 
         let hex: String = inner.iter().map(|b| format!("{:02x}", b)).collect();
         println!("M2 inner content ({} bytes): {}", inner.len(), hex);
+        let expected = hex::decode("100100000010018f3e5a7c00700080000000000000011002000000040000000110030000009b110100000010018f3e5a7c007000800000000000000111020000000d6465766963652d746573742d411103000000080000000000000001110400000008000000000000000111050000000200011106000000010111070000000f656e746974792d746573742d303031110800000008000001a0bdd4440011090000001e200100000008000000045465737420020000000a00000006446562746f72").expect("M2: recorded hex is not valid");
+        assert_eq!(inner, expected, "M2: inner content differs from recorded vector");
     }
 
     #[test]
@@ -2603,6 +2607,8 @@ mod tests {
 
         let hex: String = payload.iter().map(|b| format!("{:02x}", b)).collect();
         println!("V1 payload ({} bytes): {}", payload.len(), hex);
+        let expected = hex::decode("200100000008000000045465737420020000000a00000006446562746f72").expect("V1: recorded hex is not valid");
+        assert_eq!(payload, expected, "V1: payload differs from recorded vector");
     }
 
     #[test]
@@ -2617,6 +2623,8 @@ mod tests {
 
         let hex: String = payload.iter().map(|b| format!("{:02x}", b)).collect();
         println!("V4 payload ({} bytes): {}", payload.len(), hex);
+        let expected = hex::decode("30010000002030110000000b0000000764656c657465643012000000090000000566616c7365").expect("V4: recorded hex is not valid");
+        assert_eq!(payload, expected, "V4: payload differs from recorded vector");
     }
 
     #[test]
@@ -2630,5 +2638,7 @@ mod tests {
 
         let hex: String = payload.iter().map(|b| format!("{:02x}", b)).collect();
         println!("V6 payload ({} bytes): {}", payload.len(), hex);
+        let expected = hex::decode("5001000000130000000f656e746974792d746573742d3030315002000000080000000443414c4c50030000000c000000084f5554424f554e4450040000000d00000009546573742063616c6c500500000006000000023031").expect("V6: recorded hex is not valid");
+        assert_eq!(payload, expected, "V6: payload differs from recorded vector");
     }
 }
