@@ -1442,6 +1442,89 @@ fn delete_document(
     Ok(affected > 0)
 }
 
+/// Build the enrollment package bytes from explicit inputs.
+///
+/// This is the shared package-construction operation. It is the
+/// single implementation used by both the production export command
+/// and the E1 known-answer test. It performs no I/O and generates no
+/// randomness: the salt and nonce are supplied by the caller.
+///
+/// Inputs:
+///   passphrase        UTF-8 passphrase for the package
+///   organization_id   the organization id, as a string
+///   organization_key  the 32-byte organization key
+///   salt              16-byte Argon2id salt
+///   nonce             24-byte XChaCha20-Poly1305 nonce
+///
+/// Output: the complete package bytes: 63-byte header, then the
+/// AEAD ciphertext and 16-byte tag.
+fn build_enrollment_package(
+    passphrase: &str,
+    organization_id: &str,
+    organization_key: &[u8],
+    salt: &[u8; 16],
+    nonce: &[u8; 24],
+) -> Result<Vec<u8>, String> {
+    if organization_key.len() != 32 {
+        return Err("Invalid organization key length".to_string());
+    }
+
+    // Derive the package encryption key with Argon2id at the frozen parameters.
+    let params = Params::new(131072, 4, 1, Some(32))
+        .map_err(|e| format!("Key derivation failed: {}", e))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut package_key = [0u8; 32];
+    argon2
+        .hash_password_into(passphrase.as_bytes(), salt, &mut package_key)
+        .map_err(|e| format!("Key derivation failed: {}", e))?;
+
+    // Build the inner content: org_id_len (u32 BE) || org_id || org_key.
+    let org_id_bytes = organization_id.as_bytes();
+    let mut inner = Vec::with_capacity(4 + org_id_bytes.len() + 32);
+    inner.extend_from_slice(&(org_id_bytes.len() as u32).to_be_bytes());
+    inner.extend_from_slice(org_id_bytes);
+    inner.extend_from_slice(organization_key);
+
+    // Ciphertext length = plaintext length + 16-byte Poly1305 tag.
+    let encrypted_payload_len = (inner.len() + 16) as u32;
+
+    // Build the 63-byte header exactly as it will be transmitted.
+    let mut header = Vec::with_capacity(63);
+    header.extend_from_slice(b"GORKAEP\0");
+    header.extend_from_slice(&1u16.to_be_bytes());
+    header.extend_from_slice(&131072u32.to_be_bytes());
+    header.extend_from_slice(&4u32.to_be_bytes());
+    header.push(1u8);
+    header.extend_from_slice(salt);
+    header.extend_from_slice(nonce);
+    header.extend_from_slice(&encrypted_payload_len.to_be_bytes());
+
+    if header.len() != 63 {
+        return Err("Internal error: header length is not 63 bytes".to_string());
+    }
+
+    // Encrypt with XChaCha20-Poly1305, using the full header as AAD.
+    let cipher = XChaCha20Poly1305::new_from_slice(&package_key)
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+    let xnonce = XNonce::from_slice(nonce);
+    let ciphertext = cipher
+        .encrypt(
+            xnonce,
+            Payload {
+                msg: &inner,
+                aad: &header,
+            },
+        )
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+
+    // Assemble the full package: header || ciphertext (which includes the tag).
+    let mut package = Vec::with_capacity(header.len() + ciphertext.len());
+    package.extend_from_slice(&header);
+    package.extend_from_slice(&ciphertext);
+
+    Ok(package)
+}
+
 #[command]
 fn export_enrollment_package(
     passphrase: String,
@@ -1476,65 +1559,19 @@ fn export_enrollment_package(
     rand::rngs::OsRng.fill_bytes(&mut salt);
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
 
-    // Derive the package encryption key with Argon2id at the frozen parameters.
-    let params = Params::new(131072, 4, 1, Some(32))
-        .map_err(|e| format!("Key derivation failed: {}", e))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut package_key = [0u8; 32];
-    argon2
-        .hash_password_into(passphrase.as_bytes(), &salt, &mut package_key)
-        .map_err(|e| format!("Key derivation failed: {}", e))?;
-
-    // Build the inner content: org_id_len (u32 BE) || org_id || org_key.
-    let org_id_bytes = key_org_id.as_bytes();
-    let mut inner = Vec::with_capacity(4 + org_id_bytes.len() + 32);
-    inner.extend_from_slice(&(org_id_bytes.len() as u32).to_be_bytes());
-    inner.extend_from_slice(org_id_bytes);
-    inner.extend_from_slice(&key_material);
-
-    // Ciphertext length = plaintext length + 16-byte Poly1305 tag.
-    let encrypted_payload_len = (inner.len() + 16) as u32;
-
-    // Build the 63-byte header exactly as it will be transmitted.
-    let mut header = Vec::with_capacity(63);
-    header.extend_from_slice(b"GORKAEP\0");
-    header.extend_from_slice(&1u16.to_be_bytes());
-    header.extend_from_slice(&131072u32.to_be_bytes());
-    header.extend_from_slice(&4u32.to_be_bytes());
-    header.push(1u8);
-    header.extend_from_slice(&salt);
-    header.extend_from_slice(&nonce_bytes);
-    header.extend_from_slice(&encrypted_payload_len.to_be_bytes());
-
-    if header.len() != 63 {
-        return Err("Internal error: header length is not 63 bytes".to_string());
-    }
-
-    // Encrypt with XChaCha20-Poly1305, using the full header as AAD.
-    let cipher = XChaCha20Poly1305::new_from_slice(&package_key)
-        .map_err(|e| format!("Encryption failed: {}", e))?;
-    let xnonce = XNonce::from_slice(&nonce_bytes);
-    let ciphertext = cipher
-        .encrypt(
-            xnonce,
-            Payload {
-                msg: &inner,
-                aad: &header,
-            },
-        )
-        .map_err(|e| format!("Encryption failed: {}", e))?;
-
-    // Assemble the full package: header || ciphertext (which includes the tag).
-    let mut package = Vec::with_capacity(header.len() + ciphertext.len());
-    package.extend_from_slice(&header);
-    package.extend_from_slice(&ciphertext);
+    let package = build_enrollment_package(
+        &passphrase,
+        &key_org_id,
+        &key_material,
+        &salt,
+        &nonce_bytes,
+    )?;
 
     std::fs::write(&file_path, &package)
         .map_err(|e| format!("Failed to save file: {}", e))?;
 
     Ok(file_path)
 }
-
 #[command]
 fn import_enrollment_package(
     passphrase: String,
@@ -1703,4 +1740,72 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+#[cfg(test)]
+mod tests {
+    use super::build_enrollment_package;
+
+    #[test]
+    fn e1_enrollment_package_creation() {
+        let passphrase = "test-passphrase-001";
+        let organization_id = "org-test-A";
+
+        let organization_key = [0u8; 32];
+
+        let salt: [u8; 16] = [0u8; 16];
+
+        let nonce: [u8; 24] = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+        ];
+
+        let package = build_enrollment_package(
+            passphrase,
+            organization_id,
+            &organization_key,
+            &salt,
+            &nonce,
+        )
+        .expect("E1: package construction failed");
+
+        assert_eq!(&package[0..8], b"GORKAEP\0", "E1: magic");
+        assert_eq!(
+            u16::from_be_bytes([package[8], package[9]]),
+            0x0001,
+            "E1: format_version"
+        );
+        assert_eq!(
+            u32::from_be_bytes([package[10], package[11], package[12], package[13]]),
+            131072,
+            "E1: argon2_memory_kib"
+        );
+        assert_eq!(
+            u32::from_be_bytes([package[14], package[15], package[16], package[17]]),
+            4,
+            "E1: argon2_iterations"
+        );
+        assert_eq!(package[18], 1, "E1: argon2_parallelism");
+        assert_eq!(&package[19..35], &salt, "E1: salt");
+        assert_eq!(&package[35..59], &nonce, "E1: nonce");
+
+        let encrypted_payload_len = u32::from_be_bytes([
+            package[59], package[60], package[61], package[62],
+        ]);
+        assert_eq!(encrypted_payload_len, 62, "E1: encrypted_payload_len");
+        assert_eq!(package.len(), 125, "E1: package length");
+
+        let package2 = build_enrollment_package(
+            passphrase,
+            organization_id,
+            &organization_key,
+            &salt,
+            &nonce,
+        )
+        .expect("E1: second construction failed");
+        assert_eq!(package, package2, "E1: not deterministic");
+
+        let hex: String = package.iter().map(|b| format!("{:02x}", b)).collect();
+        println!("E1 package ({} bytes): {}", package.len(), hex);
+    }
 }
