@@ -60,6 +60,8 @@ model Organization {
   templates                Template[]
   clientConnectors         ClientConnector[]
   connectorUsage           ConnectorUsage[]
+  deviceRegistrations      DeviceRegistration[]
+  relaySessions            RelaySession[]
 
   @@map("organizations")
 }
@@ -75,6 +77,7 @@ model User {
 
   organizationId String?  @map("organization_id")
   organization   Organization? @relation(fields: [organizationId], references: [id])
+  deviceRegistrations       DeviceRegistration[]
 
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -394,5 +397,97 @@ model ConnectorUsage {
 
   @@index([organizationId, connectorCode, periodStart])
   @@map("connector_usage")
+}
+
+// ============ CONTROL PLANE ============
+//
+// device_registrations and relay_sessions.
+//
+// These two tables support the multi-user sync model.
+// See CLOUD-TABLES.md v1.2 Section 20 for the logical contract.
+//
+// MVP model: user-based. One row per user, per organization.
+// The wire device_id is the user identity.
+//
+// The funded phase will add per-machine device identity. The
+// columns for that model are present below, nullable, and
+// reserved. The MVP never reads or writes them. See the
+// reserved-field rule below.
+
+model DeviceRegistration {
+  id             String   @id @default(cuid())
+
+  // Active MVP columns.
+  // organization_id and user_id are derived by the Control
+  // Plane from the authenticated session. Never trusted from
+  // a request body.
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String   @map("user_id")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  registeredAt   DateTime @default(now()) @map("registered_at")
+  lastSeenAt     DateTime? @map("last_seen_at")
+
+  // is_authorized is the MVP's authorization state.
+  // It is NOT the funded-phase per-machine revocation
+  // mechanism. That is revoked_at / revoked_by, which are
+  // reserved. Do not collapse the two.
+  isAuthorized   Boolean  @default(true) @map("is_authorized")
+
+  // RESERVED columns.
+  // Present for forward compatibility only. Not part of the
+  // active MVP behavior. MVP code MUST NOT read them and MUST
+  // NOT write them. No implementation may populate them or
+  // assign semantics to them until the combined-model
+  // specification explicitly activates them through an
+  // approved amendment.
+  deviceName     String?  @map("device_name")     // reserved
+  deviceType     String?  @map("device_type")     // reserved
+  devicePlatform String?  @map("device_platform") // reserved
+  devicePublicKey String? @map("device_public_key") // reserved
+  revokedAt      DateTime? @map("revoked_at")     // reserved
+  revokedBy      String?  @map("revoked_by")      // reserved
+  metadata       Json?                            // reserved
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, isAuthorized])
+  @@index([organizationId, lastSeenAt])
+  @@map("device_registrations")
+}
+
+model RelaySession {
+  id             String   @id @default(cuid())
+
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // device_a_id is always the lexicographically smaller UTF-8
+  // identifier string; device_b_id the larger. A/B ordering is
+  // a protocol invariant, enforced in Control Plane code.
+  deviceAId      String   @map("device_a_id")
+  deviceA        DeviceRegistration @relation("RelayDeviceA", fields: [deviceAId], references: [id], onDelete: Restrict)
+  deviceBId      String   @map("device_b_id")
+  deviceB        DeviceRegistration @relation("RelayDeviceB", fields: [deviceBId], references: [id], onDelete: Restrict)
+
+  startedAt      DateTime @default(now()) @map("started_at")
+  endedAt        DateTime? @map("ended_at")
+  bytesTransferred BigInt @default(0) @map("bytes_transferred")
+
+  // session_status follows the existing schema convention for
+  // enumerated string fields: String with a documented allowed
+  // set (ACTIVE, ENDED, FAILED), enforced in application code.
+  // No CHECK constraint, no Prisma enum. Same convention as
+  // User.role, License.status, SupportTicket.status.
+  sessionStatus  String   @default("ACTIVE") @map("session_status")
+  closeReason    String?  @map("close_reason")
+
+  // Operational metadata only. Never debtor data. Never
+  // traffic content.
+  metadata       Json?
+
+  @@index([organizationId, sessionStatus])
+  @@index([organizationId, startedAt])
+  @@index([deviceAId, deviceBId, startedAt])
+  @@map("relay_sessions")
 }
 
