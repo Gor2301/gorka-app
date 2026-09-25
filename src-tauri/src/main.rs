@@ -1769,7 +1769,7 @@ fn main() {
 }
 #[cfg(test)]
 mod tests {
-    use super::build_enrollment_package;
+    use super::{build_enrollment_package, parse_enrollment_package};
 
     #[test]
     fn e1_enrollment_package_creation() {
