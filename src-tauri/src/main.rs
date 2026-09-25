@@ -1759,6 +1759,248 @@ fn build_handshake_proof_input(
     input.extend_from_slice(responder_nonce);
     input
 }
+/// Encode a single TLV record.
+///
+/// Per Section 22.5:
+///   u16 BE type code || u32 BE value length || value
+///
+/// This is the single TLV primitive. Every higher-level encoder
+/// in this file calls this function. No higher-level encoder
+/// writes a TLV header on its own.
+fn encode_tlv(type_code: u16, value: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(6 + value.len());
+    out.extend_from_slice(&type_code.to_be_bytes());
+    out.extend_from_slice(&(value.len() as u32).to_be_bytes());
+    out.extend_from_slice(value);
+    out
+}
+
+/// Encode a UTF-8 string field value.
+///
+/// Per Section 22.3: u32 BE length (bytes) || UTF-8 bytes.
+/// The result is the TLV *value*, not the TLV record.
+fn encode_string_value(s: &str) -> Vec<u8> {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(4 + bytes.len());
+    out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+    out.extend_from_slice(bytes);
+    out
+}
+
+/// Encode a DEBTOR_CREATED payload (Section 25.8.3).
+///
+/// Fields, in order:
+///   name       0x2001
+///   surname    0x2002
+///   email      0x2003  optional
+///   phone      0x2004  optional
+///   data_json  0x2005  optional
+fn encode_debtor_created_payload(
+    name: &str,
+    surname: &str,
+    email: Option<&str>,
+    phone: Option<&str>,
+    data_json: Option<&str>,
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&encode_tlv(0x2001, &encode_string_value(name)));
+    out.extend_from_slice(&encode_tlv(0x2002, &encode_string_value(surname)));
+    if let Some(e) = email {
+        out.extend_from_slice(&encode_tlv(0x2003, &encode_string_value(e)));
+    }
+    if let Some(p) = phone {
+        out.extend_from_slice(&encode_tlv(0x2004, &encode_string_value(p)));
+    }
+    if let Some(d) = data_json {
+        out.extend_from_slice(&encode_tlv(0x2005, &encode_string_value(d)));
+    }
+    out
+}
+
+/// Encode an ENTITY_UPDATED payload (Section 25.9.3).
+///
+/// One or more change records, each of type 0x3001. Each change's
+/// value is a sequence of two TLV records:
+///   field_name   0x3011
+///   field_value  0x3012
+///
+/// Section 25.9.3 requires the change records to appear in
+/// lexicographic order by field_name. This encoder establishes
+/// that order before serializing. The input slice is not itself
+/// a wire-order guarantee.
+fn encode_entity_updated_payload(changes: &[(&str, &str)]) -> Vec<u8> {
+    let mut sorted: Vec<(&str, &str)> = changes.to_vec();
+    sorted.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut out = Vec::new();
+    for (field_name, field_value) in sorted {
+        let mut change = Vec::new();
+        change.extend_from_slice(&encode_tlv(0x3011, &encode_string_value(field_name)));
+        change.extend_from_slice(&encode_tlv(0x3012, &encode_string_value(field_value)));
+        out.extend_from_slice(&encode_tlv(0x3001, &change));
+    }
+    out
+}
+/// Encode a COMMUNICATION_LOGGED payload (Section 25.11.3).
+///
+/// Fields, in order:
+///   debtor_id           0x5001
+///   communication_type  0x5002
+///   direction           0x5003
+///   content             0x5004
+///   duration            0x5005  optional
+fn encode_communication_logged_payload(
+    debtor_id: &str,
+    communication_type: &str,
+    direction: &str,
+    content: &str,
+    duration: Option<&str>,
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&encode_tlv(0x5001, &encode_string_value(debtor_id)));
+    out.extend_from_slice(&encode_tlv(0x5002, &encode_string_value(communication_type)));
+    out.extend_from_slice(&encode_tlv(0x5003, &encode_string_value(direction)));
+    out.extend_from_slice(&encode_tlv(0x5004, &encode_string_value(content)));
+    if let Some(d) = duration {
+        out.extend_from_slice(&encode_tlv(0x5005, &encode_string_value(d)));
+    }
+    out
+}
+/// Encode an event record (Section 22.13.2).
+///
+/// Fields, in order:
+///   event_id       0x1101  exactly 16 bytes
+///   device_id      0x1102  raw bytes
+///   sequence       0x1103  u64
+///   logical_clock  0x1104  u64
+///   event_type     0x1105  u16
+///   entity_type    0x1106  u8
+///   entity_id      0x1107  raw bytes
+///   created_at     0x1108  u64, milliseconds since epoch
+///   payload        0x1109  TLV-encoded payload
+fn encode_event_record(
+    event_id: &[u8; 16],
+    device_id: &[u8],
+    sequence: u64,
+    logical_clock: u64,
+    event_type: u16,
+    entity_type: u8,
+    entity_id: &[u8],
+    created_at_ms: u64,
+    payload: &[u8],
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&encode_tlv(0x1101, event_id));
+    out.extend_from_slice(&encode_tlv(0x1102, device_id));
+    out.extend_from_slice(&encode_tlv(0x1103, &sequence.to_be_bytes()));
+    out.extend_from_slice(&encode_tlv(0x1104, &logical_clock.to_be_bytes()));
+    out.extend_from_slice(&encode_tlv(0x1105, &event_type.to_be_bytes()));
+    out.extend_from_slice(&encode_tlv(0x1106, &[entity_type]));
+    out.extend_from_slice(&encode_tlv(0x1107, entity_id));
+    out.extend_from_slice(&encode_tlv(0x1108, &created_at_ms.to_be_bytes()));
+    out.extend_from_slice(&encode_tlv(0x1109, payload));
+    out
+}
+
+/// Build a framed, encrypted SYNC_MESSAGE (Section 22.13.1).
+///
+/// Inner content:
+///   message_id  0x1001  16 bytes
+///   event_count 0x1002  u32 = event_records.len()
+///   events      0x1003  repeatable, one per event record
+///
+/// Outer framing:
+///   type 0x0010 (u16 BE) || length (u32 BE) ||
+///   nonce (24) || ciphertext || tag (16)
+///
+/// The AAD is the 6-byte outer header, as transmitted.
+fn build_sync_message(
+    session_key: &[u8; 32],
+    nonce: &[u8; 24],
+    message_id: &[u8; 16],
+    event_records: &[Vec<u8>],
+) -> Result<Vec<u8>, String> {
+    // Inner content.
+    let mut inner = Vec::new();
+    inner.extend_from_slice(&encode_tlv(0x1001, message_id));
+    let event_count = event_records.len() as u32;
+    inner.extend_from_slice(&encode_tlv(0x1002, &event_count.to_be_bytes()));
+    for record in event_records {
+        inner.extend_from_slice(&encode_tlv(0x1003, record));
+    }
+
+    // Outer header: type 0x0010 || length.
+    let outer_length = (24 + inner.len() + 16) as u32;
+    let mut outer_header = Vec::with_capacity(6);
+    outer_header.extend_from_slice(&0x0010u16.to_be_bytes());
+    outer_header.extend_from_slice(&outer_length.to_be_bytes());
+
+    // Encrypt with XChaCha20-Poly1305, header as AAD.
+    let cipher = XChaCha20Poly1305::new_from_slice(session_key)
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+    let xnonce = XNonce::from_slice(nonce);
+    let ciphertext = cipher
+        .encrypt(
+            xnonce,
+            Payload {
+                msg: &inner,
+                aad: &outer_header,
+            },
+        )
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+
+    // Assemble: outer_header || nonce || ciphertext (includes tag).
+    let mut framed = Vec::with_capacity(6 + 24 + ciphertext.len());
+    framed.extend_from_slice(&outer_header);
+    framed.extend_from_slice(nonce);
+    framed.extend_from_slice(&ciphertext);
+    Ok(framed)
+}
+
+/// Parse and decrypt a framed SYNC_MESSAGE (Section 22.13.1).
+///
+/// This validates and decrypts the outer envelope and returns the
+/// decrypted inner content. It does not parse event records. Full
+/// message parsing is a separate concern, for a later phase.
+fn parse_sync_message(
+    session_key: &[u8; 32],
+    framed_message: &[u8],
+) -> Result<Vec<u8>, String> {
+    if framed_message.len() < 6 + 24 + 16 {
+        return Err("SYNC_MESSAGE too short".to_string());
+    }
+
+    // Read and verify the outer header.
+    let msg_type = u16::from_be_bytes([framed_message[0], framed_message[1]]);
+    if msg_type != 0x0010 {
+        return Err("SYNC_MESSAGE: unexpected type code".to_string());
+    }
+    let outer_length =
+        u32::from_be_bytes([framed_message[2], framed_message[3], framed_message[4], framed_message[5]])
+            as usize;
+    if framed_message.len() != 6 + outer_length {
+        return Err("SYNC_MESSAGE: length mismatch".to_string());
+    }
+
+    let outer_header = &framed_message[0..6];
+    let nonce = &framed_message[6..30];
+    let ciphertext = &framed_message[30..];
+
+    let cipher = XChaCha20Poly1305::new_from_slice(session_key)
+        .map_err(|e| format!("Decryption failed: {}", e))?;
+    let xnonce = XNonce::from_slice(nonce);
+    let plaintext = cipher
+        .decrypt(
+            xnonce,
+            Payload {
+                msg: ciphertext,
+                aad: outer_header,
+            },
+        )
+        .map_err(|_| "SYNC_MESSAGE: decryption failed".to_string())?;
+
+    Ok(plaintext)
+}
 /// Parse and decrypt an enrollment package.
 ///
 /// This is the shared package-parsing operation. It is the single
@@ -1956,7 +2198,7 @@ fn main() {
 }
 #[cfg(test)]
 mod tests {
-    use super::{build_enrollment_package, parse_enrollment_package, derive_session_key, compute_handshake_reply_tag, compute_handshake_confirm_tag};
+        use super::{build_enrollment_package, parse_enrollment_package, derive_session_key, compute_handshake_reply_tag, compute_handshake_confirm_tag, encode_tlv, encode_debtor_created_payload, encode_entity_updated_payload, encode_communication_logged_payload, encode_event_record, build_sync_message, parse_sync_message};
 
     #[test]
     fn e1_enrollment_package_creation() {
@@ -2254,5 +2496,139 @@ mod tests {
         println!("H3 CONFIRM tag (32 bytes): {}", hex);
         let expected = hex::decode("e37ba7454ebf9b85d12c9e0156d5ec7bc9dc3b2d7f2c10ca689b1e6b45891fd5").expect("H3: recorded hex is not valid");
         assert_eq!(confirm_tag, expected.as_slice(), "H3: tag differs from recorded vector");
+    }
+    #[test]
+    fn m1_sync_message_encryption() {
+        // Fixtures (spec section 11).
+        let session_key = [0u8; 32];
+        let nonce = [0u8; 24];
+        // message_id = event_id_test_001, 16 bytes.
+        let message_id: [u8; 16] = [
+            0x01, 0x8F, 0x3E, 0x5A, 0x7C, 0x00, 0x70, 0x00,
+            0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        ];
+        let device_id = "device-test-A";
+        let entity_id = "entity-test-001";
+        let created_at_ms: u64 = 1_789_891_200_000; // 2026-09-20T00:00:00Z
+
+        // Build the DEBTOR_CREATED payload (V1 fields).
+        let payload = encode_debtor_created_payload("Test", "Debtor", None, None, None);
+
+        // Build the event record.
+        let event_id = message_id; // same bytes, per spec section 11
+        let record = encode_event_record(
+            &event_id,
+            device_id.as_bytes(),
+            1,
+            1,
+            0x0001, // DEBTOR_CREATED
+            0x01,   // debtor
+            entity_id.as_bytes(),
+            created_at_ms,
+            &payload,
+        );
+
+        // Build the framed, encrypted message.
+        let framed = build_sync_message(&session_key, &nonce, &message_id, &[record.clone()])
+            .expect("M1: build_sync_message failed");
+
+        // Structural checks.
+        assert_eq!(&framed[0..2], &[0x00, 0x10], "M1: outer type");
+        let outer_length =
+            u32::from_be_bytes([framed[2], framed[3], framed[4], framed[5]]) as usize;
+        assert_eq!(framed.len(), 6 + outer_length, "M1: outer length");
+        assert_eq!(&framed[6..30], &nonce, "M1: nonce");
+
+        // Determinism.
+        let framed2 = build_sync_message(&session_key, &nonce, &message_id, &[record])
+            .expect("M1: second build failed");
+        assert_eq!(framed, framed2, "M1: not deterministic");
+
+        let hex: String = framed.iter().map(|b| format!("{:02x}", b)).collect();
+        println!("M1 framed message ({} bytes): {}", framed.len(), hex);
+    }
+
+    #[test]
+    fn m2_sync_message_decryption() {
+        let session_key = [0u8; 32];
+        let nonce = [0u8; 24];
+        let message_id: [u8; 16] = [
+            0x01, 0x8F, 0x3E, 0x5A, 0x7C, 0x00, 0x70, 0x00,
+            0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        ];
+        let payload = encode_debtor_created_payload("Test", "Debtor", None, None, None);
+        let record = encode_event_record(
+            &message_id,
+            "device-test-A".as_bytes(),
+            1,
+            1,
+            0x0001,
+            0x01,
+            "entity-test-001".as_bytes(),
+            1_789_891_200_000,
+            &payload,
+        );
+
+        let framed = build_sync_message(&session_key, &nonce, &message_id, &[record.clone()])
+            .expect("M2: build_sync_message failed");
+        let inner = parse_sync_message(&session_key, &framed)
+            .expect("M2: parse_sync_message failed");
+
+        // The decrypted inner content must re-serialize to the same bytes
+        // that build_sync_message encrypted.
+        let mut expected_inner = Vec::new();
+        expected_inner.extend_from_slice(&encode_tlv(0x1001, &message_id));
+        expected_inner.extend_from_slice(&encode_tlv(0x1002, &1u32.to_be_bytes()));
+        expected_inner.extend_from_slice(&encode_tlv(0x1003, &record));
+
+        assert_eq!(inner, expected_inner, "M2: inner content mismatch");
+
+        let hex: String = inner.iter().map(|b| format!("{:02x}", b)).collect();
+        println!("M2 inner content ({} bytes): {}", inner.len(), hex);
+    }
+
+    #[test]
+    fn v1_debtor_created_payload() {
+        let payload = encode_debtor_created_payload("Test", "Debtor", None, None, None);
+
+        // Structural check: two fields, types 0x2001 and 0x2002.
+        assert_eq!(&payload[0..2], &[0x20, 0x01], "V1: first field type");
+        let len1 = u32::from_be_bytes([payload[2], payload[3], payload[4], payload[5]]) as usize;
+        assert_eq!(len1, 4 + 4, "V1: name TLV value length");
+        let name_start = 6 + 4;
+        assert_eq!(&payload[name_start..name_start + 4], b"Test", "V1: name");
+
+        let second = name_start + 4;
+        assert_eq!(&payload[second..second + 2], &[0x20, 0x02], "V1: second field type");
+
+        let hex: String = payload.iter().map(|b| format!("{:02x}", b)).collect();
+        println!("V1 payload ({} bytes): {}", payload.len(), hex);
+    }
+
+    #[test]
+    fn v4_entity_updated_payload() {
+        let payload = encode_entity_updated_payload(&[("deleted", "false")]);
+
+        // Structural check: outer 0x3001.
+        assert_eq!(&payload[0..2], &[0x30, 0x01], "V4: outer type");
+        // Inner: 0x3011 then 0x3012.
+        let inner = &payload[6..];
+        assert_eq!(&inner[0..2], &[0x30, 0x11], "V4: field_name type");
+
+        let hex: String = payload.iter().map(|b| format!("{:02x}", b)).collect();
+        println!("V4 payload ({} bytes): {}", payload.len(), hex);
+    }
+
+    #[test]
+    fn v6_communication_logged_payload() {
+        let payload = encode_communication_logged_payload(
+            "entity-test-001", "CALL", "OUTBOUND", "Test call", Some("01"),
+        );
+
+        // Structural check: five fields, types 0x5001 through 0x5005.
+        assert_eq!(&payload[0..2], &[0x50, 0x01], "V6: first field type");
+
+        let hex: String = payload.iter().map(|b| format!("{:02x}", b)).collect();
+        println!("V6 payload ({} bytes): {}", payload.len(), hex);
     }
 }
