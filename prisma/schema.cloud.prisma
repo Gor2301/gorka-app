@@ -433,6 +433,11 @@ model DeviceRegistration {
   // mechanism. That is revoked_at / revoked_by, which are
   // reserved. Do not collapse the two.
   isAuthorized   Boolean  @default(true) @map("is_authorized")
+  // Reverse relations for relay_sessions.
+  // Not columns. Prisma requires the relation to be declared on
+  // both sides. These do not create anything in the database.
+  relaySessionsAsDeviceA  RelaySession[] @relation("RelayDeviceA")
+  relaySessionsAsDeviceB  RelaySession[] @relation("RelayDeviceB")
 
   // RESERVED columns.
   // Present for forward compatibility only. Not part of the
