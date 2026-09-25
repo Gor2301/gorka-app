@@ -678,6 +678,35 @@ was blocked on the package not existing. It is now unblocked.
 See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
 September 25 entries.
 
+Update - September 25, 2026 (Phase E, E1-E6)
+
+The enrollment-package test vectors are complete. E1 through E6
+are done and pass on the cloud machine. Commit 77b8aa1.
+
+E1 is the deterministic known-answer test. It constructs the
+package from fixed inputs and asserts byte equality against a
+recorded 125-byte reference value. The value is recorded in
+SYNC-TEST-VECTORS-v1.md, E1 entry, as SPECIFIED / FROZEN.
+
+E2 through E6 are the import behavioral tests: correct
+passphrase, wrong passphrase, tampered payload, organization
+mismatch, wrong magic. All five pass.
+
+Two shared operations were extracted, both plain functions, both
+testable without a Tauri runtime:
+- build_enrollment_package, used by the export command.
+- parse_enrollment_package, used by the import command.
+
+Both production commands keep their observable behavior. No new
+Tauri command was added. generate_handler! is unchanged.
+
+Phase E is not complete. H1, H2, H3, M1, M2, V1, V4, V6 remain.
+H1-H3 are the next target. Their vectors entry still says
+BLOCKED, but that text is stale: SYNC-ARCHITECTURE.md section
+22.19 now contains the HKDF labels.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
+September 25 (Phase E) entries.
 ========================================================================
 
 9. HOW TO HANDLE A NEW QUESTION OR FEATURE REQUEST
@@ -742,9 +771,10 @@ checking the rules.
   prerequisites for multi-user implementation are met. The
   Argon2id parameters were frozen on September 24, 2026
   (SYNC-ARCHITECTURE.md section 7.3, section 22.19.2). Phase D
-  is complete: D.1 through D.4.4 are done and verified. What
-  remains before implementation: E1 (the deterministic test
-  vector), and the Control Plane tables applied to gorka_test.
+  is complete: D.1 through D.4.4 are done and verified. Phase E
+  is in progress: E1 through E6 are done and verified. What
+  remains before implementation: H1, H2, H3, M1, M2, V1, V4,
+  V6, and the Control Plane tables applied to gorka_test.
   
 ========================================================================
 

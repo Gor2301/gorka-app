@@ -4331,5 +4331,193 @@ package now exists, so E1 is unblocked.
 
 End of entry.
 
+## Recovery Session — September 25, 2026 (Phase E, E1–E6)
+
+This entry records the completion of the enrollment-package
+test vectors, E1 through E6. The work extracted two shared
+package operations, added the deterministic E1 known-answer
+test, and added the five E2–E6 behavioral tests for the import
+command. All six tests pass on the cloud machine.
+
+Phase E is not complete. It is the test-vector phase, and E1–E6
+are the enrollment-package family. H1, H2, H3, M1, M2, V1, V4,
+and V6 remain.
+
+### E1 — the deterministic known-answer test
+
+Commit 4db59fc (extraction and Phase 1 test), 76f4544 (Phase 2
+assertion via hex decode), 4a8cd0f (vectors-file update).
+
+The enrollment-package construction was extracted from
+export_enrollment_package into a shared operation,
+build_enrollment_package. The production command keeps its
+behavior: it generates the salt and nonce with OsRng and calls
+the shared function. The shared function takes the salt and
+nonce as explicit inputs and generates nothing.
+
+The E1 test calls the shared function with the fixed fixtures
+from SYNC-TEST-VECTORS-v1.md §2:
+  organization_key   organization_key_zero
+  organization_id    organization_id_A ("org-test-A")
+  passphrase         "test-passphrase-001"
+  argon2id_salt      argon2id_salt_zero
+  aead_nonce         nonce_structured
+  argon2id params    131072 / 4 / 1
+
+The test verifies the structure of the produced package and
+asserts its length is 125 bytes. It then decodes the recorded
+125-byte reference value from hex and asserts byte equality.
+The test is deterministic and runs without a Tauri runtime.
+
+### The 125-byte size, and the 140-byte confusion
+
+The E1 package is 125 bytes: 63-byte header, 46-byte inner
+content, 62-byte encrypted payload. The D.3 test produced a
+140-byte package because it used the real 25-byte organization
+id. E1 uses organization_id_A, which is 10 bytes. The
+difference is the organization id length. This is recorded in
+the E1 entry in SYNC-TEST-VECTORS-v1.md so the size difference
+is not mistaken for a bug.
+
+### Two transcription errors, and the fix
+
+The first attempt at the Phase 2 assertion converted the hex to
+a hand-written [u8; 125] array. The array was 124 bytes. The
+compiler rejected it. The second attempt recorded the wrong hex
+in SYNC-TEST-VECTORS-v1.md: the file's hex was 252 characters
+(126 bytes) instead of 250 characters (125 bytes).
+
+The fix: do not transcribe by hand. The test now contains the
+hex as a string and decodes it with hex::decode. The recorded
+value in the vectors file was compared to the value in main.rs
+using fc.exe, a byte-level file comparison. The two files were
+byte-identical. The transcription errors are recorded here as
+a lesson: a byte-count measured through a terminal can be
+wrong, and a value that matters should be verified with a
+tool that compares bytes, not characters.
+
+### E2–E6 — the import behavioral tests
+
+Commit ee496e9 (extraction and tests), 77b8aa1 (test-module
+import fix).
+
+The package-parsing logic was extracted from
+import_enrollment_package into a shared operation,
+parse_enrollment_package. The function takes the file bytes,
+the passphrase, and the trusted organization id. It returns the
+32-byte organization key or an error string. It performs no
+I/O and touches no database.
+
+The production command keeps its behavior: it reads the file,
+calls the parser, and installs the key in the database. The
+parser is not a Tauri command. It has no #[command] attribute.
+The import command keeps its #[command] attribute.
+
+Five behavioral tests were added:
+
+  E2  correct passphrase, matching org id   returns the key
+  E3  wrong passphrase                      "Wrong passphrase or corrupted package"
+  E4  tampered payload (one byte flipped)   "Wrong passphrase or corrupted package"
+  E5  organization mismatch                 "Organization mismatch"
+  E6  wrong magic bytes                     "Invalid package: bad magic bytes"
+
+E3 and E4 assert the same error string. That is deliberate:
+the AEAD cannot distinguish a wrong passphrase from a tampered
+payload. A single message for both is honest; pretending to
+distinguish them would not be.
+
+All five tests share the E1 package through a helper,
+e1_package(), which decodes the recorded hex. The E1 test uses
+the same helper.
+
+### The import-command refactor left one stale variable
+
+When the body of import_enrollment_package was replaced, the
+INSERT statement still referenced package_org_id, a variable
+that had moved into the parser. It also passed organization_key
+by value, where the SQL binding needs a slice. Both were fixed
+in the same commit: package_org_id became organization_id, and
+organization_key became &organization_key.
+
+### The test-module import
+
+The first cloud build of E2–E6 failed with five instances of
+E0425: cannot find function parse_enrollment_package. The tests
+are in a child module, #[cfg(test)] mod tests, and a child
+module does not see the parent's items without an explicit
+import. The module already had use super::build_enrollment_package;
+it was changed to use super::{build_enrollment_package,
+parse_enrollment_package};. Fixed in commit 77b8aa1.
+
+### Verification
+
+The cloud machine ran cargo test -- --nocapture. All six tests
+passed:
+
+  test tests::e1_enrollment_package_creation ... ok
+  test tests::e2_import_correct_passphrase ... ok
+  test tests::e3_import_wrong_passphrase ... ok
+  test tests::e4_import_tampered_payload ... ok
+  test tests::e5_import_organization_mismatch ... ok
+  test tests::e6_import_wrong_magic ... ok
+
+  test result: ok. 6 passed; 0 failed
+
+### The vectors file, after E1
+
+The E1 entry in SYNC-TEST-VECTORS-v1.md was updated:
+  Specification status: BLOCKED -> SPECIFIED
+  Expected-bytes status: PENDING -> FROZEN
+The recorded hex is the 125-byte value, and a structural
+breakdown of the bytes was added under the "Expected output"
+heading.
+
+The document header status was updated to note that E1 is
+recorded. Section 1, item 3 was updated to say E1 is recorded
+and H1, H2, H3 remain. The summary table row for E1 was updated
+to SPECIFIED / FROZEN / None.
+
+### Rule compliance
+
+- No production behavior changed. The two production commands,
+  export_enrollment_package and import_enrollment_package, keep
+  their observable behavior. Only their internal structure was
+  refactored.
+- No cloud schema change. No new tables. No new columns.
+- No CI/CD touched.
+- Invariant held. The organization key is local-only.
+- Instance B (db.rs::derive_key) was not touched. The package
+  key derivation is Instance A, separate from the SQLCipher
+  derivation.
+- No new Tauri command. The two shared functions are plain
+  functions, not commands. The generate_handler! block is
+  unchanged.
+- The passphrase is never logged, never stored, never included
+  in an error, never printed.
+
+### Files changed this session
+
+- src-tauri/src/main.rs — build_enrollment_package extracted;
+  parse_enrollment_package extracted; export_enrollment_package
+  and import_enrollment_package refactored; E1, E2, E3, E4, E5,
+  E6 tests added. Commits 4db59fc, 76f4544, ee496e9, 77b8aa1.
+- GORKA_RECOVERY/recovery-notes/SYNC-TEST-VECTORS-v1.md — E1
+  entry updated; E1 hex recorded; header and Section 1 status
+  updated; summary table updated. Commit 4a8cd0f.
+
+### What comes next
+
+H1, H2, H3 — the session-key derivation and handshake proof
+tags. Their specification in SYNC-TEST-VECTORS-v1.md still
+says "BLOCKED — HKDF domain-separation labels not confirmed in
+§22.19", but that text is stale: §22.19 now contains the
+labels, restored on September 20-21. The blocker is gone.
+
+H1–H3 need their own spec, in the same style as the E1 spec.
+They need two crates not yet in Cargo.toml: hkdf and hmac.
+
+Then M1, M2, V1, V4, V6.
+
+End of entry.
 
 

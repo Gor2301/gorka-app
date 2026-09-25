@@ -1685,6 +1685,134 @@ No CI/CD touched.
 Invariant held. The organization key is local-only. Instance B
 (db.rs::derive_key) was not touched.
 
+STATUS UPDATE - September 25, 2026 (Phase E, E1-E6)
+
+WHAT THIS SESSION DID
+
+Completed the enrollment-package test vectors, E1 through E6.
+All six tests pass on the cloud machine with cargo test.
+
+Phase E is not complete. It is the test-vector phase. E1-E6 are
+the enrollment-package family. H1, H2, H3, M1, M2, V1, V4, and
+V6 remain.
+
+E1 - THE DETERMINISTIC KNOWN-ANSWER TEST
+
+Commits 4db59fc (extraction and Phase 1 test), 4a8cd0f (vector
+and Phase 2 assertion), 76f4544 (hex decode).
+
+The package construction was extracted from
+export_enrollment_package into build_enrollment_package. The
+production command keeps its behavior: salt and nonce from
+OsRng, then a call to the shared function. The shared function
+takes salt and nonce as explicit inputs and generates nothing.
+
+The E1 test calls the shared function with fixed fixtures and
+asserts the result. The package is 125 bytes. The recorded
+reference value is in SYNC-TEST-VECTORS-v1.md, E1 entry,
+recorded as SPECIFIED / FROZEN.
+
+Note on size: the E1 package is 125 bytes, not 140. The D.3
+test produced 140 because it used the real 25-byte org id. E1
+uses organization_id_A, 10 bytes. The difference is the org id
+length. Recorded in the vectors file.
+
+Two transcription errors are recorded in DECISIONS.md: a
+124-byte hand-written array, and a 126-byte hex in the vectors
+file. The fix was to stop transcribing by hand. The test now
+decodes the hex with hex::decode, and the vectors file's hex
+was compared against main.rs with fc.exe. Byte-identical.
+
+E2-E6 - THE IMPORT BEHAVIORAL TESTS
+
+Commits ee496e9 (extraction and tests), 77b8aa1 (import fix).
+
+The parsing logic was extracted from import_enrollment_package
+into parse_enrollment_package. It takes file bytes, passphrase,
+and trusted org id; it returns the 32-byte key or an error
+string. No I/O, no database. The production import command
+reads the file, calls the parser, and installs the key.
+
+Five tests:
+
+  E2  correct passphrase              returns the key
+  E3  wrong passphrase                "Wrong passphrase or corrupted package"
+  E4  tampered payload                "Wrong passphrase or corrupted package"
+  E5  organization mismatch           "Organization mismatch"
+  E6  wrong magic                     "Invalid package: bad magic bytes"
+
+E3 and E4 assert the same message. That is deliberate: the AEAD
+cannot distinguish a wrong passphrase from a tampered payload.
+
+All six tests share the E1 package through a helper,
+e1_package(). The E1 test uses the same helper.
+
+WHAT IS STILL OPEN
+
+H1, H2, H3 - the session-key derivation and handshake proof
+tags. Their vectors entry still says BLOCKED, but that is
+stale: SYNC-ARCHITECTURE.md 22.19 now contains the HKDF labels,
+restored on September 20-21. H1-H3 need their own spec, in the
+style of the E1 spec. They need two crates not yet in
+Cargo.toml: hkdf and hmac.
+
+M1, M2, V1, V4, V6 - specification done, expected bytes not
+computed.
+
+Excel and TXT implementation. Deferred by conscious decision.
+
+Debt due-date bug. Not reproducible. Not closed.
+
+supervisor-dashboard\dist\ stale build. Housekeeping.
+
+dataType dropdown offers CSV and JSON. JSON is not implemented.
+
+.txt entry in unstructured accept advertises a route that does
+not work.
+
+Dashboard 401s from /api/auth/me and /api/connectors/types.
+
+Control Plane tables not applied to gorka_test.
+
+Control Plane services not implemented.
+
+Agent App (Phase 9.5) not started.
+
+Sync engine (Phase 9.6) not started.
+
+Multi-user demonstration (Phase 9.7) not started.
+
+check-columns.ts, untracked, on the cloud machine only.
+
+test-package.gorka, untracked, on the cloud machine only. The
+D.3 test package. Not deleted, because the D.4.4 refusal path
+did not commit.
+
+All items from the September 23 and September 24 entries,
+unchanged.
+
+REPOSITORY STATE
+
+Main machine: at 77b8aa1, clean, pushed.
+
+Cloud machine: at 77b8aa1, clean.
+
+GitHub origin/main: at 77b8aa1.
+
+RULE COMPLIANCE
+
+No production behavior changed. Both production commands keep
+their observable behavior; only their internal structure was
+refactored.
+
+No cloud schema change.
+
+No CI/CD touched.
+
+Invariant held. The organization key is local-only. Instance B
+(db.rs::derive_key) was not touched.
+
+
 
 
 
