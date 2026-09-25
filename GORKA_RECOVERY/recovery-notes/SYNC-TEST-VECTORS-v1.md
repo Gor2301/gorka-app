@@ -14,9 +14,9 @@ Version:     1.0 (partially complete)
 
 Date:        September 20, 2026
 
-Status:      PARTIALLY COMPLETE — deterministic cryptographic
+Status:      PARTIALLY COMPLETE — E1 recorded; H1, H2, H3 and
 
-&#x20;            outputs pending final parameter freeze
+&#x20;            the M and V vectors pending computation
 
 Authority:   Companion to SYNC-ARCHITECTURE.md v1.1 (frozen),
 
@@ -158,9 +158,9 @@ four BLOCKED vectors can be computed:
 
 
 
-&#x20; 3. This artifact must then record the computed outputs for E1,
+&#x20; 3. E1 has been recorded. H1, H2, and H3 remain to be
 
-&#x20;    H1, H2, and H3, and the status must be changed from
+&#x20;    computed. When all are recorded, the status changes from
 
 &#x20;    PARTIALLY COMPLETE to COMPLETE.
 
@@ -400,9 +400,9 @@ E1 — Enrollment package creation
 
 
 
-Specification status:  BLOCKED — Argon2id parameters not frozen
+Specification status:  SPECIFIED
 
-Expected-bytes status: PENDING
+Expected-bytes status: FROZEN
 
 
 
@@ -418,37 +418,59 @@ Inputs:
 
 &#x20; argon2id\_salt:        argon2id\_salt\_zero
 
-&#x20; argon2id parameters:  NOT YET FROZEN (see SYNC-ARCHITECTURE.md §7.3)
+&#x20; argon2id parameters:  131072 / 4 / 1
+
+&#x20; aead\_nonce:           nonce\_structured
 
 Operation:
 
 &#x20; Derive the package encryption key from the passphrase using
 
-&#x20; Argon2id with the frozen parameters. Encrypt the payload
+&#x20; Argon2id at 131072 / 4 / 1 with the raw 16-byte salt. Encrypt
 
-&#x20; {organization\_id, organization\_key} with XChaCha20-Poly1305
+&#x20; the payload {organization\_id, organization\_key} with
 
-&#x20; using that key, a fixed nonce, and the package format version as
+&#x20; XChaCha20-Poly1305 using that key, the fixed nonce, and the
 
-&#x20; associated data. Assemble the package per Section 22.7.1.
+&#x20; full 63-byte package header as associated data. Assemble the
+
+&#x20; package per Section 22.7.1.
 
 Expected output:
 
-&#x20; PENDING — cannot be computed until SYNC-ARCHITECTURE.md §7.3
+&#x20; FROZEN. The 125-byte package, computed by the conforming
 
-&#x20; records the Argon2id parameters (memory cost, time cost,
+&#x20; implementation on 2026-09-25. Hex:
 
-&#x20; parallelism).
+&#x20; 474f524b41455000000100020000000000040100000000000000000000000000000000000102030405060708090a0b0c0d0e0f10111213141516170000003e8b53b5c87375885d9e5f6f95417e98f37c49c7e3d6e3dbb0c22bd4e6290f03599957e698b8971885b9b94d24b35545642cbc7d0e6d0117b8380605945841
 
-Blocking amendment:
+&#x20; Structure, verified before recording:
 
-&#x20; SYNC-ARCHITECTURE.md §7.3 must record the Argon2id parameter
+&#x20;   bytes  0-7    magic                 "GORKAEP\\0"
 
-&#x20; values. These are chosen by benchmarking on the supported GORKA
+&#x20;   bytes  8-9    format\_version        0x0001
 
-&#x20; desktop environment.
+&#x20;   bytes 10-13   argon2\_memory\_kib     131072
 
+&#x20;   bytes 14-17   argon2\_iterations     4
 
+&#x20;   byte  18      argon2\_parallelism    1
+
+&#x20;   bytes 19-34   argon2\_salt           all zero
+
+&#x20;   bytes 35-58   aead\_nonce            sequential 0x00-0x17
+
+&#x20;   bytes 59-62   encrypted\_payload\_len 62
+
+&#x20;   bytes 63-124  ciphertext || tag
+
+&#x20; Total: 125 bytes (63 header + 62 payload).
+
+&#x20; Note: this is a reference value recorded by the first
+
+&#x20; conforming implementation. It is not independent
+
+&#x20; cryptographic validation. See Section 1 of this artifact.
 
 \------------------------------------------------------------------------
 
@@ -910,7 +932,7 @@ Verification:
 
 &#x20; ------   --------------------   --------------   -------------
 
-&#x20; E1       BLOCKED                PENDING          §7.3 Argon2id parameters
+&#x20; E1       SPECIFIED              FROZEN           None
 
 &#x20; H1       SPECIFIED              TO BE COMPUTED   None
 
