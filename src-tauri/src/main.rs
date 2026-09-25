@@ -1572,19 +1572,26 @@ fn export_enrollment_package(
 
     Ok(file_path)
 }
-#[command]
-fn import_enrollment_package(
-    passphrase: String,
-    file_path: String,
-    app: tauri::AppHandle,
-    state: tauri::State<AppState>,
-) -> Result<(), String> {
-    let organization_id = get_trusted_organization_id(&app)?;
-
-    // Read the package file.
-    let file = std::fs::read(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
-
+/// Parse and decrypt an enrollment package.
+///
+/// This is the shared package-parsing operation. It is the single
+/// implementation used by both the production import command and
+/// the E2-E6 behavioral tests. It performs no I/O and touches no
+/// database: the file bytes and the trusted organization id are
+/// supplied by the caller.
+///
+/// Inputs:
+///   file            the complete package bytes
+///   passphrase      the passphrase entered by the agent
+///   trusted_org_id  the organization id from the local session
+///
+/// Output: the 32-byte organization key on success, or an error
+/// string identifying the failure.
+fn parse_enrollment_package(
+    file: &[u8],
+    passphrase: &str,
+    trusted_org_id: &str,
+) -> Result<[u8; 32], String> {
     // Verify minimum length: 63-byte header.
     if file.len() < 63 {
         return Err("Invalid package: file too short".to_string());
@@ -1647,7 +1654,8 @@ fn import_enrollment_package(
     if plaintext.len() < 4 {
         return Err("Invalid package: malformed inner content".to_string());
     }
-    let org_id_len = u32::from_be_bytes([plaintext[0], plaintext[1], plaintext[2], plaintext[3]]) as usize;
+    let org_id_len =
+        u32::from_be_bytes([plaintext[0], plaintext[1], plaintext[2], plaintext[3]]) as usize;
     let expected_len = 4 + org_id_len + 32;
     if plaintext.len() != expected_len {
         return Err("Invalid package: malformed inner content".to_string());
@@ -1657,10 +1665,28 @@ fn import_enrollment_package(
     let organization_key = &plaintext[4 + org_id_len..4 + org_id_len + 32];
 
     // Compare the package's organization id to the trusted id.
-    if package_org_id != organization_id {
+    if package_org_id != trusted_org_id {
         return Err("Organization mismatch".to_string());
     }
 
+    let mut key_out = [0u8; 32];
+    key_out.copy_from_slice(organization_key);
+    Ok(key_out)
+}
+#[command]
+fn import_enrollment_package(
+    passphrase: String,
+    file_path: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+
+    // Read the package file.
+    let file = std::fs::read(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let organization_key = parse_enrollment_package(&file, &passphrase, &organization_id)?;
     // Begin the transaction.
     let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
@@ -1679,7 +1705,7 @@ fn import_enrollment_package(
     tx.execute(
         "INSERT INTO organization_keys (id, organization_id, key_material, created_at)
          VALUES (1, ?1, ?2, ?3)",
-        params![&package_org_id, organization_key, Utc::now().to_rfc3339()],
+        params![&organization_id, &organization_key, Utc::now().to_rfc3339()],
     )
     .map_err(|e| e.to_string())?;
 
@@ -1811,5 +1837,70 @@ mod tests {
         let expected = hex::decode(expected_hex).expect("E1: recorded hex is not valid");
         assert_eq!(expected.len(), 125, "E1: recorded hex is not 125 bytes");
         assert_eq!(package, expected, "E1: package differs from recorded vector");
-        }
+    }
+
+
+    fn e1_package() -> Vec<u8> {
+        let hex = "474f524b41455000000100020000000000040100000000000000000000000000000000000102030405060708090a0b0c0d0e0f10111213141516170000003e8b53b5c87375885d9e5f6f95417e98f37c49c7e3d6e3dbb0c22bd4e6290f03599957e698b8971885b9b94d24b35545642cbc7d0e6d0117b8380605945841";
+        hex::decode(hex).expect("E1 hex is not valid")
+    }
+
+    #[test]
+    fn e2_import_correct_passphrase() {
+        let package = e1_package();
+        let result = parse_enrollment_package(&package, "test-passphrase-001", "org-test-A");
+        assert!(result.is_ok(), "E2: expected success, got {:?}", result.err());
+        let key = result.unwrap();
+        assert_eq!(key.len(), 32, "E2: key length");
+        assert_eq!(key, [0u8; 32], "E2: E1 uses organization_key_zero");
+    }
+
+    #[test]
+    fn e3_import_wrong_passphrase() {
+        let package = e1_package();
+        let result = parse_enrollment_package(&package, "wrong-passphrase", "org-test-A");
+        assert!(result.is_err(), "E3: expected error, got {:?}", result);
+        assert_eq!(
+            result.unwrap_err(),
+            "Wrong passphrase or corrupted package",
+            "E3: error message"
+        );
+    }
+
+    #[test]
+    fn e4_import_tampered_payload() {
+        let mut package = e1_package();
+        // Flip one byte inside the ciphertext region (after the 63-byte header).
+        package[70] ^= 0x01;
+        let result = parse_enrollment_package(&package, "test-passphrase-001", "org-test-A");
+        assert!(result.is_err(), "E4: expected error, got {:?}", result);
+        assert_eq!(
+            result.unwrap_err(),
+            "Wrong passphrase or corrupted package",
+            "E4: error message"
+        );
+    }
+
+    #[test]
+    fn e5_import_organization_mismatch() {
+        let package = e1_package();
+        let result = parse_enrollment_package(&package, "test-passphrase-001", "org-test-B");
+        assert!(result.is_err(), "E5: expected error, got {:?}", result);
+        assert_eq!(result.unwrap_err(), "Organization mismatch", "E5: error message");
+    }
+
+    #[test]
+    fn e6_import_wrong_magic() {
+        let mut package = e1_package();
+        // Corrupt the magic bytes.
+        package[0] = 0x00;
+        let result = parse_enrollment_package(&package, "test-passphrase-001", "org-test-A");
+        assert!(result.is_err(), "E6: expected error, got {:?}", result);
+        assert_eq!(
+            result.unwrap_err(),
+            "Invalid package: bad magic bytes",
+            "E6: error message"
+        );
+    }
+
 }
