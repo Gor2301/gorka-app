@@ -601,6 +601,37 @@ Working session on the Client Dashboard, on the local authentication and unlock 
 
 See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 23 entries.
 
+Update - September 25, 2026 (Phase E, H1-H3 and M1-M2/V1-V4-V6)
+
+Phase E is complete. The enrollment-package vectors, E1-E6,
+were recorded earlier. The other two families are now done:
+H1-H3, the session-key derivation and handshake proof tags; and
+M1, M2, V1, V4, V6, the SYNC_MESSAGE envelope and the event
+payload encoders.
+
+All nine vectors are recorded and frozen in
+SYNC-TEST-VECTORS-v1.md. The test suite is fourteen tests. All
+pass on the cloud machine at commit 7f8529e.
+
+H1-H3: three operations in main.rs, plain functions, not Tauri
+commands. Two crates added: hkdf and hmac. The H1 vectors entry
+was corrected: it had listed two organization ids, which did
+not match section 22.11.1. Corrected to one. This is a
+documentation repair, not a protocol change.
+
+M1/M2/V1/V4/V6: the TLV serialization primitives, the
+SYNC_MESSAGE framing, and the three event payload encoders.
+encode_tlv is the single TLV primitive; every builder calls it.
+These are reusable protocol primitives that Phase 9.6 will
+consume.
+
+All nine vectors are recorded but not independently confirmed.
+Section 1 of SYNC-TEST-VECTORS-v1.md requires a second
+implementation; there is only one. That remains open.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
+September 25 (Phase E, H and M/V) entries.
+
 Update - September 24, 2026
 Two workstreams: completion of the Dashboard local-stats task, and the writing of the Excel/TXT upload specification. The Excel/TXT implementation is deferred by conscious decision.
 
@@ -771,10 +802,10 @@ checking the rules.
   prerequisites for multi-user implementation are met. The
   Argon2id parameters were frozen on September 24, 2026
   (SYNC-ARCHITECTURE.md section 7.3, section 22.19.2). Phase D
-  is complete: D.1 through D.4.4 are done and verified. Phase E
-  is in progress: E1 through E6 are done and verified. What
-  remains before implementation: H1, H2, H3, M1, M2, V1, V4,
-  V6, and the Control Plane tables applied to gorka_test.
+  is complete: D.1 through D.4.4 are done and verified. Phase E is complete: E1 through E6, H1 through H3, and M1,
+  M2, V1, V4, V6 are done and verified. What remains before
+  implementation: the Control Plane tables applied to
+  gorka_test.
   
 ========================================================================
 

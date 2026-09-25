@@ -1812,6 +1812,151 @@ No CI/CD touched.
 Invariant held. The organization key is local-only. Instance B
 (db.rs::derive_key) was not touched.
 
+STATUS UPDATE - September 25, 2026 (Phase E, H1-H3 and M1-M2/V1-V4-V6)
+
+WHAT THIS SESSION DID
+
+Completed Phase E. The enrollment-package vectors, E1-E6, were
+recorded earlier and documented in commit f526a24. This session
+added the other two vector families: H1-H3, the session-key
+derivation and handshake proof tags; and M1, M2, V1, V4, V6,
+the SYNC_MESSAGE envelope and the event payload encoders.
+
+All nine remaining vectors are recorded and verified. The test
+suite is fourteen tests. All pass on the cloud machine.
+
+THE H FAMILY
+
+Commits fbdc42a (functions and Phase 1 tests), 3fe9daa
+(vectors and Phase 2 assertions).
+
+Three operations added as plain functions in main.rs, not Tauri
+commands: derive_session_key (HKDF-SHA256), and
+compute_handshake_reply_tag and compute_handshake_confirm_tag
+(HMAC-SHA256). Two crates added: hkdf 0.12 and hmac 0.12. They
+resolved against sha2 0.10 without conflict.
+
+H2 and H3 share a helper that takes the domain-separation
+string. The only difference between the two proofs is that
+string.
+
+The H1 vectors-file discrepancy: the entry had listed both
+organization_id_A and organization_id_B, which did not match
+section 22.11.1 or 22.19.1. Corrected to use one organization
+id. This is a documentation repair; the protocol was not
+reopened.
+
+THE M/V FAMILY
+
+Commits 67f8a07 (primitives and Phase 1 tests), 7f8529e
+(vectors and Phase 2 assertions).
+
+Serialization code that did not exist before:
+
+  encode_tlv                      the single TLV primitive
+  encode_string_value             u32-prefixed UTF-8
+  encode_debtor_created_payload   V1
+  encode_entity_updated_payload   V4
+  encode_communication_logged_payload  V6
+  encode_event_record             the event record
+  build_sync_message              inner + outer + encrypt
+  parse_sync_message              decrypt the envelope
+
+encode_tlv is the only place that writes a TLV header. Every
+builder calls it. The V4 encoder sorts change records
+lexicographically by field_name, as section 25.9.3 requires.
+
+These are reusable protocol primitives. Phase 9.6 will consume
+them.
+
+M1's message_id fixture: the vectors file said only "a fixed
+test UUID." Resolved to event_id_test_001, 16 bytes. Recorded
+in the vectors file.
+
+THE FIVE NEW TESTS
+
+  M1  SYNC_MESSAGE encryption, 239-byte framed message
+  M2  SYNC_MESSAGE decryption, 193-byte inner content
+  V1  DEBTOR_CREATED payload, 30 bytes
+  V4  ENTITY_UPDATED payload, 38 bytes
+  V6  COMMUNICATION_LOGGED payload, 88 bytes
+
+VERIFICATION
+
+The cloud machine ran cargo test -- --nocapture at commit
+7f8529e. Fourteen tests, all passed. The three H Phase 2
+assertions, deferred when the cloud machine was off, ran for
+the first time and passed.
+
+THE VECTORS FILE
+
+All nine vectors are SPECIFIED / FROZEN. The header reads: "All
+nine vectors recorded. Second-implementation verification not
+performed." That is accurate.
+
+WHAT IS STILL OPEN
+
+Second-implementation verification. SYNC-TEST-VECTORS-v1.md
+section 1 requires a second independent implementation to
+confirm the bytes. There is only one implementation. The
+vectors are recorded, not independently confirmed. This remains
+open.
+
+Control Plane tables not applied to gorka_test. device_
+registrations and relay_sessions are specified but not created.
+
+Control Plane services not implemented.
+
+Phase 9.6, the sync engine. Not started. It consumes the
+primitives built in Phase E.
+
+Agent App (Phase 9.5) not started.
+
+Multi-user demonstration (Phase 9.7) not started.
+
+Excel and TXT implementation. Deferred by conscious decision.
+
+Debt due-date bug. Not reproducible. Not closed.
+
+supervisor-dashboard\dist\ stale build. Housekeeping.
+
+dataType dropdown offers CSV and JSON. JSON is not implemented.
+
+.txt entry in unstructured accept advertises a route that does
+not work.
+
+Dashboard 401s from /api/auth/me and /api/connectors/types.
+
+check-columns.ts, untracked, on the cloud machine only.
+
+test-package.gorka, untracked, on the cloud machine only.
+
+All items from the September 23 and September 24 entries,
+unchanged.
+
+REPOSITORY STATE
+
+Main machine: at 7f8529e, clean, pushed.
+
+Cloud machine: at 7f8529e, clean.
+
+GitHub origin/main: at 7f8529e.
+
+The documentation commit for this entry follows, covering
+HANDOFF.md, DECISIONS.md, SESSION-LOG.md, and START-HERE.md.
+
+RULE COMPLIANCE
+
+No production behavior changed.
+
+No cloud schema change.
+
+No CI/CD touched.
+
+Invariant held. Every operation is local.
+
+db.rs::derive_key was not touched.
+
 
 
 

@@ -2041,6 +2041,171 @@ Then M1, M2, V1, V4, V6.
 
 End of entry.
 
+## Session Extension — September 25, 2026 (Phase E, H1–H3 and M1/M2/V1/V4/V6)
+
+### What this session did
+
+Completed Phase E. The enrollment-package vectors, E1-E6, were
+recorded earlier and documented in commit f526a24. This session
+added the other two families: H1-H3, the session-key derivation
+and handshake proof tags; and M1, M2, V1, V4, V6, the
+SYNC_MESSAGE envelope and the event payload encoders.
+
+All nine remaining vectors are recorded and verified. The test
+suite is fourteen tests. All pass on the cloud machine.
+
+### The H family
+
+Commits fbdc42a (functions and Phase 1 tests), 3fe9daa
+(vectors and Phase 2 assertions).
+
+Three operations added as plain functions in main.rs, not Tauri
+commands: derive_session_key, compute_handshake_reply_tag,
+compute_handshake_confirm_tag. Two crates added: hkdf 0.12 and
+hmac 0.12, both resolved against sha2 0.10 without conflict.
+
+A shared helper, build_handshake_proof_input, takes the
+domain-separation string as a parameter. H2 and H3 differ only
+in that string.
+
+Each of the three tests carries a byte-width assertion. H1
+asserts that len("org-test-A") encodes as 00 0A. H2 asserts
+that protocol_version encodes as 00 01. These catch the
+single-byte-versus-two-byte mistake at the point where it would
+be made.
+
+### The H1 vectors-file discrepancy
+
+The H1 entry in SYNC-TEST-VECTORS-v1.md listed both
+organization_id_A and organization_id_B. That did not match
+section 22.11.1 or 22.19.1, which define exactly one
+organization_id in the session-key info, shared by both peers.
+The entry had copied the input list from H2 and H3.
+
+Corrected to use organization_id_A as the session organization
+id. This is a documentation repair; the protocol was already
+frozen. Section 22.11.1 was not reopened.
+
+### The M/V family
+
+Commits 67f8a07 (primitives and Phase 1 tests), 7f8529e
+(vectors and Phase 2 assertions).
+
+This family needed serialization code that did not exist. Eight
+plain functions were added:
+
+  encode_tlv                      the single TLV primitive
+  encode_string_value             u32-prefixed UTF-8
+  encode_debtor_created_payload   V1
+  encode_entity_updated_payload   V4
+  encode_communication_logged_payload  V6
+  encode_event_record             the event record
+  build_sync_message              inner + outer + encrypt
+  parse_sync_message              decrypt the envelope
+
+The design constraint: encode_tlv is the only place that writes
+a TLV header. Every builder calls it. That eliminates the class
+of bug where two encoders produce subtly different headers.
+
+The V4 encoder sorts change records lexicographically by
+field_name, because section 25.9.3 requires that order and the
+input slice is not a wire-order guarantee. With V4's
+single-change fixture the sort is a no-op, and the spec records
+that plainly.
+
+build_sync_message does the full construction: inner content,
+the 6-byte outer header, XChaCha20-Poly1305 with that header as
+AAD, and the assembly header || nonce || ciphertext || tag.
+parse_sync_message validates and decrypts the outer envelope
+and returns the decrypted inner content. It does not parse
+event records.
+
+These are reusable protocol primitives. Phase 9.6 will consume
+them.
+
+### The M1 message_id fixture
+
+The vectors file said only "a fixed test UUID" and did not give
+the bytes. The M/V spec resolved this explicitly:
+message_id = event_id_test_001, exactly 16 bytes. This is a
+test-fixture choice; the protocol is unchanged. The vectors file
+records the actual value.
+
+### Five new tests
+
+  M1  SYNC_MESSAGE encryption, 239-byte framed message
+  M2  SYNC_MESSAGE decryption, 193-byte inner content
+  V1  DEBTOR_CREATED payload, 30 bytes
+  V4  ENTITY_UPDATED payload, 38 bytes
+  V6  COMMUNICATION_LOGGED payload, 88 bytes
+
+Each is deterministic, no randomness, no I/O, no Tauri runtime.
+Each carries a structural check of the TLV layout, then the
+Phase 2 assertion against the recorded value.
+
+### Verification
+
+The cloud machine ran cargo test -- --nocapture at commit
+7f8529e. All fourteen tests passed:
+
+  test tests::e1_enrollment_package_creation ... ok
+  test tests::e2_import_correct_passphrase ... ok
+  test tests::e3_import_wrong_passphrase ... ok
+  test tests::e4_import_tampered_payload ... ok
+  test tests::e5_import_organization_mismatch ... ok
+  test tests::e6_import_wrong_magic ... ok
+  test tests::h1_session_key_derivation ... ok
+  test tests::h2_handshake_reply_tag ... ok
+  test tests::h3_handshake_confirm_tag ... ok
+  test tests::m1_sync_message_encryption ... ok
+  test tests::m2_sync_message_decryption ... ok
+  test tests::v1_debtor_created_payload ... ok
+  test tests::v4_entity_updated_payload ... ok
+  test tests::v6_communication_logged_payload ... ok
+
+  test result: ok. 14 passed; 0 failed
+
+The three H Phase 2 assertions were deferred when the cloud
+machine was off. They ran for the first time in this cloud
+session, when the M/V work pulled both commits together. All
+three passed. The deferred verification is closed.
+
+### The vectors file after this session
+
+All nine vectors are SPECIFIED / FROZEN. The document header
+reads: "All nine vectors recorded. Second-implementation
+verification not performed." That is accurate: every vector is
+recorded, and the independent second-implementation check that
+section 1 describes has not been done.
+
+### Repository state
+
+Main machine: at 7f8529e, clean, pushed.
+Cloud machine: at 7f8529e, clean.
+GitHub origin/main: at 7f8529e.
+
+The documentation commit for this entry follows.
+
+### Rule compliance
+
+- No production behavior changed.
+- No cloud schema change.
+- No CI/CD touched.
+- Invariant held. Every operation is local.
+- db.rs::derive_key was not touched.
+- Two crates added: hkdf and hmac.
+- No new Tauri command. generate_handler! is unchanged.
+- The fixture values are test-only.
+
+### What comes next
+
+Phase E is complete. The next work is Phase 9.6, the sync
+engine, which consumes the primitives built here. Before that,
+the Control Plane tables (device_registrations, relay_sessions)
+must be applied to gorka_test.
+
+End of entry.
+
 
 
 

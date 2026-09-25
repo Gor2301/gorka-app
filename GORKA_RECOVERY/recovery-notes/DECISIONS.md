@@ -4520,4 +4520,194 @@ Then M1, M2, V1, V4, V6.
 
 End of entry.
 
+## Recovery Session — September 25, 2026 (Phase E, H1–H3 and M1/M2/V1/V4/V6)
+
+This entry records the completion of Phase E. The enrollment-
+package vectors, E1 through E6, were recorded earlier and are
+documented in the preceding entry (commit f526a24). This entry
+covers the two families that followed: H1–H3, the session-key
+derivation and handshake proof tags; and M1, M2, V1, V4, V6,
+the SYNC_MESSAGE envelope and the event payload encoders.
+
+All nine remaining vectors are recorded and verified. The test
+suite is fourteen tests. All pass on the cloud machine.
+
+### The H family
+
+Commits fbdc42a (functions and Phase 1 tests), 3fe9daa
+(vectors recorded and Phase 2 assertions).
+
+Three new operations, added as plain functions in main.rs, not
+Tauri commands:
+
+  derive_session_key          H1 — HKDF-SHA256 session key
+  compute_handshake_reply_tag H2 — HMAC-SHA256 REPLY proof
+  compute_handshake_confirm_tag H3 — HMAC-SHA256 CONFIRM proof
+
+Two crates added: hkdf 0.12 and hmac 0.12. They resolved
+against the existing sha2 0.10 without conflict.
+
+H2 and H3 share a private helper, build_handshake_proof_input,
+which takes the domain-separation string as a parameter. The
+only difference between the two proofs is that string.
+
+Three tests. Each is deterministic, generates no randomness,
+performs no I/O. Each carries a byte-width assertion: H1 asserts
+that len("org-test-A") encodes as 00 0A, and H2 asserts that
+protocol_version encodes as 00 01. Those assertions catch the
+single-byte-versus-two-byte mistake at the point where it would
+be made.
+
+### The H1 vectors-file discrepancy, and its resolution
+
+The H1 entry in SYNC-TEST-VECTORS-v1.md listed both
+organization_id_A and organization_id_B. That did not match
+SYNC-ARCHITECTURE §22.11.1 or §22.19.1, which define exactly
+one organization_id in the session-key info, shared by both
+peers. The vectors file's entry was wrong — it had copied the
+input list from H2 and H3, which do use two organization ids.
+
+The H1 entry was corrected to use organization_id_A as the
+session organization id. This is a documentation repair; the
+protocol was already frozen. §22.11.1 was not reopened.
+
+### The M/V family
+
+Commits 67f8a07 (primitives and Phase 1 tests), 7f8529e
+(vectors recorded and Phase 2 assertions).
+
+This family needed serialization code that did not exist. The
+following plain functions were added to main.rs:
+
+  encode_tlv                          the single TLV primitive
+  encode_string_value                 u32-prefixed UTF-8 string
+  encode_debtor_created_payload       V1
+  encode_entity_updated_payload       V4
+  encode_communication_logged_payload V6
+  encode_event_record                 the 0x1101..0x1109 record
+  build_sync_message                  inner + outer + encrypt
+  parse_sync_message                  decrypt the envelope
+
+The design constraint, from the M/V spec: encode_tlv is the
+single TLV primitive, and every higher-level builder calls it.
+No builder writes a TLV header on its own. That eliminates the
+class of bug where two encoders produce subtly different type or
+length headers.
+
+The V4 encoder sorts its change records lexicographically by
+field_name before serializing, because §25.9.3 requires that
+order and the input slice is not itself a wire-order guarantee.
+With V4's single-change fixture the sort is a no-op, and the
+spec records that plainly.
+
+build_sync_message does the full construction: inner content,
+the 6-byte outer header, XChaCha20-Poly1305 encryption with that
+header as AAD, and the assembly header || nonce || ciphertext ||
+tag. parse_sync_message validates and decrypts the outer
+envelope and returns the decrypted inner content. It does not
+parse event records; that is a later concern.
+
+These operations are reusable protocol primitives. M1/M2 and V1/
+V4/V6 exercise them; Phase 9.6 will consume the same operations
+when the sync engine is implemented. They are not test-only code.
+
+### Five tests
+
+  M1  SYNC_MESSAGE encryption, 239-byte framed message
+  M2  SYNC_MESSAGE decryption, 193-byte inner content
+  V1  DEBTOR_CREATED payload, 30 bytes
+  V4  ENTITY_UPDATED payload, 38 bytes
+  V6  COMMUNICATION_LOGGED payload, 88 bytes
+
+Each is deterministic, no randomness, no I/O, no Tauri runtime.
+Each carries a structural check of the TLV layout, then the
+Phase 2 assertion against the recorded value.
+
+### The M1 message_id fixture
+
+The vectors file said only "a fixed test UUID" and did not give
+the bytes. The M/V spec resolved this explicitly:
+message_id = event_id_test_001, exactly 16 bytes. This is a
+test-fixture choice and does not alter the protocol. The
+vectors file records the actual value.
+
+### Verification
+
+The cloud machine ran cargo test -- --nocapture at commit
+7f8529e. All fourteen tests passed:
+
+  test tests::e1_enrollment_package_creation ... ok
+  test tests::e2_import_correct_passphrase ... ok
+  test tests::e3_import_wrong_passphrase ... ok
+  test tests::e4_import_tampered_payload ... ok
+  test tests::e5_import_organization_mismatch ... ok
+  test tests::e6_import_wrong_magic ... ok
+  test tests::h1_session_key_derivation ... ok
+  test tests::h2_handshake_reply_tag ... ok
+  test tests::h3_handshake_confirm_tag ... ok
+  test tests::m1_sync_message_encryption ... ok
+  test tests::m2_sync_message_decryption ... ok
+  test tests::v1_debtor_created_payload ... ok
+  test tests::v4_entity_updated_payload ... ok
+  test tests::v6_communication_logged_payload ... ok
+
+  test result: ok. 14 passed; 0 failed
+
+Each test asserts its output against the value recorded in
+SYNC-TEST-VECTORS-v1.md. The recorded values and the computed
+values agree, byte for byte.
+
+### The H Phase 2 verification, deferred and then closed
+
+The three H tests were committed with their Phase 2 assertions
+at 3fe9daa, but the cloud machine was off, so they were not run.
+They ran for the first time in the next cloud session, when the
+M/V work pulled both commits together. All three passed. The
+deferred verification is closed.
+
+### The vectors file after this session
+
+All nine vectors are SPECIFIED / FROZEN. The document header
+now reads: "All nine vectors recorded. Second-implementation
+verification not performed." That is accurate: every vector is
+recorded, and the independent second-implementation check that
+SYNC-TEST-VECTORS-v1.md §1 describes has not been done.
+
+### Rule compliance
+
+- No production behavior changed. The enrollment-package and
+  H operations are new or extracted; the two production
+  commands keep their observable behavior.
+- No cloud schema change. No new tables. No new columns.
+- No CI/CD touched.
+- Invariant held. Every operation is local. Nothing is
+  transmitted.
+- db.rs::derive_key was not touched.
+- Two crates added across the session: hkdf and hmac, both
+  RustCrypto. No other dependency change.
+- No new Tauri command. generate_handler! is unchanged.
+- The fixture values are test-only. They are never used in a
+  production path.
+
+### Files changed this session
+
+- src-tauri/Cargo.toml — hkdf and hmac crates. Commit fbdc42a.
+- src-tauri/src/main.rs — H operations; M/V serialization
+  primitives; build_sync_message; parse_sync_message; fourteen
+  tests with Phase 2 assertions. Commits fbdc42a, 3fe9daa,
+  67f8a07, 7f8529e.
+- GORKA_RECOVERY/recovery-notes/SYNC-TEST-VECTORS-v1.md — H1,
+  H2, H3, M1, M2, V1, V4, V6 recorded; H1 input corrected;
+  summary table and header updated. Commits 3fe9daa, 7f8529e.
+
+### What comes next
+
+Phase E is complete. The next work is Phase 9.6, the sync
+engine, which consumes the primitives built here. Before that,
+the Control Plane tables (device_registrations, relay_sessions)
+must be applied to gorka_test.
+
+End of entry.
+
+
 
