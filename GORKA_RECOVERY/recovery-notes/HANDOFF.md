@@ -1958,6 +1958,131 @@ Invariant held. Every operation is local.
 db.rs::derive_key was not touched.
 
 
+## STATUS UPDATE — September 26, 2026 (Control Plane tables and device identity)
+
+### What this session did
+
+Created the two Control Plane tables in gorka_test:
+device_registrations and relay_sessions. Verified them. Resolved
+the device-identity question that had been ambiguous in the frozen
+documents. Closed a pre-existing Cargo.lock divergence. Recorded
+the result.
+
+### The tables
+
+device_registrations — 13 columns. Six active MVP columns (id,
+organization_id, user_id, registered_at, last_seen_at,
+is_authorized). Seven reserved columns, nullable, empty:
+device_name, device_type, device_platform, device_public_key,
+revoked_at, revoked_by, metadata.
+
+relay_sessions — 10 columns. No reserved columns. Will contain no
+rows until Phase 9.6.
+
+The MVP model is user-based: one row per user, per organization.
+The reserved columns are for the funded-phase combined model. The
+reserved-field rule governs them: MVP code MUST NOT read or write
+them, and no implementation may populate them without an approved
+amendment.
+
+### The decision — device identity has two layers
+
+Layer 1 — Access (Control Plane). User-based. One registration per
+user, per organization. A user logs in from any machine. No
+per-machine registration, no per-machine key, no per-machine
+revocation. device_registrations records this; in the MVP it is not
+a machine registry.
+
+Layer 2 — Sync origin (wire protocol). Each local GORKA database
+has its own local replica identifier, generated when the database
+is first established. The wire device_id is exactly this 16-byte
+identifier. It does not encode the user identity.
+
+(device_id, sequence) is globally unique within the organization.
+Two local databases used by the same user have different device_id
+values and independent sequence namespaces.
+
+device_id identifies the synchronization origin, not the human
+actor.
+
+### The amendments
+
+SYNC-ARCHITECTURE.md bumped to v1.3. Sections 3, 4, 11.3, 22.4
+amended; new subsection 25.6.6 added. The sentence in §11.3 that
+said the wire device_id "combines the user identity with the device
+instance identifier" is replaced. The new §25.6.6 defines the wire
+device_id as the 16-byte local replica identifier.
+
+CLOUD-TABLES.md §20.1: a physical-specification note and an MVP
+note added. The section remains the logical contract.
+
+LOCAL-TABLES.md: no change. Category D is consistent with the
+decision. The storage representation of sync_state.device_id is
+deferred to Phase 9.6.
+
+### The commits
+
+  1d89af8  Add the two models to schema.cloud.prisma.
+  9b5a118  Add reverse relations to DeviceRegistration.
+  15a993f  Sync Cargo.lock with Cargo.toml: pin hkdf and hmac.
+
+All three on origin/main. All three machines at 15a993f.
+
+The documentation commit for this session follows separately.
+
+### The verification
+
+prisma db push succeeded against gorka_test. 21 tables total. The
+19 existing are unchanged. No debtor column appeared except the two
+known permitted ones. Backend starts cleanly with the regenerated
+Prisma client.
+
+### The two push errors
+
+P1001: cannot reach database server. Cause: the direct Supabase
+hostname does not resolve from AWS Singapore. Fixed by switching to
+the session pooler hostname already recorded in this document.
+
+P1012: missing opposite relation field on DeviceRegistration.
+Cause: the specification described the foreign keys from one side
+only. Fixed by amending the specification to add two
+reverse-relation lines, then editing the file.
+
+### The Cargo.lock finding
+
+Commit fbdc42a (Phase E) added hkdf and hmac to Cargo.toml but did
+not commit the resulting Cargo.lock update. The lock file sat
+uncommitted on the cloud machine since September 25. Committed as
+15a993f.
+
+Process note: "all machines at the same commit" and "all working
+trees clean" are two different claims. The prior handoff inferred
+the second from the first. Future handoffs should run git status on
+each machine, not infer.
+
+### Repository state
+
+Main machine: at 15a993f, clean, pushed.
+Cloud machine: at 15a993f, clean except check-columns.ts and
+  test-package.gorka, both intentionally untracked.
+GitHub origin/main: at 15a993f.
+
+### What is still open
+
+Second-implementation verification of the nine vectors.
+Control Plane services not implemented.
+Phase 9.6 (sync engine), 9.5 (Agent App), 9.7 (demonstration): not
+  started.
+Excel/TXT upload, debt due-date bug, stale supervisor-dashboard\dist,
+  UI honesty issues, Dashboard 401s: unchanged.
+THREAT-MODEL.md §7.2.2 wording: recorded, not acted on.
+
+One item for Phase 9.6: choose the local storage representation of
+sync_state.device_id. §25.6.6 defers this.
+
+All items from the September 25 entries, unchanged.
+
+
 
 
 

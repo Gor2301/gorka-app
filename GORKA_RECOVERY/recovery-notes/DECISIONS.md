@@ -4709,5 +4709,288 @@ must be applied to gorka_test.
 
 End of entry.
 
+---
+
+## Recovery Session — September 26, 2026 (Control Plane tables and device identity)
+
+This entry records the session that created the two Control Plane
+tables, device_registrations and relay_sessions, in gorka_test;
+resolved the device-identity question that had been ambiguous in
+the frozen documents; closed a Cargo.lock divergence; and recorded
+the result. It also records a documentation investigation that
+initially concluded "no change" and was then corrected.
+
+### What this session did, in one paragraph
+
+Wrote a physical specification for two new cloud tables, applied
+them to gorka_test, verified them, and resolved a genuine
+inconsistency in the frozen documents about what the wire device_id
+means. The tables exist. The existing nineteen tables are unchanged.
+No production was touched. No application code was changed. The
+files changed in the repository are prisma/schema.cloud.prisma,
+src-tauri/Cargo.lock, and six recovery documents.
+
+### The tables
+
+device_registrations — 13 columns. Six active MVP columns (id,
+organization_id, user_id, registered_at, last_seen_at,
+is_authorized). Seven reserved columns, nullable, empty:
+device_name, device_type, device_platform, device_public_key,
+revoked_at, revoked_by, metadata.
+
+relay_sessions — 10 columns. No reserved columns. Will contain no
+rows until Phase 9.6.
+
+The reserved-field rule: the reserved columns are present for
+forward compatibility only. They are not part of the active MVP
+behavior. MVP code MUST NOT read them and MUST NOT write them. No
+implementation may populate them or assign semantics to them until
+the combined-model specification explicitly activates them through
+an approved amendment.
+
+is_authorized is the MVP's authorization state. It is NOT the
+funded-phase per-machine revocation mechanism; that is revoked_at /
+revoked_by, which are reserved.
+
+### The commits
+
+  1d89af8  Add device_registrations and relay_sessions models to
+           cloud schema. One file, 95 insertions.
+  9b5a118  Add reverse relations to DeviceRegistration for
+           relay_sessions. One file, 5 insertions.
+  15a993f  Sync Cargo.lock with Cargo.toml: pin hkdf and hmac,
+           resolved during Phase E. One file, 20 insertions.
+
+All three on origin/main. All three machines — main, cloud,
+GitHub — at 15a993f, working trees clean.
+
+### The two prisma db push errors
+
+The first push failed with P1001: cannot reach database server.
+Cause: the cloud machine was using the direct Supabase hostname,
+which does not resolve from AWS Singapore. Fixed by switching to
+the session pooler hostname already recorded in HANDOFF.md and in
+this log. Not a schema problem.
+
+The second push failed with P1012: the relation field deviceA on
+model RelaySession is missing an opposite relation field on model
+DeviceRegistration. Cause: the physical specification described
+the foreign keys from relay_sessions to device_registrations, but
+did not state that Prisma requires the relation to be declared on
+both models. This was a genuine gap in the specification. Fixed by
+adding two reverse-relation lines to DeviceRegistration:
+relaySessionsAsDeviceA and relaySessionsAsDeviceB. They are not
+columns; they create nothing in the database. The specification
+was amended before the file was edited, per the rule that a
+specification change precedes an implementation change.
+
+### The verification result
+
+After the second push: "Your database is now in sync with your
+Prisma schema. Done in 9.04s."
+
+Verified with a node script using the generated Prisma client:
+
+  - 21 tables in the public schema. The original nineteen plus
+    the two new ones.
+  - device_registrations has 13 columns, as specified.
+  - relay_sessions has 10 columns, as specified.
+  - No column matching %debtor% except the two known, permitted
+    ones: aggregate_metrics.debtor_count and
+    boundary_proof_logs.debtor_data_included.
+
+The backend was started afterwards and connected successfully,
+confirming the regenerated Prisma client is compatible with the
+existing backend code.
+
+The temporary verification file, verify.cjs, was deleted. The two
+untracked files on the cloud machine, check-columns.ts and
+test-package.gorka, remain as recorded in prior handoffs.
+
+### The device-identity investigation, and its resolution
+
+During the session, before the schema work, a cross-document pass
+on device identity was performed. The pass examined SYNC-
+ARCHITECTURE.md Sections 3, 4, 5.5, 7.5, and 11.3, plus
+CLOUD-TABLES.md Section 20.1, LOCAL-TABLES.md Category D,
+MULTI-USER-CONCEPT.md Section 5, GORKA-MVP-SCOPE.md Section 9.2,
+THREAT-MODEL.md, PHASE-PLAN.md, and ARCHITECTURAL-LAW.md Section 20.
+
+The pass concluded, initially, that §11.3 was inconsistent with
+§3, §4, and §7.5. A corrected §11.3 was drafted that stated the
+MVP wire device_id is the user identity, with the per-database
+instance model moved to a funded-phase note.
+
+That draft was reviewed externally. The review found that the
+correction would create a real protocol problem: two machines
+logging in as the same user would produce two independent sequence
+streams under one device_id, breaking the (device_id, sequence)
+uniqueness invariant of §11.2 and the per-origin delivery
+bookkeeping of §18.2.
+
+On re-examination, the initial finding was wrong in its conclusion
+but right about one thing: §11.3's sentence "combines the user
+identity with the device instance identifier" was ambiguous and
+had been read two different ways. The resolution required an
+explicit decision, not a revert.
+
+### The decision: two identity layers
+
+The founder adopted the two-layer model.
+
+Layer 1 — Access (Control Plane). User-based. One registration per
+user, per organization. A user logs in from any machine. No
+per-machine registration, no per-machine key, no per-machine
+revocation. device_registrations records this. In the MVP it is
+not a machine registry.
+
+Layer 2 — Sync origin (wire protocol). Each local GORKA database
+has its own local replica identifier, generated when the database
+is first established. It is 16 bytes. The wire device_id is exactly
+this local replica identifier. It does not encode the user
+identity.
+
+(device_id, sequence) is globally unique within the organization.
+Two local databases used by the same user have different device_id
+values and independent sequence namespaces. The collision problem
+is solved.
+
+device_id identifies the synchronization origin, not the human
+actor. Attribution, where the protocol requires it, is carried
+separately (for example, created_by in Section 25.13.9).
+
+### The amendments applied
+
+SYNC-ARCHITECTURE.md, version bumped 1.2 to 1.3:
+
+  §3 — the bullet describing the wire device_id is corrected; a
+       clarifying paragraph about the two layers is added.
+  §4 — the Device identity definition is rewritten to name the
+       two layers; one bullet in "What the MVP Does Not Do" is
+       rewritten to say the MVP does not cryptographically
+       authenticate a physical machine.
+  §11.3 — the sentence "combines the user identity with the
+       device instance identifier" is replaced with "is the local
+       synchronization-origin identifier of the local GORKA
+       database. It is exactly 16 bytes. It does not encode the
+       user identity."
+  §22.4 — "device_id: fixed-size, exact format defined in Section
+       25" becomes "device_id: exactly 16 bytes."
+  §25.6.6 — new subsection. Defines the wire device_id: the local
+       replica identifier, 16 bytes, generated when the local
+       database is first established, never deliberately reused,
+       transmitted as raw bytes. The local storage representation
+       is deferred to the implementation; whatever representation
+       is used MUST decode deterministically to the 16-byte wire
+       value.
+
+CLOUD-TABLES.md Section 20.1:
+
+  A physical-specification note and an MVP note are added. The
+  section remains the logical contract. The notes point to the
+  physical classification and state that the table is not a
+  machine registry in the MVP.
+
+LOCAL-TABLES.md:
+
+  No change. Category D.1, D.2, and D.4 are consistent with the
+  decision. The storage representation of sync_state.device_id is
+  deferred to Phase 9.6, per §25.6.6.
+
+### What the earlier conclusion got wrong
+
+An earlier draft of this record concluded "§11.3 is correct as
+written; no change to SYNC-ARCHITECTURE.md." That conclusion was
+incomplete. §11.3's "combines" sentence was genuinely ambiguous,
+and the two-layer decision resolves it. The sentence is replaced.
+The document is now at v1.3.
+
+The record keeps both: the original finding, the external review
+that found the protocol problem with the first proposed correction,
+and the final decision that resolved the ambiguity without breaking
+§11.2.
+
+### The Cargo.lock finding
+
+After the schema work was done, git status on the cloud machine
+showed src-tauri/Cargo.lock modified. The change was not from this
+session. Investigation showed:
+
+  - Commit fbdc42a (Phase E, H1-H3) added hkdf and hmac to
+    Cargo.toml. It did not touch Cargo.lock.
+  - The cloud machine's next cargo build resolved the two crates
+    and updated Cargo.lock locally.
+  - That update was never committed. It sat in the cloud machine's
+    working tree since September 25.
+
+The D.3 work had used the correct pattern: d3e5fee added
+chacha20poly1305 to Cargo.toml with the note "Cargo.lock updates on
+the next build", and d426bba then committed the resulting lock
+file. The H-family did the first step and missed the second.
+
+Fixed by committing Cargo.lock as 15a993f from the cloud machine,
+then pulling on the main machine. All three machines and GitHub
+are now in sync on the lock file.
+
+Process finding recorded: "all machines at the same commit" and
+"all working trees clean" are two different claims. The prior
+handoff treated them as one. The lock-file divergence was invisible
+because no full git status had been run on the cloud machine.
+Future handoffs should verify working-tree cleanliness on each
+machine separately, not infer it from matching HEADs.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change to production.
+- No CI/CD touched.
+- Invariant held. No debtor data crossed the boundary.
+- No application code changed. No Rust changed. No backend
+  changed.
+- No new abstraction introduced in the schema.
+- The two prisma db push errors were resolved at the correct
+  level: the first was environment (hostname), the second was a
+  specification gap, resolved by amending the specification first,
+  then the file.
+- The §11.3 decision was made by the founder, not inferred.
+
+### Repository state after this session
+
+Main machine: at 15a993f, clean, pushed.
+Cloud machine: at 15a993f, clean except the two known untracked
+  files (check-columns.ts, test-package.gorka).
+GitHub origin/main: at 15a993f.
+
+The documentation commit for this entry follows separately, after
+all four record documents are written.
+
+### What is still open
+
+Second-implementation verification of the nine vectors. Unchanged.
+
+Control Plane services not implemented. Discovery, presence, relay
+coordination. Phase 9.6 work.
+
+Phase 9.6, the sync engine. Not started.
+
+Phase 9.5 (Agent App) and 9.7 (multi-user demonstration). Not
+started.
+
+Excel/TXT upload, the debt due-date bug, the stale
+supervisor-dashboard\dist, the UI honesty issues, the Dashboard
+401s. Unchanged.
+
+One item for Phase 9.6: when the sync tables are built, the local
+storage representation of sync_state.device_id is chosen then.
+§25.6.6 defers this choice.
+
+### A small note recorded but not acted on
+
+THREAT-MODEL.md §7.2.2 uses the phrase "the former member's
+device", which under the two-layer decision means the former
+member's registration row. Not a defect, but a phrase a careful
+reader could misread. Recorded here, not acted on.
+
+
 
 

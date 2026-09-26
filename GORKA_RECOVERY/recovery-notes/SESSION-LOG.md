@@ -2207,5 +2207,149 @@ must be applied to gorka_test.
 End of entry.
 
 
+## Session Extension — September 26, 2026 (Control Plane tables and device identity)
+
+### What this session did
+
+Created two Control Plane tables in gorka_test. Verified them.
+Resolved the device-identity question that had been ambiguous in
+the frozen documents. Closed a Cargo.lock divergence. Recorded the
+result.
+
+### The sequence
+
+1. Cross-document pass on device identity. Read SYNC-
+   ARCHITECTURE.md Sections 3, 4, 5.5, 7.5, and 11.3 together
+   with the other documents that mention device identity.
+   Concluded, initially, that §11.3 was inconsistent.
+
+2. Founder confirmed the MVP model: user-based, one row per user,
+   wire device_id is the user identity. Called Reading B.
+
+3. Wrote the physical specification. It went through several
+   review rounds. Final shape: Reading B, Option 1
+   (forward-compatible columns physically present),
+   reserved-field rule, is_authorized active.
+
+4. Wrote the two Prisma models into schema.cloud.prisma. Added
+   the reverse relations to Organization and User.
+
+5. Committed as 1d89af8, pushed, pulled on cloud.
+
+6. prisma db push failed with P1001: cannot reach database
+   server. Cause: the direct Supabase hostname does not resolve
+   from AWS Singapore. Fixed by switching to the session pooler
+   hostname.
+
+7. prisma db push failed with P1012: missing opposite relation
+   field on DeviceRegistration. Cause: the specification
+   described the foreign keys only from the relay_sessions side.
+   Amended the specification to add two reverse-relation lines to
+   DeviceRegistration.
+
+8. Committed the fix as 9b5a118, pushed, pulled on cloud.
+
+9. prisma db push succeeded. 9.04 seconds.
+
+10. Verified with a node script using the generated Prisma client.
+    21 tables. Columns of the two new tables match the spec. No
+    debtor column except the two known permitted ones.
+
+11. Started the backend. Connected successfully.
+
+12. Deleted the temporary verification file.
+
+13. git status on the cloud machine showed src-tauri/Cargo.lock
+    modified. Not from this session. Investigated: fbdc42a added
+    hkdf and hmac to Cargo.toml but did not commit the Cargo.lock
+    update. The update sat uncommitted since September 25.
+
+14. Committed the lock file as 15a993f, pushed, pulled on main.
+
+15. Re-examined the §11.3 finding. External review had identified
+    a protocol problem with the initially proposed correction. On
+    re-examination, the initial conclusion was incomplete: §11.3's
+    "combines" sentence was genuinely ambiguous. The founder
+    adopted a two-layer model to resolve it.
+
+16. Applied the amendments to SYNC-ARCHITECTURE.md §§3, 4, 11.3,
+    22.4, and added the new §25.6.6. Bumped the version to v1.3.
+
+17. Added the physical-specification note and the MVP note to
+    CLOUD-TABLES.md §20.1.
+
+18. Confirmed LOCAL-TABLES.md Category D needs no change.
+
+### The tables
+
+device_registrations: 13 columns, six active, seven reserved.
+relay_sessions: 10 columns, no reserved.
+
+The MVP is user-based. The reserved columns are for the
+funded-phase combined model. The reserved-field rule governs them.
+
+### The device-identity decision
+
+Two identity layers.
+
+Layer 1 — Access (Control Plane). User-based. device_registrations
+records which users are authorized. Not a machine registry.
+
+Layer 2 — Sync origin (wire protocol). Each local GORKA database
+has its own local replica identifier. The wire device_id is exactly
+this 16-byte identifier. It does not encode the user identity.
+
+(device_id, sequence) is globally unique within the organization.
+Two machines under one user have independent sequence namespaces.
+
+device_id identifies the synchronization origin, not the human
+actor.
+
+### The commits
+
+  1d89af8  Add the two models to schema.cloud.prisma.
+  9b5a118  Add reverse relations to DeviceRegistration.
+  15a993f  Sync Cargo.lock.
+
+### Two process findings
+
+First: the physical spec for the two tables initially missed
+Prisma's requirement that a relation be declared on both models.
+The spec described foreign keys from one side only. The gap
+surfaced on the first push. Fixed by amending the spec before
+editing the file.
+
+Second: "all machines at the same commit" is not the same claim as
+"all working trees clean". The prior handoff treated them as one.
+A full git status on the cloud machine would have found the
+Cargo.lock divergence earlier. Future handoffs should verify the
+working tree on each machine, not infer it from matching HEADs.
+
+### Repository state
+
+Main machine: at 15a993f, clean, pushed.
+Cloud machine: at 15a993f, clean except the two known untracked
+  files.
+GitHub origin/main: at 15a993f.
+
+### What is still open
+
+Second-implementation verification of the nine vectors.
+Control Plane services not implemented.
+Phase 9.5, 9.6, 9.7 not started.
+Excel/TXT upload, debt due-date bug, stale dist, UI honesty issues,
+  Dashboard 401s: unchanged.
+One item for Phase 9.6: choose the local storage representation of
+  sync_state.device_id. §25.6.6 defers this.
+
+### Rule compliance
+
+No production touched. No cloud schema change to production. No
+CI/CD touched. Invariant held. No application code changed. The two
+push errors were resolved at the correct level: the first was
+environment, the second was specification. The §11.3 decision was
+made by the founder, not inferred.
+
+
 
 

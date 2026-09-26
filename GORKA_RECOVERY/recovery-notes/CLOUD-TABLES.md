@@ -754,6 +754,23 @@ The existing 19 tables are unchanged. The existing rules of this document still 
 | C | No. Contains only device and user identity metadata. Never debtor data. Never any identifier that maps to an individual debtor. |
 | D | Write: authenticated CLIENT user of the organization (register own device), OWNER (any device). Read: OWNER (all), own CLIENT admin (devices within the organization). |
 
+**Physical specification note:** The physical schema for this
+table classifies its fields into active MVP columns and reserved
+future columns, and states the reserved-field rule that governs
+the reserved columns. This section remains the logical contract
+for the table; the physical classification is in the committed
+schema and in the session record. Reserved-field rule: reserved
+columns are present for forward compatibility only, are not part
+of the active MVP behavior, MVP code MUST NOT read or write
+them, and no implementation may populate them or assign
+semantics to them until the combined-model specification
+explicitly activates them through an approved amendment.
+
+**MVP note:** In the MVP, this table is not a machine registry.
+It records which user accounts of an organization are authorized
+for sync. The synchronization origin is a separate concept,
+defined in SYNC-ARCHITECTURE.md Section 11.3 and Section 25.6.6.
+
 **Purpose:** The Control Plane's authoritative record of which devices belong to which organization. Supports the discovery, presence, and encrypted relay coordination services. Enables the Owner Dashboard and the Client Dashboard to show the list of authorized devices.
 
 **What it does NOT contain:**

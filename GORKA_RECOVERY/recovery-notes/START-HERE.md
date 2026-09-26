@@ -865,5 +865,58 @@ END OF DOCUMENT
 ========================================================================
 
 
+Update - September 26, 2026 (Control Plane tables and device identity)
+
+The two Control Plane tables now exist in gorka_test:
+device_registrations and relay_sessions. They were created by the
+schema change at 1d89af8 and 9b5a118, verified, and recorded.
+
+device_registrations has 13 columns. Six active MVP columns and
+seven reserved columns for the funded-phase combined model. The
+reserved columns are nullable and empty. They are governed by the
+reserved-field rule: MVP code MUST NOT read or write them.
+
+relay_sessions has 10 columns. No reserved columns. It will contain
+no rows until Phase 9.6.
+
+Device identity has two layers, and the frozen documents now say so
+explicitly.
+
+Layer 1, access: user-based. One registration per user, per
+organization. A user logs in from any machine. No per-machine
+registration, no per-machine key, no per-machine revocation.
+device_registrations records this. In the MVP it is not a machine
+registry.
+
+Layer 2, sync origin: each local GORKA database has its own local
+replica identifier, generated when the database is first
+established. The wire device_id is exactly this 16-byte identifier.
+It does not encode the user identity. (device_id, sequence) is
+globally unique within the organization, so two machines under one
+user have independent sequence namespaces.
+
+SYNC-ARCHITECTURE.md is now at v1.3. Sections 3, 4, 11.3, and 22.4
+were amended; a new subsection 25.6.6 defines the wire device_id.
+The sentence in §11.3 that said the wire device_id "combines the
+user identity with the device instance identifier" is replaced.
+
+CLOUD-TABLES.md §20.1 gained a physical-specification note and an
+MVP note. LOCAL-TABLES.md is unchanged.
+
+A pre-existing Cargo.lock divergence was closed at 15a993f.
+
+Main machine and cloud machine are at 15a993f, clean. The cloud
+machine has the two known untracked files only. GitHub origin/main
+is at 15a993f.
+
+The next work is Phase 9.6, the sync engine, which consumes these
+two tables. One item for Phase 9.6: choose the local storage
+representation of sync_state.device_id. §25.6.6 defers this.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
+September 26 entries.
+
+
+
 
 

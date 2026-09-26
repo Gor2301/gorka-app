@@ -8,9 +8,9 @@ GORKA — SYNC ARCHITECTURE
 
 Document:    SYNC-ARCHITECTURE.md
 
-Version:     1.2 (frozen)
+Version:     1.3 (frozen)
 
-Date:        September 19, 2026 (v1.2 amendment applied September 21, 2026)
+Date:        September 19, 2026 (v1.3 amendment applied September 26, 2026)
 
 Status:      FROZEN — approved by the founder on September 19, 2026.
              v1.1 amendment (Section 25.13 field-semantics
@@ -40,6 +40,15 @@ the initial value of the counter before any event has been
 originated. No other section of this document was changed by the
 v1.2 amendment.
 
+A v1.3 amendment was applied on September 26, 2026. Sections 3,
+4, 11.3, 22.4, and a new subsection 25.6.6 were amended to make
+the MVP device identity model explicit. The MVP has two distinct
+identity layers: the user-based access identity (Control Plane),
+and the local replica synchronization-origin identity (wire
+protocol). The wire device_id is exactly 16 raw bytes: the local
+replica identifier. It does not encode the user identity. The
+change aligns Sections 3, 4, 11.3, 22.4, 22.13.2, and 25 with
+each other. No other section was changed by the v1.3 amendment.
 
 ========================================================================
 
@@ -855,13 +864,12 @@ redesigning the wire format. Specifically:
 
 &#x20; The wire format does not change.
 
-\- The peer records and session records already carry a device\_id
-
-&#x20; field. In the MVP, that field is populated with a value
-
-&#x20; derived from the user identity. In the funded phase, it is
-
-&#x20; populated with the per-device identity.
+- The peer records and session records already carry a device_id
+  field. In the MVP, that field carries the local replica
+  identifier of the local GORKA database (Section 11.3, Section
+  25.6.6). It does not encode the user identity and is not a
+  Control Plane registration. In the funded phase, it becomes the
+  per-machine registered device identity.
 
 \- The protocol version number (Section 24) allows the funded
 
@@ -869,27 +877,24 @@ redesigning the wire format. Specifically:
 
 &#x20; breaking MVP peers.
 
+This distinction must not be collapsed. In the MVP, the
+cryptographic and authorization identity is the user identity.
+The wire device_id is the local replica identifier, defined in
+Section 11.3 and Section 25.6.6. The two are distinct. In the
+funded phase, a formally registered per-machine identity is
+added. Any code written against this document must not assume
+the funded-phase model, because the funded-phase model does not
+yet exist. Any code written against this document must not
+assume the MVP model is permanent, because the funded-phase
+model is the target.
 
-
-This distinction must not be collapsed. In the MVP, "device
-
-identity" and "user identity" are the same cryptographic
-
-identity. In the funded phase, they are separate. Any code written
-
-against this document must not assume the funded-phase model,
-
-because the funded-phase model does not yet exist. Any code
-
-written against this document must not assume the MVP model is
-
-permanent, because the funded-phase model is the target.
-
-
+This subsection describes the MVP's authentication and
+authorization model. Synchronization uses a separate concept,
+the local replica origin identity. The wire device_id is
+claimed, not proven (Section 8.3, Section 8.6); it labels an
+origin stream, it does not attribute an action to a person.
 
 What This Section Does Not Do
-
-
 
 It does not define authentication. That is Section 5.
 
@@ -958,14 +963,15 @@ Organization identity.
 
 
 Device identity.
-
-&#x20; The identity of a running sync engine, used in the wire
-
-&#x20; protocol. In the MVP, a device's identity is derived from the
-
-&#x20; authenticated user account. In the funded phase, a device's
-
-&#x20; identity is a separate, per-machine identity.
+  The identity of a running sync engine, used in the wire
+  protocol. Two distinct concepts must not be collapsed. First,
+  the MVP access identity: user-based, used for authentication
+  and authorization, recorded in device_registrations. Second,
+  the synchronization-origin identity: the local replica
+  identifier of the local GORKA database, used on the wire as
+  device_id. The funded phase adds a third: a formally
+  registered per-machine identity, with its own lifecycle and
+  revocation.
 
 
 
@@ -1071,9 +1077,10 @@ What the MVP Does Not Do
 
 \- It does not support per-machine revocation.
 
-\- It does not distinguish "this device" from "this user" in the
-
-&#x20; wire protocol.
+- It does not cryptographically authenticate a physical
+  machine. The wire device_id identifies the synchronization
+  origin, which is a local replica identifier, not a proven
+  machine identity.
 
 
 
@@ -4143,32 +4150,20 @@ device instance identifier is generated for the new database
 
 instance. The old identifier is not reused.
 
-
-
 The device instance identifier is stored in the SQLCipher
-
 database. It is available to the sync engine after the database
-
 is unlocked.
 
-
-
-The device\_id used on the wire combines the user identity with
-
-the device instance identifier. The exact format is defined in
-
-Section 25.
-
-
+The device_id used on the wire is the local synchronization-
+origin identifier of the local GORKA database. It is exactly
+16 bytes. It does not encode the user identity. The exact wire
+representation is defined in Section 25.6.6.
 
 The protocol invariant:
-
-
 
 A device instance identifier MUST NOT be reused for a different
 
 local database instance.
-
 
 
 The reason: a device instance and its sequence namespace are
@@ -8749,7 +8744,7 @@ The fixed sizes for the values the protocol uses:
 
 &#x20; UUIDv7, per RFC 9562).
 
-\- device\_id: fixed-size, exact format defined in Section 25.
+- device_id: exactly 16 bytes.
 
 \- AEAD nonce: exactly 24 bytes.
 
@@ -12815,11 +12810,7 @@ Operation 5 — Read and advance the logical clock.
 
 25.6.5 What sync\_state Does Not Contain
 
-
-
 sync\_state does not contain:
-
-
 
 \- Events. Those are in sync\_events.
 
@@ -12832,13 +12823,59 @@ sync\_state does not contain:
 &#x20; and are discarded when the session ends.
 
 
+25.6.6 The Wire device_id
+
+Local replica identifier
+
+  A local replica identifier is generated when the local GORKA
+  database is first established. It is 16 bytes, generated with
+  a cryptographically secure random number generator, and stored
+  in the SQLCipher database.
+
+  A generated local replica identifier MUST NOT be deliberately
+  reused for another local database.
+
+  If the local database is lost, deleted, or replaced, a new
+  identifier is generated.
+
+Wire device_id
+
+  The wire device_id is exactly 16 bytes. It is the local
+  replica identifier. It is transmitted as raw bytes.
+
+Protocol-order comparison
+
+  Section 12.6 compares device_id values as byte strings. The
+  16-byte value is its own canonical serialization. Comparison
+  is on those 16 bytes directly.
+
+Local storage
+
+  The identifier is stored in sync_state.device_id. The local
+  storage representation is determined by the existing
+  implementation and is not a wire-format decision. Whatever
+  representation is used MUST decode deterministically to the
+  16-byte wire value.
+
+Why this solves the collision problem
+
+  Two machines used by the same user have two different local
+  replica identifiers, therefore two different device_id
+  values. (device_id, sequence) is unique within the
+  organization. Section 11.2 holds.
+
+What this subsection does not do
+
+  It does not introduce Control Plane per-machine registration.
+  It does not encode the user identity. It does not define the
+  funded-phase combined device_id. That model will be defined
+  in its own amendment.
 
 ========================================================================
 
 25.7 THE history\_records AND pending\_events TABLES
 
 ========================================================================
-
 
 
 25.7.1 history\_records — Purpose
