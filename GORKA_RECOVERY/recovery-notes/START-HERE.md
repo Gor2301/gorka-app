@@ -916,6 +916,51 @@ representation of sync_state.device_id. §25.6.6 defers this.
 See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
 September 26 entries.
 
+Update - September 26, 2026 (Second-implementation verification of the nine vectors)
+
+The second-implementation verification of the nine deterministic
+test vectors is complete. All nine are confirmed by an
+independent implementation.
+
+A second, independent implementation was written in Node.js, at
+verify/, using @noble/ciphers 2.4.0, hash-wasm 4.12.0, and
+node:crypto — a different library family from the Rust
+implementation's RustCrypto. It was written from
+SYNC-ARCHITECTURE.md v1.3 and SYNC-TEST-VECTORS-v1.md only. No
+file under src-tauri/ was read.
+
+First run produced 9/9 PASS. Every vector matched the recorded
+value byte-for-byte. No implementation adjustment, vector
+adjustment, or specification adjustment was required. A
+negative control confirmed the harness detects byte-level
+mismatch.
+
+The verification code is preserved at verify/. It can be rerun
+with `node verify/index.mjs` to reconfirm the vectors.
+
+The Status block of SYNC-TEST-VECTORS-v1.md was updated from
+"Second-implementation verification not performed" to
+"verification performed on 2026-09-26. All nine vectors
+confirmed by an independent implementation."
+
+The open item "Second-implementation verification of the nine
+vectors" is now closed. The nine vectors are no longer recorded
+but not confirmed.
+
+What remains unchanged:
+  - Phase 9.6 (sync engine), 9.5 (Agent App), 9.7
+    (demonstration): not started.
+  - Control Plane services: not implemented.
+  - Excel/TXT upload, debt due-date bug, stale
+    supervisor-dashboard\dist, UI honesty issues, Dashboard
+    401s: unchanged.
+
+The Agent App architecture decision (same-repo shared-crate vs
+built from scratch) remains open. It has been open since
+September 21 and blocks Phase 9.5.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
+September 26 second-implementation entries.
 
 
 

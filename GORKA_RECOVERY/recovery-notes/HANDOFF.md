@@ -2082,6 +2082,135 @@ sync_state.device_id. §25.6.6 defers this.
 
 All items from the September 25 entries, unchanged.
 
+## STATUS UPDATE — September 26, 2026 (Second-implementation verification of the nine vectors)
+
+### What this session did
+
+Completed the second-implementation verification of the nine
+deterministic test vectors recorded in SYNC-TEST-VECTORS-v1.md.
+The verification is required by SYNC-TEST-VECTORS-v1.md Section
+1 and described in the task brief of the same date. It was
+performed before Phase 9.6, per the brief's recommendation.
+
+### What was written
+
+A second, independent implementation of the nine vectors, in
+Node.js, at verify/. Single file: index.mjs. Libraries:
+@noble/ciphers 2.4.0 (XChaCha20-Poly1305), hash-wasm 4.12.0
+(Argon2id), node:crypto (HKDF-SHA256, HMAC-SHA256, SHA-256).
+Different library family from the Rust implementation's
+RustCrypto.
+
+### The independence boundary
+
+The second implementation was written from SYNC-ARCHITECTURE.md
+v1.3 and SYNC-TEST-VECTORS-v1.md only. No file under
+src-tauri/ was consulted. The permitted Cargo.toml exception
+was not used. This is the condition that makes the verification
+meaningful.
+
+### The environment
+
+  OS:      Microsoft Windows 11 Home | 10.0.26200 | build 26200
+  Node.js: v24.18.0
+  npm:     11.16.0
+  Libraries: @noble/ciphers 2.4.0, hash-wasm 4.12.0, node:crypto
+
+Ran on the main machine. Not the cloud machine. Node is present
+on both; the task does not need a Rust compiler and is not
+blocked by the SAC / cargo.exe restriction.
+
+### The result
+
+First execution, no adjustment:
+
+  E1  PASS
+  H1  PASS
+  H2  PASS
+  H3  PASS
+  M1  PASS
+  M2  PASS
+  V1  PASS
+  V4  PASS
+  V6  PASS
+
+  9/9 PASS
+
+All nine vectors produced the exact recorded bytes. No
+implementation adjustment, vector adjustment, or specification
+adjustment was required. No post-hoc convergence occurred.
+
+A negative control was performed: a copy of the runner with one
+byte of V1's expected value mutated from 0x20 to 0xff produced
+V1 FAIL and 8/9 PASS, confirming that the harness detects a
+byte-level mismatch. The copy was deleted, the original was
+rerun, and 9/9 PASS was reproduced.
+
+### What was not changed
+
+  - Rust source: not read, not modified.
+  - Vector values: not modified.
+  - Specification: not modified.
+  - Database, cloud schema, backend, Control Plane tables: not
+    touched.
+  - Phase 9.6: not started.
+
+The only file edit was the Status block of SYNC-TEST-VECTORS-v1.md,
+updated from "Second-implementation verification not performed"
+to "verification performed on 2026-09-26. All nine vectors
+confirmed by an independent implementation."
+
+### The preservation decision
+
+Decision D4 of the brief recommended keeping the verification
+code. Kept. verify/ is committed alongside the documentation.
+package-lock.json pins the exact library versions, so the check
+is reproducible. node_modules/ is gitignored.
+
+### Conclusion, stated precisely
+
+All nine deterministic test vectors have been independently
+reproduced byte-for-byte by a second implementation written
+from SYNC-ARCHITECTURE.md v1.3 and SYNC-TEST-VECTORS-v1.md.
+No disagreement, specification ambiguity, vector correction,
+or implementation correction was required.
+
+### What this closes
+
+The open item "Second-implementation verification of the nine
+vectors" from the September 25 and September 26 entries. The
+nine vectors are no longer recorded-but-not-confirmed.
+
+### What remains open
+
+  - Control Plane services not implemented.
+  - Phase 9.6 (sync engine), 9.5 (Agent App), 9.7
+    (demonstration) not started.
+  - Excel/TXT upload, debt due-date bug, stale
+    supervisor-dashboard\dist, UI honesty issues, Dashboard
+    401s.
+  - THREAT-MODEL.md §7.2.2 wording: recorded, not acted on.
+  - The local storage representation of sync_state.device_id,
+    deferred to Phase 9.6.
+  - The Agent App architecture decision (same-repo shared-crate
+    vs built from scratch). Open since September 21. Blocks
+    Phase 9.5.
+
+### Repository state
+
+Committed and pushed as part of this session's single commit.
+Hash to follow.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held.
+  - No Rust code changed. Instance B (db.rs::derive_key) not
+    touched.
+  - The independence boundary was held.
+
 
 
 

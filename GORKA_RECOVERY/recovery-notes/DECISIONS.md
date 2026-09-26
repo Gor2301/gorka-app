@@ -4991,6 +4991,248 @@ device", which under the two-layer decision means the former
 member's registration row. Not a defect, but a phrase a careful
 reader could misread. Recorded here, not acted on.
 
+---
+
+## Recovery Session — September 26, 2026 (Second-implementation verification of the nine vectors)
+
+This entry records the completion of the second-implementation
+verification required by SYNC-TEST-VECTORS-v1.md Section 1 and
+described in the task brief of the same date. The verification
+was performed as a separate task, before Phase 9.6, per the
+decision recorded in the brief.
+
+### What the task was
+
+Write a second, independent implementation of the nine
+deterministic test vectors, working from the frozen
+specification and the recorded fixtures, and confirm that it
+produces the same bytes as the values recorded in
+SYNC-TEST-VECTORS-v1.md. The vectors were recorded by the Rust
+implementation in src-tauri/src/main.rs on 2026-09-25. The
+fourteen Rust tests compare the Rust implementation against the
+recorded values. That is a regression check, not a correctness
+check. A second implementation written from the specification,
+not from the Rust code, is the only way to detect a bug that is
+present in both the Rust code and the recorded vector.
+
+### The independence boundary
+
+The second implementation was written from SYNC-ARCHITECTURE.md
+v1.3 and SYNC-TEST-VECTORS-v1.md only. src-tauri/src/main.rs,
+src-tauri/src/db.rs, src-tauri/src/auth.rs, and
+src-tauri/Cargo.toml were not consulted. The one exception
+permitted by the brief — reading the crate versions from
+Cargo.toml — was not needed and was not used. This is the
+condition that makes the verification meaningful. Reading the
+Rust code would have turned the exercise into a translation,
+not an independent verification.
+
+### The second implementation
+
+Location: C:\Users\kucha\gorka-app\verify\
+Entry point: index.mjs
+Runtime: Node.js v24.18.0, on the main machine
+
+Libraries:
+  node:crypto (built-in)   HKDF-SHA256, HMAC-SHA256, SHA-256
+  @noble/ciphers 2.4.0     XChaCha20-Poly1305
+  hash-wasm 4.12.0         Argon2id
+
+The Rust implementation uses RustCrypto (argon2,
+chacha20poly1305, hkdf, hmac, sha2). The second implementation
+uses a different library family. A bug in one family is unlikely
+to be reproduced in the other. This satisfies the brief's
+Condition 2, which was recommended but not required.
+
+The main machine was used, not the cloud machine. Node is
+present on both. The task does not require a Rust compiler and
+is not blocked by the Smart App Control / cargo.exe restriction
+recorded on 2026-09-24. No cloud machine session was needed.
+
+### The verification environment
+
+  OS:      Microsoft Windows 11 Home | 10.0.26200 | build 26200
+  Node.js: v24.18.0
+  npm:     11.16.0
+  @noble/ciphers: 2.4.0
+  hash-wasm: 4.12.0
+  crypto:  node:crypto (built-in)
+
+Recorded for reproducibility. The task brief's environment
+estimate said Node 24.21.0 on the cloud machine. The actual run
+used Node v24.18.0 on the main machine. This is not a
+discrepancy in the verification; the task did not require a
+specific host or a specific minor version.
+
+### The result
+
+node index.mjs, first execution, no adjustment:
+
+  E1  PASS
+  H1  PASS
+  H2  PASS
+  H3  PASS
+  M1  PASS
+  M2  PASS
+  V1  PASS
+  V4  PASS
+  V6  PASS
+
+  9/9 PASS
+
+Every vector produced the exact recorded bytes.
+
+First execution produced 9/9 matches. No implementation
+adjustment, vector adjustment, or specification adjustment was
+required. No post-hoc convergence occurred. The nine vectors
+are now confirmed by two independent implementations against
+the final frozen specification:
+  1. The Rust implementation in src-tauri/src/main.rs
+     (RustCrypto).
+  2. The Node.js implementation in verify/index.mjs (@noble,
+     hash-wasm, node:crypto).
+
+### The negative control
+
+After the 9/9 run, a copy of the runner was made with one byte
+of the V1 expected value mutated from 0x20 to 0xff. The copy
+was run, then deleted. Result:
+
+  E1  PASS
+  H1  PASS
+  H2  PASS
+  H3  PASS
+  M1  PASS
+  M2  PASS
+  V1  FAIL
+        expected: ff0100000008000000045465737420020000000a00000006446562746f72
+        actual:   200100000008000000045465737420020000000a00000006446562746f72
+        lengths:  expected=30 actual=30
+  V4  PASS
+  V6  PASS
+
+  8/9 PASS
+
+The negative control establishes that the comparison harness
+detects a one-byte mismatch and reports both the expected and
+the actual values plus their lengths. It is not merely printing
+PASS. The original runner was rerun after the negative control
+and produced 9/9 PASS again.
+
+### The Rust regression status
+
+No Rust source and no vector value were changed during the
+verification. The fourteen Rust tests in src-tauri/src/main.rs
+were already passing before this session, per the September 25
+entries, and were not rerun here, because nothing they depend on
+changed. Rerunning them would add no information.
+
+### The header update
+
+The Status block of SYNC-TEST-VECTORS-v1.md was updated from:
+
+  "All nine vectors recorded. Second-implementation
+   verification not performed."
+
+to:
+
+  "All nine vectors recorded. Second-implementation
+   verification performed on 2026-09-26. All nine vectors
+   confirmed by an independent implementation."
+
+This is the status change the task brief Step 6 requires.
+
+### The preservation decision
+
+Decision D4 of the task brief offered two choices for the
+verification code: keep it committed, or delete it after
+recording the result. The brief recommended keeping it.
+
+Kept. The verify/ folder is committed alongside the
+documentation. Its package-lock.json pins the exact library
+versions so the check is reproducible. node_modules/ is
+gitignored; the manifest and lock file are tracked. A future
+session can rerun node index.mjs to reconfirm the vectors
+without reconstructing the implementation.
+
+### What this task did not do
+
+  - Did not read src-tauri/src/main.rs, or any file under
+    src-tauri/.
+  - Did not modify the Rust implementation.
+  - Did not modify any vector value.
+  - Did not modify the specification.
+  - Did not touch the database, the cloud schema, the backend,
+    or the Control Plane tables.
+  - Did not start Phase 9.6.
+  - Did not propose a redesign or question the architecture.
+
+### The commit
+
+Files added:
+  - verify/index.mjs
+  - verify/package.json
+  - verify/package-lock.json
+  - verify/.gitignore
+
+Files modified:
+  - GORKA_RECOVERY/recovery-notes/SYNC-TEST-VECTORS-v1.md
+    (Status block only)
+  - GORKA_RECOVERY/recovery-notes/DECISIONS.md (this entry)
+  - GORKA_RECOVERY/recovery-notes/HANDOFF.md (one status entry)
+  - GORKA_RECOVERY/recovery-notes/SESSION-LOG.md
+    (session extension)
+  - GORKA_RECOVERY/recovery-notes/START-HERE.md (one update
+    subsection)
+
+Commit hash and push recorded after the commit.
+
+### What this entry closes
+
+The open item "Second-implementation verification of the nine
+vectors" from the September 25 and September 26 entries is
+closed. The nine vectors are no longer recorded-but-not-
+confirmed. They are confirmed by two independent
+implementations against the final frozen specification.
+
+Conclusion, stated precisely:
+
+  All nine deterministic test vectors have been independently
+  reproduced byte-for-byte by a second implementation written
+  from SYNC-ARCHITECTURE.md v1.3 and SYNC-TEST-VECTORS-v1.md.
+  No disagreement, specification ambiguity, vector correction,
+  or implementation correction was required.
+
+### What remains open
+
+  - Control Plane services not implemented.
+  - Phase 9.6 (sync engine), 9.5 (Agent App), 9.7
+    (demonstration) not started.
+  - Excel/TXT upload, debt due-date bug, stale
+    supervisor-dashboard\dist, UI honesty issues, Dashboard
+    401s.
+  - THREAT-MODEL.md §7.2.2 wording: recorded, not acted on.
+  - The local storage representation of sync_state.device_id,
+    deferred to Phase 9.6.
+  - The Agent App architecture decision (same-repo shared-crate
+    vs built from scratch). Open since September 21. Blocks
+    Phase 9.5.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change. No new tables. No new columns.
+  - No CI/CD touched.
+  - Invariant held. The verification operates entirely on fixed
+    fixtures and produces no debtor data.
+  - No Rust code changed. Instance B (db.rs::derive_key) not
+    touched.
+  - The independence boundary was held. This is the whole point
+    of the exercise, and it is recorded here so a future
+    session cannot mistake this verification for a
+    translation.
+
+End of entry.
 
 
 

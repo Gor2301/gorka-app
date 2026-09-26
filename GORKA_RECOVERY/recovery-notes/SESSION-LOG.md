@@ -2350,6 +2350,70 @@ push errors were resolved at the correct level: the first was
 environment, the second was specification. The §11.3 decision was
 made by the founder, not inferred.
 
+## Session — September 26, 2026 (Second-implementation verification)
+
+Completed the second-implementation verification of the nine
+deterministic test vectors, required by SYNC-TEST-VECTORS-v1.md
+Section 1 and described in the task brief of the same date.
+
+### What was done
+
+Wrote a second, independent implementation of the nine vectors
+in Node.js, at verify/. Single file: index.mjs. Libraries:
+@noble/ciphers 2.4.0 (XChaCha20-Poly1305), hash-wasm 4.12.0
+(Argon2id), node:crypto (HKDF-SHA256, HMAC-SHA256, SHA-256).
+Different library family from the Rust implementation's
+RustCrypto.
+
+The independence boundary was held: written from
+SYNC-ARCHITECTURE.md v1.3 and SYNC-TEST-VECTORS-v1.md only, with
+no file under src-tauri/ consulted. The permitted Cargo.toml
+exception was not used.
+
+### Environment
+
+  OS:      Microsoft Windows 11 Home | 10.0.26200 | build 26200
+  Node.js: v24.18.0
+  npm:     11.16.0
+  Libraries: @noble/ciphers 2.4.0, hash-wasm 4.12.0, node:crypto
+
+Ran on the main machine, not the cloud machine. Node is present
+on both. No Rust compiler needed; not blocked by SAC.
+
+### Result
+
+First execution, no adjustment: 9/9 PASS. E1, H1, H2, H3, M1,
+M2, V1, V4, V6 each produced the exact recorded bytes. No
+implementation adjustment, vector adjustment, or specification
+adjustment was required. No post-hoc convergence occurred.
+
+A negative control was performed: one byte of V1's expected
+value was mutated from 0x20 to 0xff in a copy of the runner.
+The mutated copy produced V1 FAIL and 8/9 PASS, confirming the
+harness detects byte-level mismatch. The copy was deleted; the
+original was rerun and reproduced 9/9 PASS.
+
+### Files changed
+
+  Added:    verify/index.mjs, verify/package.json,
+            verify/package-lock.json, verify/.gitignore
+  Modified: SYNC-TEST-VECTORS-v1.md (Status block only),
+            DECISIONS.md (entry appended),
+            HANDOFF.md (entry appended),
+            SESSION-LOG.md (this entry),
+            START-HERE.md (update subsection)
+
+### What was not changed
+
+Rust source, vector values, specification. Database, cloud
+schema, backend, Control Plane tables. Phase 9.6 not started.
+
+### Rule compliance
+
+No production touched. No cloud schema change. No CI/CD touched.
+Invariant held. No Rust code changed. Instance B
+(db.rs::derive_key) not touched. The independence boundary was
+held.
 
 
 

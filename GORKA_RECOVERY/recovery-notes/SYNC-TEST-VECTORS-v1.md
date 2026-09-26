@@ -16,7 +16,9 @@ Date:        September 20, 2026
 
 Status:      All nine vectors recorded. Second-implementation
 
-&#x20;            verification not performed.
+&#x20;            verification performed on 2026-09-26. All nine vectors
+
+&#x20;            confirmed by an independent implementation.
 
 Authority:   Companion to SYNC-ARCHITECTURE.md v1.1 (frozen),
 
