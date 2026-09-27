@@ -2415,5 +2415,93 @@ Invariant held. No Rust code changed. Instance B
 (db.rs::derive_key) not touched. The independence boundary was
 held.
 
+## Session — September 27, 2026 (Multi-user application architecture: A–G and design reconnaissance)
+
+Held a structured architecture conversation covering how the two
+applications coexist, how they reach providers and AI, where
+compliance is enforced, what syncs, and how the work is
+sequenced. Then performed a read-only design reconnaissance of
+the Client Dashboard.
+
+Nothing was written this session except this record. No spec, no
+code, no architecture amendment, no frozen document change.
+
+### The seven sections (A–G), condensed
+
+A — Communication runs from the Agent App, not the Client
+Dashboard. Admin configures connectors and monitors. Agent sends.
+GORKA-managed subaccounts and BYOP. Automatic sending deferred.
+
+B — Provider credentials live locally, in each device's SQLCipher
+database, encrypted with the local password. Separate from the
+organization key. Rotation mechanism deferred to sync-protocol
+design.
+
+C — AI calls go from the agent's device directly. Only metadata
+leaves. New client-side component: the AI boundary layer, which
+redacts debtor-identifying content before the call. Multi-provider
+from the start.
+
+D — Copilot in both apps with different purposes. Communication
+Center in the Agent App only. Per-agent access control not yet
+decided.
+
+E — Cloud declares rules, local enforces them. GORKA provides
+mechanism and safeguards; the client is sender of record. New
+client-side compliance enforcement layer.
+
+F — Message log syncs as new event types. Admin sees full
+content. AI recommendations and agent decisions sync. MVP: one
+event per message, retain everything. Production: per-step
+events, client-policy retention.
+
+G — Same schema for both apps. LEGO architecture. Cross-platform
+in the target. "Workable GORKA" defined as a usable pilot
+product.
+
+### N1–N3
+
+N1 — Connection Center (broader than communication providers).
+Skip-tracing capability needed; framing compliance-sensitive;
+legal review a precondition.
+
+N2 — Audit log journal: partially implemented on Client
+Dashboard; cross-app connection deferred.
+
+N3 — Cross-platform commitment: Windows first, others later, no
+Windows-only assumptions in the shared Rust layer.
+
+### Design reconnaissance
+
+Twelve files read on disk from the Client Dashboard. Design
+vocabulary extracted: color palette, typography, spacing, shape,
+icons, components, layout. Full tables in DECISIONS.md.
+
+Consistency rule settled: primary button purple #7C3AED
+everywhere, including the entry flow. Red #DC2626 reserved for
+the logo, errors, and destructive confirmation.
+
+### Entry flow for the Agent App
+
+Three steps, three centered cards in one style: Login → Unlock →
+Enroll. Step 3 (Enroll — import the organization enrollment
+package) is new as a screen; it also implies a proper export/
+import screen pair on the Client Dashboard.
+
+### Files changed
+
+  Modified: DECISIONS.md (this session's entry appended)
+  Modified: HANDOFF.md (status update appended)
+  Modified: SESSION-LOG.md (this entry)
+  Modified: START-HERE.md (update appended, pending)
+
+No commit made this session. No code touched.
+
+### Rule compliance
+
+No production touched. No cloud schema change. No CI/CD touched.
+Invariant held. No Rust code changed. The design reconnaissance
+was read-only.
+
 
 

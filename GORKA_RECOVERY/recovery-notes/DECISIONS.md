@@ -5234,5 +5234,559 @@ Conclusion, stated precisely:
 
 End of entry.
 
+---
+
+## Recovery Session — September 27, 2026 (Multi-user application architecture: A–G decisions and design reconnaissance)
+
+This entry records the structured architecture conversation between
+the founder and the assistant on September 27, 2026, and the design
+reconnaissance of the Client Dashboard that followed it. It is the
+input document for the Agent App build spec, which is the next
+document to be written. It does not write the spec. It records the
+decisions the spec will implement.
+
+It is the largest single record since the September 17 multi-user
+decision. That is appropriate: this entry defines how the two apps
+coexist, how they reach providers and AI, where compliance is
+enforced, what syncs, and what the design vocabulary is.
+
+### Purpose and context
+
+After Phase E (the nine test vectors) and the second-implementation
+verification, the next work is the Agent App (Phase 9.5) and the
+sync engine (Phase 9.6). Before writing the Agent App build spec,
+the founder answered a structured list of questions about how the
+two apps coexist, how they reach providers, how the AI fits, where
+compliance is enforced, and how data flows. This entry records those
+answers. It also records the design vocabulary extracted from the
+Client Dashboard, which the Agent App spec will follow.
+
+The multi-user model is unchanged. No frozen document is amended.
+Every item here is either a decision within the existing
+architecture or an additive extension the frozen documents already
+provide for (new event types, new client-side components, new
+configurable rules).
+
+### Section A — Where the Communication Service runs
+
+A-1. Two apps, two roles, no overlap. The Client Dashboard is a
+management console: the admin uploads debtors, configures
+connectors, monitors agent activity, reviews usage, and handles
+billing. The Agent App is the working tool: the agent chooses a
+debtor, calls/SMS/emails/pushes via connectors the admin has
+enabled, and records the activity on the debtor profile.
+
+A-2. The admin cannot send messages to debtors from the Client
+Dashboard. If the admin also acts as a collection worker, they
+install their own Agent App and log in with the same user account.
+This is a systemic principle, deliberate for simplicity in the MVP;
+it can be revisited in the funded phase.
+
+A-3. Connectors are configured by the admin, consumed by the agent.
+The agent sees what the admin has enabled and never sees provider
+accounts, credentials, or settings.
+
+A-4. Two commercial paths.
+- GORKA-managed: GORKA is the provider's counterparty. GORKA
+  provisions a subaccount per client at the provider. The client
+  pays GORKA; GORKA pays the provider. The Client Dashboard and
+  Owner Dashboard must include usage and billing functions.
+  Confirmed technically possible.
+- BYOP (bring your own provider): the client is the provider's
+  counterparty. GORKA is excluded from the commercial relationship.
+  The client sees a Zone 3 warning that GORKA is not responsible
+  for data leaving via their own provider.
+
+A-5. Automatic sending is deferred. For the development stage,
+outbound messages are triggered while the agent's machine is on
+and the agent is working. A scheduler that fires when the agent's
+machine is asleep is a later-phase item and is to be revisited
+deliberately.
+
+A-6. The agent experience is the constraint everything else
+serves: the agent opens the app, clicks a debtor, chooses a
+channel that is available, and executes without thinking about
+how it works. The agent never sees credentials or provider
+settings.
+
+Open: A-2a (where connector credentials live on the agent side,
+lean: client device).
+
+### Section B — Where credentials live
+
+B-1. Provider credentials live locally, inside each device's
+SQLCipher database, encrypted with that device's local password.
+Same home as the organization key; same lock.
+
+B-2. Provider credentials and the organization key are separate
+concepts with separate lifecycles. The organization key proves
+membership and derives session encryption. Provider credentials
+authenticate the client to a third-party provider. Rotating one
+does not rotate the other. They are named separately in the spec
+and stored separately.
+
+B-3. Revocation of a local credential is by provider rotation. You
+cannot delete a credential from a device you cannot reach. What
+you can do is rotate it at the provider so the old copy is
+useless, then distribute the new one to the devices that should
+still hold it.
+
+Open: B-5 (how a rotated credential reaches the other devices).
+Three shapes named in conversation: manual re-entry, sync via the
+existing event system (cleanest, matches the multi-user model), and
+Control Plane push (would put provider credentials on the path of
+GORKA cloud; not debtor data, so not the invariant, but a decision
+to make explicitly). To be resolved alongside the sync protocol's
+message-type freeze.
+
+Open, production-stage: GORKA-managed connectors make GORKA the
+root of trust for every managed connector across every client.
+Operational risk belongs in the threat model, not in the MVP.
+
+### Section C — Where AI calls happen
+
+C-1. The AI call goes from the agent's device directly. Not
+through the hub, not through GORKA cloud. No approval by the
+client/admin. The agent benefits without a gatekeeper.
+
+C-2. Only metadata leaves the device for the AI call. The old
+Electron context object (name, email, phone, amount, full
+history) is out. Local data storage is the rule, and it extends
+to what goes to the AI. The AI must help without receiving
+debtor-identifying data.
+
+C-3. There is a new client-side component, the AI boundary
+layer. It runs on the agent's device, between the agent and the
+AI provider. It inspects what is about to be sent and redacts or
+blocks debtor-identifying content. Its rulebook comes from legal
+review (see C-1 open item below), not from engineering.
+
+C-4. The DLP shape chosen. Shape 1: redact before sending. The
+boundary layer scans the agent's free-text, finds names that
+match a debtor in the local database, replaces them with a
+placeholder, sends the redacted text. The AI receives the
+question without the debtor's identity and answers about the
+metadata. The agent sees a natural reply. Names that do not
+match a local debtor pass through harmlessly. Option B for the
+indicator: a small, unobtrusive visible indicator that a field
+was redacted, not silent.
+
+C-5. Multi-provider from the start. Gemini for development and
+early production. ChatGPT, DeepSeek, Claude and others later.
+The architecture treats AI providers as pluggable, same as
+SMS/email providers. The more providers GORKA can offer, the
+better; the client chooses.
+
+C-6. The AI provider is not the same category of third party as
+the message provider. The message provider necessarily receives
+the recipient address and the message content — that is what it
+is for. The AI provider must never receive debtor data. The DLP
+boundary applies to the AI, not to the message provider. This
+distinction is explicit in the spec.
+
+Open: C-1 (the sensitive-field list; a legal input, not a
+design choice; pre-implementation task).
+Open: C-3a (redaction applied to pasted documents and long text).
+Open: C-4 (whether the AI receives free-text at all, or only a
+structured metadata blob).
+Open: C-5 (how AI provider credentials reach the agent device;
+same shape as B-5, solve together).
+Open: C-6 (the AI boundary layer needs its own spec section; it is
+a new client-side component).
+
+### Section D — Which app hosts what
+
+D-1. Copilot appears in both apps with different purposes.
+- Client Dashboard: oversight. Which AI providers are enabled,
+  who used them, when, how much, and whether the AI is effective
+  against business goals. Also usage totals for billing.
+- Agent App: the daily working tool. The agent asks, the AI
+  answers, the agent acts.
+
+D-2. Communication Center lives only in the Agent App. The admin
+never sends from the Client Dashboard. The Client Dashboard's role
+for communication is: configure connectors, monitor usage,
+produce analytics, feed billing.
+
+D-3. Per-agent access control (which debtors each agent can see)
+is a real question. Three shapes were named:
+- Option 1: UI-layer hiding. The Agent App shows only the agent's
+  assigned debtors. Data still on the device, because the device
+  holds the full replica. Days of work. No architecture change.
+- Option 2: sync-layer filtering. The hub sends only events for
+  assigned debtors. Access control is real, not cosmetic. This is
+  an amendment to SYNC-ARCHITECTURE.md §5.11 and the "every
+  authorized device can decrypt any sync traffic" claim. Not a
+  silent change.
+- Option 3: full per-record crypto access control. Funded phase.
+  Not MVP.
+
+The MVP's frozen architecture states every device in the
+organization has access to every record. That is the reason the
+MVP is simple. Option 1 fits within it; option 2 amends it.
+
+No decision made. Recorded for the Agent App spec and to be
+resolved before the spec is finalized.
+
+Note. The Client Dashboard reportedly has a partial permissions
+implementation. Worth reading before designing the Agent App's
+access layer, following the same discipline as the Electron-era
+code: read, do not assume.
+
+### Section E — Compliance enforcement
+
+E-1. Cloud declares, local enforces. The cloud holds the rule
+(international defaults, GORKA-wide policy, the list of fields and
+thresholds the system should enforce). The client device enforces
+the rule (the actual debtor, the actual time, the actual history,
+the actual opt-out status). The cloud never needs debtor data to
+enforce a rule, because enforcement is always local.
+
+E-2. GORKA declares its scope. GORKA provides the mechanism and
+the safeguards. The client is the sender of record. Final legal
+responsibility for a rule violation rests with the client. GORKA
+is responsible only for what it declares: no debtor data in cloud,
+no ability to decrypt sync traffic, no readable debtor data
+crossing its infrastructure.
+
+E-3. GORKA provides the scaffolding, not only the disclaimer. The
+Client Dashboard includes a "Local compliance rules" section with
+fields for quiet hours, contact limits, opt-out handling, and
+disclosure text. Pre-populated with whatever GORKA knows about
+common jurisdictions; empty where GORKA does not know. The client
+fills in their jurisdiction's requirements. The client is still
+responsible; GORKA is helpful, not silent.
+
+E-4. A new client-side component, the compliance enforcement
+layer. It runs on the sending device, before the provider call.
+It reads parameters from cloud (the rules) and state from local
+(the actual debtor, the actual time, the actual history).
+
+Open: E-16 (what "block" means per rule type; quiet hours suggests
+"schedule for next permitted window"; contact limit suggests
+"block entirely"; opt-out suggests "block entirely, no override").
+The spec names each.
+
+Open: E-15 (the compliance layer needs its own spec section).
+
+### Section F — Message log and sync
+
+F-1. The message log syncs. It becomes part of the event stream,
+following the same rules the frozen architecture already defines.
+
+F-2. The admin sees everything — full message content, status,
+provider ids, timing — for business control, agent monitoring,
+and compliance review.
+
+F-3. AI recommendations and agent decisions sync. For analytics,
+for outcome measurement, for GORKA's own assessment of what works.
+
+F-4. Architectural consequence: new event types. The MVP event
+set has four. What F-1 through F-3 require adds:
+- MESSAGE_SENT
+- MESSAGE_STATUS_CHANGED
+- AI_RECOMMENDATION_MADE
+- AGENT_DECISION_RECORDED
+Possibly more, depending on the desired audit trail. This is
+additive. Section 22.13.3 reserves event type codes starting at
+0x0100 for exactly this; Section 24 defines the versioning
+process. The MVP adds what is cheap; the funded phase extends.
+
+F-5. F-18, the sync unit for a message, staged.
+- MVP: one event per message. MESSAGE_SENT carries the content
+  and a status field. Subsequent changes are ENTITY_UPDATED on
+  that message record. Matches the existing DEBTOR_CREATED /
+  ENTITY_UPDATED pattern; fewer events; smaller schema.
+- Production: per-step events (MESSAGE_QUEUED, MESSAGE_SENT,
+  MESSAGE_DELIVERED, MESSAGE_OPENED, MESSAGE_FAILED). Each its
+  own event type under the reserved 0x0100 range. Additive; no
+  rebuild.
+
+F-6. F-19, retention, staged.
+- MVP: retain everything. Append-only, no pruning.
+- Production: retention is a client policy. The client decides
+  what to keep and what to prune. Closed files (paid in full, no
+  further action) can be pruned except for whatever the client's
+  internal policy says must be kept — usually the sensitive bits
+  for compliance, not the operational noise.
+
+Open: F-19a (the funded-phase pruning mechanism: what "closed"
+means, what is kept, what is pruned; goes in the Client
+Dashboard as a configurable retention rule).
+Open: F-19b (whether pruning is local or synced; if local, the
+"same state on every device" property bends; if synced, a prune
+event propagates).
+
+Note. If the admin's device holds every message body from every
+agent, then the loss of the admin's device is larger than one
+agent's loss. That is a consequence of "full replica on every
+device." It is not a defect; it belongs in the threat model that
+device loss grows in severity with role.
+
+### Section G — Sequencing and scope
+
+G-1. Same schema for both apps. Same tables, same migrations.
+The Agent App is a different UI over the same local database
+shape.
+
+G-2. LEGO architecture. GORKA has to be usable on all
+environments: Windows, macOS, Linux, mobile (Android, and
+Microsoft's mobile platforms). Windows first. Cross-platform is
+the target. Read-only reporting consoles and administrative apps
+are foreseen. Build the basis for all of it now, where the basis
+is cheap to lay now. Where it is expensive, defer, but do not
+paint into a corner. No Windows-only assumptions in the shared
+Rust layer.
+
+G-3. "Workable GORKA" defined. A product the founder can hand to
+friends as a free pilot, get real feedback, and take to investors
+as evidence of traction. Minimum functions, but the essential
+ones present. Not all AI providers — Gemini. Not all SMS
+providers — Twilio. Simple analytics, not a full BI suite. Some
+mobile support, not all. Honest pitch: "not complete, but
+usable; pricing when you want it; more coming."
+
+G-4. Three pillars for a bank compliance reviewer.
+1. Local data storage: debtor data stays on the client's
+   machines, encrypted at rest with SQLCipher.
+2. SaaS model with simplified pricing: GORKA runs as a service,
+   which simplifies many functions and the commercial model.
+3. AI Copilot: enhances the client's daily routine.
+Each pillar is provable by an audit log journal — a
+compliance-facing artifact that shows what crossed the boundary
+and what did not.
+
+The honest sentence for the reviewer: all debtor data is stored
+on the client's own machines, encrypted at rest with SQLCipher;
+sync traffic is end-to-end encrypted; GORKA's cloud holds only
+account metadata and cannot decrypt debtor data; audit logs
+prove it.
+
+### Section N1 — Connection Center
+
+The communication mechanism in the Client Dashboard is broader
+than "communication providers." It is a general third-party
+integration mechanism with three properties:
+- The client chooses the third party and carries the
+  responsibility.
+- GORKA provides no credentials and sits nowhere on the path.
+- Responses land on the client's machine and stay there.
+
+The categories include communication providers (Twilio, Mocean,
+Resend), credit bureaus, the client's own local databases, and
+other data vendors. Under the frozen architecture these are all
+Zone 3 connections — client-controlled paths that leave the
+client's machine and reach a third party GORKA does not control.
+
+Working name: Connection Center (supersedes "Communication
+Center" as the broad term; "Communication Center" remains the
+specific name for the send-message feature).
+
+Skip-tracing. The capability is needed. The term is dangerous.
+The friends' reviews were unanimous that it can be read
+negatively by regulators. The capability stays; the framing is a
+compliance-sensitive presentation problem; legal review is a
+precondition — the same category as C-1.
+
+GORKA provides no credentials for any third-party data source.
+The client's relationship with a credit bureau or any data
+vendor is a commercial relationship between them; GORKA does
+not participate. Responses are stored locally.
+
+MVP inclusion favored if the simplest implementation is
+demonstrable. The founder's reasoning: a simple or restricted
+version in the MVP is more convincing to investors and pilot
+clients than a described future feature.
+
+### Section N2 — Audit log journal
+
+The audit log journal is partially implemented on the Client
+Dashboard. The Agent App side and the cross-app connection are
+not yet designed. The open question — do the two apps each keep
+their own journal, share one, or have one forward to the other —
+is deferred. Same shape as the message log question (Section F),
+applied to the audit journal.
+
+### Section N3 — Cross-platform commitment
+
+Recorded, see G-2.
+
+### Design vocabulary extracted from the Client Dashboard
+
+Read on 2026-09-27 from: index.css, App.css, App.tsx,
+AppShell.tsx, Sidebar.tsx, Sidebar.css, TopHeader.tsx,
+GorkaLogo.tsx, Dashboard.tsx, DebtorEditModal.tsx, Login.tsx,
+UnlockScreen.tsx. Nothing was written.
+
+Color palette
+  Accent (primary):     #7C3AED
+  Accent tint:          #F4F0FF
+  Accent tint (icons):  #f3e8ff
+  Brand red:            #DC2626 (logo, danger)
+  Danger:               #dc2626
+  Danger tint:          #fef2f2 / #fecaca
+  Success:              #16a34a / #dcfce7
+  Warning:              #ea580c / #ffedd5
+  Text strong:          #111827
+  Text normal:          #374151
+  Text muted:           #6b7280
+  Text dim:             #9ca3af
+  Text sidebar:         #4A4A4A
+  Border default:       #e5e7eb
+  Border sidebar:       #E3E3E3
+  Background main:      #f9fafb
+  Background sidebar:   #FAFAFA
+  Background card:      #FFFFFF
+
+Typography
+  Font: system-ui, 'Segoe UI', Roboto, sans-serif
+  Body: 13–14px
+  Label: 13px, weight 500
+  Nav: 16px, weight 400 / 500 active
+  Page title: 28px, weight bold
+  Card title: 14px, weight 500, muted
+  Card value: 24px, weight bold
+  Section heading: 18px, weight 600
+  Logo: 24–26px, weight bold, uppercase
+
+Spacing
+  Modal padding: 24px
+  Card padding: 20px
+  Content padding: 24px
+  Grid gap: 12–16px
+  Field spacing: 12px
+
+Shape
+  Card radius: 12px
+  Button/input radius: 8px
+  Nav item radius: 6px
+  Icon container radius: 12px
+  Sidebar width: 240px
+  Header height: 73px
+  Nav item height: 36px
+  Modal width: 440px (max 90vw)
+  Entry card width: 400px
+
+Shadow
+  Card default: 0 1px 3px rgba(0,0,0,0.05)
+  Card hover:   0 10px 25px rgba(0,0,0,0.08)
+  Overlay:      rgba(0,0,0,0.4)
+
+Icons
+  Library: lucide-react
+  Sidebar: 16px
+  Header: 18px, strokeWidth 1.7
+  Card icon: 24px
+  Close icon: 20px
+
+Components
+  card: white, 12px radius, hover lifts 2px + accent border
+  kpi-card: icon block 48×48 tinted background, title/value/subtitle, clickable
+  btnPrimary: accent background, white text, 8px radius, 14px font
+  btnGhost: white background, default border, #374151 text, 8px radius
+  input: 8px radius, #e5e7eb border, 14px font, padding 8×12
+  label: 13px, weight 500, #374151
+  error-banner: danger tint, danger border, danger text, 8px radius
+  modal: overlay + white box, close top-right, footer ghost Cancel + primary Save
+  spinner: border trick, top border accent, 40px
+  avatar: 32px circle, accent background, initials, white text
+
+Layout
+  Shell: 240px fixed sidebar + flex column (fixed-height header + scrollable main)
+  Page: maxWidth 1200px, margin 0 auto, padding 24px
+  Header row: title + subtitle left, actions/avatar right
+  KPI grid: repeat(auto-fit, minmax(200px, 1fr))
+  Modal form: grid gap 12px
+  Modal footer: flex, gap 8px, justify-content flex-end
+
+Consistency rule (settled by founder, 2026-09-27)
+  Primary button color: purple #7C3AED, everywhere, including the
+  entry flow.
+  Red #DC2626 is reserved for the logo, error banners, danger
+  buttons, and destructive confirmation. It is not used for
+  primary actions.
+
+Inconsistencies noted and not carried forward to the Agent App
+  - Three different primary button colors across three surfaces
+    (Login red, Unlock blue, workspace purple). Resolved by the
+    consistency rule above.
+  - Two radius conventions (6px on Login, 8px elsewhere).
+    Resolved: 8px.
+  - Two logo implementations (GorkaLogo.tsx vs inline in
+    Sidebar). The Agent App uses one.
+  - Two header implementations (TopHeader.tsx vs inline in
+    AppShell). The Agent App uses one.
+  - Sidebar.css is orphaned. The Agent App uses one styling
+    approach, not two.
+  - The Login subtitle says "Supervisor Dashboard" (stale). The
+    Agent App's login says "Agent App" and nothing else.
+
+Deferred (running list)
+  The Client Dashboard's entry-flow screens (Set/Enter) came in
+  from Tauri and use a design that was not chosen by the founder.
+  They are to be brought into the Login-page design later. Not
+  part of the Agent App spec. Recorded here so it is not lost.
+
+### Entry flow for the Agent App
+
+Three steps, three centered white cards in one visual style.
+
+  1. Login — cloud credentials, JWT. Same shape as the Client
+     Dashboard's Login page, with purple primary button per the
+     consistency rule.
+  2. Unlock — local SQLCipher password. First run: set + confirm.
+     Later runs: enter. Same Rust command pattern as the Client
+     Dashboard (database_exists, unlock_database).
+  3. Enroll — import the organization enrollment package. This is
+     the piece the Agent App needs and that the Client Dashboard
+     currently only does via the devtools console (Phase D.4.4).
+     It has to become a real screen in the Agent App. It also
+     implies a proper export/import screen pair on the Client
+     Dashboard side, so the admin can export and the agent can
+     import without console commands.
+
+The first step is the only one that touches the network. Steps 2
+and 3 are local only.
+
+### Running list of open items
+
+A-2a, A-6 (automatic sending deferred), B-5, C-1, C-3a, C-4, C-5,
+C-6, D-3 (per-agent access control), E-15, E-16, F-19a, F-19b,
+CI/CD for two Tauri apps, enrollment of a second local app on the
+same machine, new event types for the funded phase (MESSAGE_SENT,
+MESSAGE_STATUS_CHANGED, AI_RECOMMENDATION_MADE,
+AGENT_DECISION_RECORDED), the Client Dashboard entry-flow
+redesign, and the credit-bureau / data-vendor integration as a
+distinct feature within the Connection Center.
+
+### What is not done
+
+  - No Agent App spec written.
+  - No code written.
+  - No architecture amended.
+  - No frozen document modified.
+  - No cloud table touched.
+  - No Phase 9.5 or 9.6 started.
+
+This entry is a record of decisions and a design reconnaissance.
+It is the input to the Agent App spec.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held. Every decision here is consistent with the
+    invariant; none of them cause debtor data to reach GORKA
+    cloud.
+  - No Rust code changed. Instance B (db.rs::derive_key) not
+    touched.
+  - The design reconnaissance was read-only. Twelve files were
+    read; nothing was written.
+  - The independence rule of the prior task was not implicated.
+    This is a new conversation, not a verification.
+
+End of entry.
+
 
 

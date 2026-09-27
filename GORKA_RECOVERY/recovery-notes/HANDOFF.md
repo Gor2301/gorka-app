@@ -2211,6 +2211,137 @@ Hash to follow.
     touched.
   - The independence boundary was held.
 
+## STATUS UPDATE — September 27, 2026 (Multi-user application architecture: A–G decisions and design reconnaissance)
+
+### What this session did
+
+Held a structured architecture conversation between the founder
+and the assistant, covering seven topic areas (A–G) about how the
+two applications coexist, how they reach providers and AI, where
+compliance is enforced, what syncs, and how the work is
+sequenced. Then performed a read-only design reconnaissance of
+the Client Dashboard so the Agent App spec can follow the same
+visual vocabulary.
+
+Nothing was written in this session except this record. No spec,
+no code, no architecture amendment, no frozen document change.
+
+### The seven sections, condensed
+
+A — Communication runs from the Agent App, not the Client
+Dashboard. Admin configures connectors and monitors usage.
+Agent sends. Two commercial paths: GORKA-managed (subaccount per
+client) and BYOP. Automatic sending deferred.
+
+B — Provider credentials live locally in each device's SQLCipher
+database. Separate concept from the organization key. Rotation
+mechanism (B-5) deferred to sync-protocol design.
+
+C — AI calls go from the agent's device directly. Only metadata
+leaves. A new client-side component, the AI boundary layer,
+redacts debtor-identifying content before the call. Multi-
+provider from the start.
+
+D — Copilot in both apps with different purposes (oversight vs
+workflow). Communication Center in the Agent App only.
+Per-agent access control (D-3) has three possible shapes; not
+yet decided.
+
+E — Cloud declares rules, local enforces them. GORKA provides
+mechanism and safeguards; the client is sender of record and is
+responsible for local jurisdiction rules. New client-side
+compliance enforcement layer.
+
+F — The message log syncs as new event types. Admin sees full
+content. AI recommendations and agent decisions sync. MVP: one
+event per message, retain everything. Production: per-step
+events, client-policy retention.
+
+G — Same schema for both apps. LEGO architecture with
+cross-platform in the target. "Workable GORKA" defined as a
+usable pilot product, not a demo.
+
+### Section N1–N3, condensed
+
+N1 — The Client Dashboard's third-party integration is broader
+than communication providers. Working name: Connection Center.
+Skip-tracing capability is needed; its framing is a
+compliance-sensitive problem; legal review is a precondition.
+
+N2 — The audit log journal is partially implemented on the
+Client Dashboard. The Agent App side and the cross-app
+connection are deferred.
+
+N3 — Cross-platform commitment: Windows first, others later. No
+Windows-only assumptions in the shared Rust layer.
+
+### Design reconnaissance
+
+Read twelve files from the Client Dashboard on disk. Extracted
+the design vocabulary: color palette, typography, spacing,
+shape, icons, components, layout. Full tables are in
+DECISIONS.md.
+
+Consistency rule settled: primary button color is purple
+#7C3AED everywhere, including the entry flow. Red #DC2626 is
+reserved for the logo, errors, and destructive confirmation.
+
+Deferred: the Client Dashboard's entry-flow screens (Set/Enter)
+came in from Tauri and use a design that was not chosen. They
+will be brought into the Login-page design later.
+
+### Entry flow for the Agent App
+
+Three steps, three centered cards in one visual style:
+  1. Login — cloud credentials, JWT.
+  2. Unlock — local SQLCipher password.
+  3. Enroll — import the organization enrollment package.
+
+Step 3 is new as a screen. It also implies a proper
+export/import screen pair on the Client Dashboard side.
+
+### Running list of open items
+
+A-2a, A-6, B-5, C-1, C-3a, C-4, C-5, C-6, D-3, E-15, E-16,
+F-19a, F-19b, CI/CD for two Tauri apps, enrollment of a second
+local app on the same machine, new event types for the funded
+phase, the Client Dashboard entry-flow redesign, and the
+credit-bureau / data-vendor integration as a distinct feature
+within the Connection Center.
+
+### What remains unchanged
+
+  - The multi-user model.
+  - Every frozen document.
+  - The invariant.
+  - Phase 9.5, 9.6, 9.7 status (all not started).
+
+### What comes next
+
+Write the Agent App build spec. This session's decisions and the
+design vocabulary are its input. The spec will cover the app's
+structure, the shared Rust command layer, the three-step entry
+flow, the Connection Center, the AI boundary layer, the
+compliance enforcement layer, the local schema (same as the
+Client Dashboard), the design section (following the
+vocabulary), and the open items above.
+
+### Repository state
+
+No commit made this session. Only DECISIONS.md, HANDOFF.md,
+SESSION-LOG.md, and START-HERE.md are modified (or will be,
+once this entry is written).
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held.
+  - No Rust code changed.
+  - The design reconnaissance was read-only.
+  - The independence rule of the prior task was not implicated.
+
 
 
 

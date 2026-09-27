@@ -963,5 +963,70 @@ See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
 September 26 second-implementation entries.
 
 
+Update — September 27, 2026 (Multi-user application architecture: A–G decisions and design reconnaissance)
+
+A structured architecture conversation about how the two applications coexist, how they reach providers and AI, where compliance is enforced, what syncs, and how the work is sequenced. Followed by a read-only design reconnaissance of the Client Dashboard. Recorded in DECISIONS.md, HANDOFF.md, SESSION-LOG.md.
+
+The Agent App architecture decision, open since September 21, is now resolved:
+
+  Same repository, second Tauri binary, shared Rust command
+  layer. Code is written fresh. The Electron-era code in
+  src/frontend/ and src/backend/_disabled/ is reference only,
+  not ported. It is not deleted; it stays where it is.
+
+The "embedding that should not have happened" question is also resolved. It was the original Electron agent app, left inside the Client Dashboard's tree by mistake during the pre-recovery drift era, and kept untouched afterwards by a deliberate decision. Not a stray. Now documented.
+
+Seven topic areas were settled (A–G):
+
+  A — Communication runs from the Agent App. Admin configures
+      connectors; agent sends. GORKA-managed subaccounts and
+      BYOP. Automatic sending deferred.
+  B — Provider credentials stored locally in each device's
+      SQLCipher database. Separate from the organization key.
+  C — AI calls direct from the agent's device. Only metadata
+      leaves. New client-side component: the AI boundary layer.
+  D — Copilot in both apps, different purposes. Communication
+      Center in the Agent App only. Per-agent access control
+      still undecided.
+  E — Cloud declares rules, local enforces. Client is sender of
+      record. New client-side compliance enforcement layer.
+  F — Message log syncs as new event types. Admin sees full
+      content. MVP: one event per message, retain everything.
+  G — Same schema for both apps. LEGO architecture.
+      Cross-platform in the target. "Workable GORKA" defined.
+
+Three further items: N1 (Connection Center — broader than
+communication providers; skip-tracing capability needed, framing
+compliance-sensitive, legal review precondition). N2 (audit log
+journal; cross-app connection deferred). N3 (cross-platform
+commitment; Windows first, no Windows-only assumptions in the
+shared Rust layer).
+
+Design reconnaissance read twelve files from the Client
+Dashboard on disk. Design vocabulary extracted (colors,
+typography, spacing, shape, icons, components, layout). Full
+tables in DECISIONS.md.
+
+Consistency rule settled: primary button color is purple
+#7C3AED everywhere, including the entry flow. Red #DC2626 is
+reserved for the logo, errors, and destructive confirmation.
+
+The Agent App's entry flow is three steps, three centered cards
+in one style: Login → Unlock → Enroll. Step 3 (import the
+organization enrollment package) is new as a screen. It implies
+a proper export/import screen pair on the Client Dashboard side.
+
+The running list of open items is in DECISIONS.md, September 27
+entry.
+
+No spec written. No code written. No architecture amended. No
+frozen document changed. No commit made this session.
+
+The next work is the Agent App build spec. This session's
+decisions and design vocabulary are its input.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
+September 27 entries.
+
 
 
