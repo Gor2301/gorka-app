@@ -5888,5 +5888,294 @@ seam exists and that filtering will be added there.
 
 End of entry.
 
+Recovery Session — September 27, 2026 (Agent App build spec)
+This entry records the session that wrote the Agent App build spec: the multi-source reconnaissance, the design decisions made during the conversation, the specification itself, the external review of the first draft, the corrections applied, and the founder's approval. The spec is now frozen. It is the input to Phase 9.5.
+
+The prior September 27 entries recorded the A-G architecture decisions and the D-3 access-control decision. This entry is the follow-on: turning those decisions into a build spec a developer can follow.
+
+What this session produced
+One document: GORKA_RECOVERY/recovery-notes/AGENT-APP-SPEC.md, version 1.2, frozen on the founder's approval. It is the technical specification for the Agent App. It is a specification, not code. It does not amend any frozen document. It names the needed amendments and defers them.
+
+The spec lives as a standalone file, referenced by this entry, not duplicated here.
+
+The reconnaissance
+Before writing, the session read the following on disk (read-only, no files modified):
+
+Source control state. git log --oneline -3 and git status confirmed b125ee9, clean working tree, origin/main matching.
+
+The Rust command layer.
+
+src-tauri/Cargo.toml — the crate set. Tauri 2 with tray-icon, store, dialog, fs. rusqlite bundled-sqlcipher. argon2, chacha20poly1305, hkdf, hmac, sha2, uuid v4, chrono, reqwest, hex, once_cell, rand, rand_core. No jsonwebtoken.
+
+src-tauri/src/auth.rs — store keys auth_token, organization_id, salt, db_unlocked. Functions login, get_token, get_organization_id, get_salt, set_unlocked, is_unlocked, logout. Login POSTs to a hardcoded http://localhost:3000/api/auth/login. get_token prints debug lines including the raw token (already flagged as C-2 in the September 12 Phase 9 entry).
+
+src-tauri/src/db.rs — migrations v1 through v4. v1 creates debtors, debts, documents, communications, audit_log. v2 is an empty placeholder. v3 adds actions. v4 adds organization_keys. The Category D sync tables are not yet migrated. derive_key is Instance B (Argon2::default() + SaltString::encode_b64), distinct from the enrollment package's Instance A. database_exists() reads the file on disk. log_audit writes audit_log with a fresh UUIDv4.
+
+src-tauri/src/main.rs — AppState { db: Mutex<Option<Connection>> }. 34 commands registered in generate_handler!. Structs: Debtor, Document, Debt, Communication, Action, DashboardStats, plus their Inputs. Enums: DocumentCategory, CommunicationType, CommunicationDirection. get_trusted_organization_id reads the JWT-derived org id from settings. enable_sync generates a fresh 32-byte key and inserts it into organization_keys. import_enrollment_package refuses if a key exists.
+
+The Electron-era reference (read-only, not ported).
+
+src/backend/_disabled/communication.service.ts and the providers/ tree. A provider registry pattern: four categories (SMS, email, push, voice), each registerable by name. Six concrete providers (Mocean SMS, Resend email, Twilio voice, three mocks). A uniform result shape {success, messageId?, status, provider, error?, providerResponse}. A status vocabulary PENDING | SENT | FAILED | DELIVERED. An exponential-backoff retry wrapper. Health checks. Some providers had validateCredentials(token).
+
+src/backend/_disabled/context.service.ts and gemini.service.ts. The old AI context object. It sent to Gemini: debtor.name, debtor.email, debtor.phone, debtor.id, exact debtAmount, per-event communication dates and channels, per-event payment dates and amounts. That is the exact leak Section C-2 of the September 27 A-G entry rejects.
+
+src/backend/_disabled/action.service.ts, email.service.ts, push.service.ts. Server-mediated. Reference only.
+
+src/backend/_disabled/routes/compliance.routes.ts and permissions.routes.ts. Cloud-mediated, using pre-recovery roles and tables. Reference only.
+
+src/frontend/pages/DebtorDetail.tsx. Reader-only. No action buttons. The ancestor of the Agent App's debtor profile.
+
+src/frontend/pages/Admin/Communications.tsx. A full CRUD plus a Send button in the admin UI. Section A-2 of the September 27 A-G entry reverses this: the admin does not send from the Client Dashboard.
+
+src/frontend/pages/Admin/Templates.tsx. Parameterized templates with {{debtor_name}} placeholders. Matches Architectural Law Section 12.
+
+The Client Dashboard's calendar (inert).
+
+supervisor-dashboard/src/pages/Calendar.tsx renders a FullCalendar UI.
+
+supervisor-dashboard/src/services/calendar.service.ts calls cloud endpoints GET/POST /calendar/events, PUT/DELETE /calendar/events/:id, POST /calendar/generate.
+
+The only backend route is src/backend/_disabled/routes/calendar.routes.ts (disabled, not mounted).
+
+No calendar model in prisma/schema.cloud.prisma.
+
+No calendar table in the local Rust schema.
+
+Conclusion: the Client Dashboard's calendar is a complete artifact of the pre-recovery drift era. It renders, it may call, it receives nothing. Recorded as pre-existing, not fixed.
+
+Design decisions made during the conversation
+These are new decisions, not yet recorded elsewhere. Each is a founder decision made during the session. The spec (Section 12) names them and cites them.
+
+D1 - Command registration is per-binary, not per-UI. The shared Rust command layer is one crate of functions. Each Tauri binary registers its own subset in its own generate_handler!. A command is registered in a binary only if that binary's UI uses it. The boundary is the registration list, not the UI. A hidden button is not a boundary; any registered command is callable from the webview's devtools.
+
+This is stricter than "register everything and hide the admin commands in the UI." It matches D-3's principle: "UI-layer hiding alone is not sufficient."
+
+D2 - enable_sync is Client Dashboard only. The Agent App must not register it. enable_sync generates a fresh random 32-byte key. It is the key creation operation, not the key distribution operation. It runs once per database, ever. If the Agent App ran it, it would create a second, different key, and import_enrollment_package refuses if a key already exists, so the agent could then never import the correct key without wiping the database. enable_sync in the Agent App is an active hazard, not a hidden harmless command. It stays Client Dashboard only.
+
+D3 - export_enrollment_package, get_dashboard_stats, and bulk_insert_debtors are also Client Dashboard only. Export produces a package containing the organization key; giving an agent export capability is granting enroll-new-device authority. Dashboard stats are organization-wide aggregates, admin-side. Bulk insert is an administrative upload path; the agent adds debtors one at a time.
+
+D4 - sync_now is not in the MVP. Synchronization is event-driven: a state change or event originates on one device and is pushed to the peer within seconds when both peers are online. There is no user-facing "Sync Now" button. Events originated while a peer is offline queue in sync_events and deliver on reconnect (SYNC-ARCHITECTURE.md Sections 17 and 18.6). A button is redundant. Named as not-scheduled, not as a future item.
+
+D5 - Guarantors and pledgers. A debtor record may also represent a guarantor or a pledger. Both are the same shape as a debtor: name, surname, contacts, photo, documents. Both live in the debtors table and sync as DEBTOR_CREATED / ENTITY_UPDATED. The relationship is expressed by:
+
+A role column on debtors (DEBTOR, GUARANTOR, PLEDGER).
+
+A debtor_relations linking table (debtor_id, related_debtor_id, relation_type).
+
+Many-to-many both ways: one guarantor may guarantee multiple debtors; one debtor may have multiple guarantors. In the UI, a guarantor appears both inside the debtor profile they guarantee and as a row in the debtor list, distinguished by a role badge. The role is chosen from a dropdown.
+
+Locality in the MVP. The people sync; the relations do not. debtor_relations is a local table in Phase 9.5. Two replicas may hold the same person rows with different relationship graphs. This is deliberate. How relations sync in the funded phase is an open item.
+
+D6 - Debtor profile photo is a column, not a document. A nullable photo_path column on debtors. The documents table is unchanged. The DocumentCategory::ProfilePhoto enum value remains in the code and is not used by the new UI. The rationale: the photo is one face, one field, and a dedicated column matches the "two places" model (photo separate from documents).
+
+D7 - The Agent App's plan view (calendar). A first-class screen. It combines:
+
+Manual events from a new local calendar_events table (birthdays, court dates, auctions, field visits). A manual event may optionally be linked to a debtor (nullable debtor_id).
+
+Payments due, derived from the local debts table, filtered by due_date. Not stored as events.
+
+Follow-ups due, derived from the local actions table, filtered by due_date and status. Not stored as events.
+
+Calendar view modes: month / week / day / list. Each day cell shows a compact count of what is on that day, colored by kind. Selecting a day opens a day panel. Selecting a period opens a summary (payments due, total amount, overdue count, follow-up count, manual event count).
+
+Every row that names a debtor is clickable into the debtor profile directly, without leaving the calendar. Rows can be multi-selected and fed into the bulk-action flow.
+
+The PAYMENT_DUE and FOLLOW_UP views are not stored. They are live queries. This avoids the duplication problem the old cloud route had (its generate route created stored events for every debtor, requiring a uniqueness key).
+
+Calendar events are local-only in the MVP. They do not sync. Whether they sync in the funded phase is an open item.
+
+D8 - Bulk actions send a generic text. The agent may select a group of debtors and send the same text to all of them. The text is generic: no names, no surnames, no individual amounts. Every recipient receives the same body. This is the "pay day is coming" reminder workflow.
+
+Flow: select debtors, pick channel, type the body (or pick a non-personalized template), see a single preview of the exact text, confirm. For each recipient, run the compliance layer against local state, then make the provider call, then record the result. Show a per-recipient result list (sent / failed / blocked). Show a "Retry failed" button. No auto-retry.
+
+Compliance runs per recipient, not per batch, because quiet hours, contact limits, and opt-out status are per-debtor.
+
+D9 - Connector buttons appear conditionally. On the debtor profile, a connector's button appears if and only if:
+
+The admin has enabled that connector, AND
+
+The debtor has the contact field the connector needs.
+
+Contact-field dependency: Twilio voice, Twilio SMS, Mocean SMS, WhatsApp need a phone number. Resend email needs an email address.
+
+The rule is deterministic. No per-debtor overrides, no manual hiding.
+
+D10 - Debts travel inside the parent debtor's data_json. This resolves the specification gap between GORKA-MVP-SCOPE.md Section 8.4 (debts synchronize) and SYNC-ARCHITECTURE.md Section 25.9.2 (entity type 0x02 is reserved for the funded phase; debt and document data remains local in the MVP).
+
+The reconciliation:
+
+Debt remains local as a standalone entity type. Entity type 0x02 is not produced or accepted in MVP sync events, consistent with Section 25.9.2.
+
+In the MVP, debt information that is intentionally part of the synchronized debtor representation may be carried inside the debtor's data_json field. The DEBTOR_CREATED event's data_json payload (type code 0x2005) and the ENTITY_UPDATED event's data_json change record (per Section 25.13.1) are the transport.
+
+Two protocol-level rules follow:
+
+Rule 1 - Receipt. When the receiving device accepts a DEBTOR_CREATED or ENTITY_UPDATED event whose data_json contains debt data, the receiving device updates its local debts table to reflect the debt data. The local debts table remains the query surface. The plan view queries debts directly; it does not parse data_json at render time. Without this rule, the admin's uploaded debts would arrive in data_json but never be visible to the agent's plan view.
+
+Rule 2 - Origination. When the agent adds a debt locally (via insert_debt), the local transaction must also update the parent debtor's data_json field to reflect the new debt, and append the corresponding ENTITY_UPDATED event to sync_events. Without this rule, a debt created locally by the agent would never leave the device.
+
+Consequences.
+
+No cryptography change. The message encryption is the same regardless of what the payload contains.
+
+No wire-format change. data_json already exists in DEBTOR_CREATED (type code 0x2005) and is already in the ENTITY_UPDATED field table (Section 25.13.1).
+
+No new event type. The four MVP types are unchanged.
+
+Conscious MVP limitation, sync granularity. The data field reconciles as a single unit. Two devices changing two different debts inside the same debtor's data at the same time produce one winner for the whole data value and one losing value in history_records. This is the same rule the protocol already applies to every field. It is a deliberate MVP granularity choice, not a defect. Six months from now, "why did changing Debt 1 overwrite Debt 2?" has a written answer: because MVP synchronization granularity for debt data is the debtor's data field, not the individual debt. The funded phase may introduce per-debt entity types (0x02) if finer granularity is needed.
+
+Size limit. data_json is capped at 1 MiB after canonical serialization (SYNC-ARCHITECTURE.md Section 25.13.2). A debtor with many debts grows that field. The practical ceiling on how much debt data travels inside a single debtor's data. Debtors with unusually large numbers of debts may approach this ceiling; the funded phase may need per-debt entity types for such cases.
+
+This decision requires a small amendment to SYNC-ARCHITECTURE.md Section 25.9.2 (see the amendment that follows this entry, or the pending-amendment note below) and to GORKA-MVP-SCOPE.md Section 8.4 if the founder chooses. The amendment adds the debt-in-data_json interpretation and Rules 1 and 2 to the frozen document, so the receiving and originating behavior is part of the frozen specification rather than only the Agent App spec.
+
+D11 - The Phase 9.5 implementation contract. The Agent App spec describes the product, including funded-phase design (connector sending, bulk sending, AI boundary layer, compliance enforcement, funded-phase event types, funded-phase access filtering). To prevent a developer from mistaking funded-phase design for Phase 9.5 work, the spec contains a definitive "Phase 9.5 builds exactly this" list and an explicit "does not build" list.
+
+Phase 9.5 builds: the second Tauri binary with its own identity; the shared schema and migrations; the three-step entry flow; local CRUD (debtor, debt, communication, action, document); the debtor profile with photo; the plan view; the guarantor/pledger local relations; the Agent UI; the command registration boundary; and a static sync placeholder.
+
+Phase 9.5 does not build: the sync engine, connector sending (single or bulk), provider credential storage and distribution, the AI Copilot and boundary layer, the compliance enforcement layer, funded-phase message event types, per-agent access filtering, automatic sending, or any cloud schema change.
+
+The rule: a Phase 9.5 developer works from the "builds exactly this" list. Any other section that describes a later-phase feature is specification context, not Phase 9.5 work.
+
+D12 - Identity: sync origin versus human actor. The protocol distinguishes two identities.
+
+device_id identifies the local synchronization origin. It is the local replica identifier of the Agent App's own database (SYNC-ARCHITECTURE.md Section 25.6.6). It labels a stream of events. It does not identify a person.
+
+Actor identity (created_by or equivalent) identifies the human user whose business action is recorded by an event. It is carried inside the encrypted event payload. It is informational and is not used for authentication, ordering, duplicate detection, or reconciliation.
+
+device_id MUST NOT be interpreted as the human actor. Where human attribution is required, created_by (or the equivalent actor field) carries the user identity. This distinction is established in SYNC-ARCHITECTURE.md v1.3 and is restated in the Agent App spec so that a Phase 9.6 implementation does not accidentally treat the wire device identity as the user identity.
+
+The specification
+GORKA_RECOVERY/recovery-notes/AGENT-APP-SPEC.md, version 1.2, frozen on approval. Sections 1 through 13:
+
+Purpose and scope
+
+Architecture (the two-binary model, the shared crate, the Agent App's own identity, the shared schema, the Phase 9.5 implementation contract)
+
+Role and boundary
+
+Entry flow (Login, Unlock, Enroll)
+
+Local schema (the shared schema, the four proposed additions, migration numbering)
+
+Shared command layer (which commands the Agent App uses, which it must not have, the new commands)
+
+Sync participation (topology, protocol, organization key, device identity, the D-3 seam, the sync indicator, cadence, the debt-sync resolution)
+
+Communication Center (single-recipient flow, bulk-action flow, failure handling, funded-phase status changes)
+
+AI Copilot (the AI boundary layer, the field classification, the multi-provider model, the provider distinction)
+
+Compliance enforcement (cloud declares, local enforces, the "block" meanings per rule type)
+
+Design section (the design vocabulary, the debtor profile, the plan view, the Communication Tools screen)
+
+Open items (three buckets: blocks Phase 9.5, does not block Phase 9.5, funded phase)
+
+What this spec does not do
+
+The spec does not amend any frozen document. It names the needed amendments in Section 12.
+
+The external review
+The founder sent the first draft (v1.0) to an external reviewer. The reviewer returned a structured assessment.
+
+The reviewer classified v1.0 as "approve after targeted corrections, not redesign" and identified seven corrections:
+
+C1 - Sync topology wording. The draft said "all sync traffic passes through the hub." That conflates the peer relationship (hub-and-spoke) with the transport (direct P2P preferred, encrypted relay fallback). The reviewer's correction is applied: the spec describes the topology as a peer relationship and states that transport uses the protocol's permitted paths as defined by the frozen sync architecture. The Agent App does not redefine transport.
+
+C2 - Formalize the debt-sync resolution. The draft's debt-in-data_json interpretation was correct but was recorded only in the Agent App spec. The reviewer requires it to be recorded in the authoritative architecture document. This session accepts the correction and records the resolution as a pending amendment (below).
+
+C3 - Align LOCAL-TABLES. The four local schema additions (debtors.photo_path, calendar_events, debtors.role, debtor_relations) must be recorded in LOCAL-TABLES.md via its amendment process. Until then, they are proposals in the Agent App spec, not schema. This session accepts the correction and records the four additions as a pending amendment (below).
+
+C4 - Clarify migration numbering. The draft named v5, v6, v7 as fixed numbers. The reviewer requires the numbers to be verified against the actual run_migrations state before implementation. Applied in the spec, Section 5.8.
+
+C5 - Separate device identity from actor identity. The spec now states that device_id MUST NOT be interpreted as the human actor, and that created_by carries the user identity. See D12 above.
+
+C6 - Make Phase 9.5 placeholders explicit. The sync indicator and the Communication Tools screen are static placeholders in Phase 9.5. The spec states this and forbids a fake sync subsystem.
+
+C7 - Make guarantor relation locality explicit. The spec states that the people sync and the relations do not in the MVP. See D5 above.
+
+The reviewer also made several refinements, all applied:
+
+The AI field classification table is now provisional. Fields marked "proposed for transmission" are subject to the funded-phase legal/privacy review. Only the "strip" entries are final.
+
+The compliance section no longer says GORKA determines the client's legal compliance. The technical spec defers legal wording to a separate review.
+
+The shared crate logic lives in modules; main.rs is wiring and command registration, not business logic.
+
+Enrollment completion does not imply synchronization completion. The Agent App may enter the shell with an empty database.
+
+Open items are grouped into three buckets (blocks Phase 9.5, does not block Phase 9.5, funded phase).
+
+The reviewer's recommended sequence was: fix the wording, formalize the debt-sync resolution, align LOCAL-TABLES, verify migration numbering, separate identity, make placeholders explicit, make relation locality explicit. Then founder review, approve, amend the authoritative documents where genuinely necessary, freeze the spec, begin Phase 9.5.
+
+The reviewer's final classification of v1.1 was "approve after final founder review - implementation-ready spec," with three process clarifications (Phase 9.5 vs funded-phase wording, a localhost API endpoint preflight item, and the temporal definition of the Agent App in Section 1.2). All three were applied in v1.2.
+
+The reviewer's closing principle: "Do not let the developer 'improve' the architecture while implementing this spec. At this point, I would want the developer working almost mechanically from the approved specification, with any discovered discrepancy becoming a STOP -> report -> founder decision, rather than an opportunity to redesign."
+
+The founder adopted this principle. It applies to the implementation of the Agent App spec.
+
+The founder's approval
+The Agent App build spec, version 1.2, was approved by the founder on September 27, 2026. It is frozen.
+
+The founder's adoption of the reviewer's closing principle is recorded as binding: the spec is the authority during implementation. Any discovered discrepancy is a STOP -> report -> founder decision. It is not a license to redesign.
+
+Pending amendments
+Two amendments to frozen documents are required by the external review (C2 and C3). They are recorded here as pending. Their content is defined; the founder decides when to apply them.
+
+Pending amendment 1 — LOCAL-TABLES.md. Add four local schema additions:
+
+debtors.photo_path (nullable TEXT).
+
+A new calendar_events table.
+
+debtors.role (TEXT, default 'DEBTOR').
+
+A new debtor_relations table.
+
+The exact schema is in the Agent App spec, Section 5.4 through 5.6. The amendment promotes the proposals to authoritative schema.
+
+Pending amendment 2 — SYNC-ARCHITECTURE.md. Amend Section 25.9.2 to record the debt-in-data_json interpretation and Rules 1 and 2 (receipt and origination). Also consider amending GORKA-MVP-SCOPE.md Section 8.4 for coherence. This amendment is a precondition for Phase 9.6, not Phase 9.5. The founder decides when to apply it.
+
+Both amendments are small. Neither is an architecture change. Neither reopens the frozen architecture.
+
+Rule compliance
+No production touched.
+
+No cloud schema change.
+
+No CI/CD touched.
+
+Invariant held. All debtor data stays local. The Agent App spec does not introduce any path by which debtor data reaches GORKA's cloud.
+
+No Rust code changed. db.rs::derive_key (Instance B) not touched.
+
+The reconnaissance was read-only. No Electron-era file was modified.
+
+The Agent App spec is a document. No code was written in this session.
+
+No frozen document was amended in this session. The two needed amendments are recorded as pending.
+
+What is still open
+The two pending amendments.
+
+Phase 9.5 implementation, which begins after the amendments (or in parallel, per the founder's decision).
+
+Phase 9.6 (the sync engine), Phase 9.7 (the multi-user demonstration), all not started.
+
+Every open item listed in the Agent App spec, Section 12.
+
+Files changed this session
+GORKA_RECOVERY/recovery-notes/AGENT-APP-SPEC.md (new, version 1.2, frozen).
+
+GORKA_RECOVERY/recovery-notes/DECISIONS.md (this entry).
+
+GORKA_RECOVERY/recovery-notes/HANDOFF.md (follows, separate entry).
+
+GORKA_RECOVERY/recovery-notes/SESSION-LOG.md (follows, separate entry).
+
+GORKA_RECOVERY/recovery-notes/START-HERE.md (follows, separate update).
+
+End of entry.
+
 
 

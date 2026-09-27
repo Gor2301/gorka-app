@@ -2503,5 +2503,99 @@ No production touched. No cloud schema change. No CI/CD touched.
 Invariant held. No Rust code changed. The design reconnaissance
 was read-only.
 
+September 27, 2026 — Agent App build spec
+Session type: Specification authoring. No code. No cloud schema change. No production touched.
+
+Goal: Write the Agent App build spec. Input to Phase 9.5.
+
+Result: Spec written, externally reviewed, corrected, and frozen at version 1.2. Twelve design decisions recorded. Two amendments to frozen documents applied.
+
+Sequence
+Ground truth. git log --oneline -3 and git status confirmed b125ee9, clean, origin/main matching.
+
+Reconnaissance. Read on disk, no modifications:
+
+src-tauri/Cargo.toml, auth.rs, db.rs, main.rs (the Rust command layer).
+
+src/backend/_disabled/communication.service.ts and the providers/ tree (the old Communication Center).
+
+src/backend/_disabled/context.service.ts and gemini.service.ts (the old AI context object, the leak C-2 rejects).
+
+src/backend/_disabled/routes/compliance.routes.ts, permissions.routes.ts, calendar.routes.ts (pre-recovery drift, reference only).
+
+src/frontend/pages/DebtorDetail.tsx, Admin/Communications.tsx, Admin/Templates.tsx (the old agent workflow UI).
+
+supervisor-dashboard/src/pages/Calendar.tsx and services/calendar.service.ts (the Client Dashboard's calendar — inert).
+
+Design conversation. Twelve decisions made with the founder. Recorded as D1 through D12 in DECISIONS.md.
+
+Spec written. AGENT-APP-SPEC.md, version 1.0.
+
+External review. The founder sent it to a reviewer. The reviewer returned seven corrections (C1 through C7) and several refinements. Classification: "approve after targeted corrections, not redesign."
+
+Corrections applied. Version 1.1.
+
+Second review pass. Reviewer classified v1.1 as "approve after final founder review — implementation-ready spec," with three process clarifications (Phase 9.5 vs funded-phase wording, localhost API endpoint preflight item, temporal definition in Section 1.2).
+
+Final corrections applied. Version 1.2. Founder approved.
+
+Documentation. DECISIONS.md entry, LOCAL-TABLES.md amendment (v1.3), SYNC-ARCHITECTURE.md amendment (v1.4), HANDOFF.md entry, this SESSION-LOG entry, START-HERE.md update.
+
+The seven corrections from the review
+C1 — Sync topology wording. The draft said "all sync traffic passes through the hub." Corrected: hub-and-spoke describes the peer relationship, not the transport path. Transport uses direct P2P preferred, encrypted relay fallback.
+
+C2 — Formalize the debt-sync resolution. Debt-in-data_json interpretation must be recorded in the authoritative architecture document, not only in the Agent App spec. Applied: SYNC-ARCHITECTURE.md Section 25.9.2a, plus Rules 1 and 2.
+
+C3 — Align LOCAL-TABLES. The four schema additions must be recorded in LOCAL-TABLES.md. Applied: LOCAL-TABLES.md v1.3, Amendment 1.
+
+C4 — Clarify migration numbering. Verify against actual run_migrations state before implementation. Applied in the spec, Section 5.8.
+
+C5 — Separate device identity from actor identity. device_id MUST NOT be interpreted as the human actor. Applied: spec Section 3.9, decision D12.
+
+C6 — Make Phase 9.5 placeholders explicit. The sync indicator and Communication Tools screen are static placeholders. Applied: spec Sections 7.6, 8.2, 11.8.
+
+C7 — Make guarantor relation locality explicit. People sync; relations do not in the MVP. Applied: spec Sections 3.7, 5.6, decision D5.
+
+The twelve decisions
+D1 command registration per binary. D2 enable_sync admin-only. D3 export_enrollment_package / get_dashboard_stats / bulk_insert_debtors admin-only. D4 no sync_now. D5 guarantors and pledgers. D6 photo as a column. D7 plan view. D8 bulk actions. D9 conditional connector buttons. D10 debt data inside data_json. D11 Phase 9.5 implementation contract. D12 device_id vs created_by.
+
+The reviewer's closing principle, adopted as binding
+Do not let the developer "improve" the architecture while implementing this spec. The developer works mechanically from the approved specification. Any discovered discrepancy becomes a STOP -> report -> founder decision, not an opportunity to redesign.
+
+Files on disk after this session
+GORKA_RECOVERY/recovery-notes/AGENT-APP-SPEC.md — new, v1.2, frozen.
+
+GORKA_RECOVERY/recovery-notes/DECISIONS.md — new long entry.
+
+GORKA_RECOVERY/recovery-notes/LOCAL-TABLES.md — v1.3.
+
+GORKA_RECOVERY/recovery-notes/SYNC-ARCHITECTURE.md — v1.4.
+
+GORKA_RECOVERY/recovery-notes/HANDOFF.md — new entry.
+
+GORKA_RECOVERY/recovery-notes/SESSION-LOG.md — this entry.
+
+GORKA_RECOVERY/recovery-notes/START-HERE.md — update to follow.
+
+What is next
+Phase 9.5 implementation begins after the founder's go. The spec is frozen.
+
+Rule compliance
+No production touched.
+
+No cloud schema change.
+
+No CI/CD touched.
+
+Invariant held.
+
+No Rust code changed. db.rs::derive_key not touched.
+
+Reconnaissance was read-only.
+
+No code written in this session.
+
+
+
 
 

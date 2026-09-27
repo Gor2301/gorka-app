@@ -1,7 +1,7 @@
 # GORKA LOCAL TABLES
 
-**Version:** 1.2
-**Date:** September 20, 2026 (v1.2 amendment applied)
+**Version:** 1.3
+**Date:** September 27, 2026 (v1.3 amendment applied)
 **Purpose:** Freeze the list of local tables that belong in the Tauri
 client's SQLite database.
 **Authority:** Tauri Spec v3.2 is the authoritative source for the
@@ -867,3 +867,129 @@ local_connector_usage (per-debtor detail)
 **The arrow only goes cloud → local for cache tables.**
 
 **For debtor tables, there is no arrow. Data stays local.**
+
+Amendment 1 — Agent App local schema additions (v1.3, September 27, 2026)
+Authority: Approved by the founder on September 27, 2026.
+Reason: The Agent App build spec (AGENT-APP-SPEC.md v1.2, frozen) introduced four local schema additions: a debtor profile photo, an agent calendar, a role column on debtors, and a guarantor/pledger relations table. LOCAL-TABLES.md is the authoritative source for the local schema, so the additions are recorded here. This amendment promotes the Agent App spec's proposals (its Section 5.4 through 5.6) to authoritative schema.
+Scope: Additive. No existing table is removed. No existing column is changed. No existing rule is weakened. The invariant is unchanged. Two existing table definitions gain columns; two new tables are added.
+
+A.1a — debtors column additions
+The debtors table (Category A.1) gains two columns:
+
+Field	Type	Notes
+photo_path	TEXT	Nullable. Local filesystem path to the debtor's profile photo. One photo per debtor. Set by the Agent App. The Client Dashboard does not display it.
+role	TEXT NOT NULL DEFAULT 'DEBTOR'	One of DEBTOR, GUARANTOR, PLEDGER. Extensible later. Default DEBTOR so existing rows are unaffected. Chosen from a dropdown when a person record is created or edited.
+Photo, not document. The profile photo is a column on debtors, not a row in documents. The DocumentCategory::ProfilePhoto enum value remains in the code and is not used by the Agent App UI. Rationale: the photo is one face, one field; documents remain the general-purpose store for passport, ID, contract, collateral, and similar attachments.
+
+Role. A guarantor or pledger is a person liable for, or who has pledged collateral against, another debtor's obligation. Both have the same shape as a debtor (name, surname, contacts, photo, documents). Both live in debtors. The role distinction is the role column.
+
+E — Agent Operational Tables (new category)
+The following two tables are added as a new Category E. They are local operational tables for the Agent App. They are not synchronized in the MVP. They are local to the device where they were created.
+
+E.1 calendar_events
+Field	Type	Notes
+id	TEXT PRIMARY KEY	UUID v4.
+organization_id	TEXT NOT NULL	Local organizational context metadata. Derived from the authenticated/trusted organization context. MUST NOT be accepted as an arbitrary frontend-supplied value. Used for local queries only. Does not create a cloud tenancy boundary.
+title	TEXT NOT NULL	
+description	TEXT	
+start_date	DATETIME NOT NULL	
+end_date	DATETIME NOT NULL	
+all_day	BOOLEAN DEFAULT 0	
+event_type	TEXT NOT NULL DEFAULT 'MANUAL'	MVP has one value: MANUAL.
+debtor_id	TEXT	Nullable. FK → debtors(id) ON DELETE SET NULL. Optional link to a specific debtor.
+data	JSON DEFAULT '{}'	Extensible.
+created_at	DATETIME DEFAULT CURRENT_TIMESTAMP	
+updated_at	DATETIME DEFAULT CURRENT_TIMESTAMP	
+Purpose: Manual calendar entries the agent has entered: birthdays, court dates, auctions, field visits, and other planned events that are not derived from a debt's due date or an action's due date. A manual event may optionally be linked to a debtor.
+
+What this table does not store: PAYMENT_DUE and FOLLOW_UP events. Those are derived views over debts and actions, computed at render time. This avoids the duplication problem the old Electron-era cloud route had (its generate route created a stored event for every debtor, requiring a uniqueness key to prevent duplicates).
+
+Indexes:
+
+idx_calendar_events_dates on (start_date, end_date).
+
+idx_calendar_events_debtor_id on debtor_id.
+
+Cloud equivalent: None.
+
+Local-only. Calendar events are not synchronized in the MVP. Whether they sync in the funded phase is an open item.
+
+E.2 debtor_relations
+Field	Type	Notes
+id	TEXT PRIMARY KEY	UUID v4.
+organization_id	TEXT NOT NULL	Local organizational context metadata. Derived from the authenticated/trusted organization context.
+debtor_id	TEXT NOT NULL	FK → debtors(id) ON DELETE CASCADE. The primary debtor.
+related_debtor_id	TEXT NOT NULL	FK → debtors(id) ON DELETE CASCADE. The person related to the primary debtor.
+relation_type	TEXT NOT NULL	One of GUARANTOR, PLEDGER. Extensible later.
+created_at	DATETIME DEFAULT CURRENT_TIMESTAMP	
+Purpose: Links a debtor to a guarantor or pledger. The related person is a full debtors row with role = 'GUARANTOR' or role = 'PLEDGER'. The relation is stored directionally (debtor_id is the primary debtor; related_debtor_id is the related person), but the same table answers "who guarantees this debtor" and "what does this guarantor guarantee" by reading from both columns.
+
+Many-to-many. One guarantor may guarantee multiple debtors; one debtor may have multiple guarantors. Both fall out of the linking table.
+
+Indexes:
+
+idx_debtor_relations_unique (unique) on (debtor_id, related_debtor_id, relation_type).
+
+idx_debtor_relations_debtor on debtor_id.
+
+idx_debtor_relations_related on related_debtor_id.
+
+Cloud equivalent: None.
+
+Locality of relations in the MVP. The people sync — they are debtors rows and travel as DEBTOR_CREATED / ENTITY_UPDATED events. The relations do not sync. Two replicas may hold the same person rows with different relationship graphs. This is deliberate. How relations sync in the funded phase is an open item.
+
+Updated summary table
+#	Table	Category	Cloud equivalent
+1	debtors	Debtor	None (forbidden in cloud)
+2	debts	Debtor	None
+3	documents	Debtor	None
+4	communications	Debtor	None
+5	actions	Debtor	None
+6	audit_log	Debtor	cloud_audit_logs (separate concept)
+7	local_connectors	Connector	client_connectors
+8	local_connector_usage	Connector	connector_usage (aggregate only)
+9	connector_sync_state	Connector	None (sync bookkeeping)
+10	local_organization	Cache	organizations
+11	local_user	Cache	users
+12	local_templates	Cache	templates
+13	sync_events	Sync	None
+14	sync_state	Sync	None
+15	sync_delivery	Sync	None
+16	sync_peers	Sync	Control Plane (cache only)
+17	organization_keys	Sync	None
+18	history_records	Sync	None
+19	pending_events	Sync	None
+20	entity_field_state	Sync	None
+21	calendar_events	Agent Operational	None
+22	debtor_relations	Agent Operational	None
+Total: 22 local tables (6 debtor operational + 3 connector + 3 cache + 8 sync + 2 agent operational).
+
+Migration numbers
+The migration blocks for these additions are appended after the current highest PRAGMA user_version value in src-tauri/src/db.rs. At the time of this amendment, the highest is v4 (from the September 24 organization_keys migration). The exact numbers (v5, v6, v7 in the Agent App spec) must be verified against the actual run_migrations implementation before the migration blocks are written. See the Agent App spec, Section 5.8.
+
+What this amendment does not change
+The invariant in ARCHITECTURAL-LAW.md Section 1.
+
+The two data planes.
+
+The debtor data categories.
+
+The sync tables and their semantics.
+
+The existing table definitions, except for the two added columns on debtors.
+
+Any rule in any frozen document.
+
+Rule compliance
+No production touched.
+
+No cloud schema change.
+
+No code written. This is a documentation amendment.
+
+Invariant held. All four additions are local-only. None creates a path by which debtor data reaches GORKA's cloud.
+
+The amendment is additive. No existing rule is weakened.
+
+End of Amendment 1.
+

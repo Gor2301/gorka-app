@@ -1028,5 +1028,31 @@ decisions and design vocabulary are its input.
 See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full
 September 27 entries.
 
+Update — September 27, 2026 (Agent App build spec)
+
+The Agent App build spec is written, reviewed, corrected, and frozen.
+
+Document: GORKA_RECOVERY/recovery-notes/AGENT-APP-SPEC.md, version 1.2, approved by the founder on September 27, 2026. It is the input to Phase 9.5.
+
+The spec defines the second Tauri binary in the same repository: the Agent App. It shares the Rust command layer with the Client Dashboard. It has its own bundle identifier, app data folder, settings.dat, and local SQLCipher database.
+
+The session recorded twelve design decisions (D1 through D12). They are recorded in full in DECISIONS.md (the September 27, 2026 entry "Agent App build spec").
+
+Two amendments to frozen documents were applied:
+
+LOCAL-TABLES.md is now v1.3. Amendment 1 promotes four schema additions to authoritative status: debtors.photo_path, calendar_events, debtors.role, debtor_relations. The summary table now shows 22 local tables (was 20).
+
+SYNC-ARCHITECTURE.md is now v1.4. Amendment 2 extends Section 25.9.2 with subsection 25.9.2a: the debt-in-data_json interpretation, plus Rules 1 (receipt) and 2 (origination).
+
+An external reviewer examined the first draft. The reviewer classified it "approve after targeted corrections, not redesign," identified seven corrections (C1 through C7), and reviewed the corrected draft as "implementation-ready spec." All corrections are applied. The reviewer's closing principle was adopted by the founder as binding:
+
+Do not let the developer "improve" the architecture while implementing this spec. The developer works mechanically from the approved specification. Any discovered discrepancy becomes a STOP -> report -> founder decision, not an opportunity to redesign.
+
+The spec lives as a standalone file, referenced by the recovery notes but not duplicated into them. The recovery notes carry the record: the decisions, the reasoning, the amendments, the status.
+
+Phase 9.5 begins after the founder's go.
+
+See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 27 entries.
+
 
 

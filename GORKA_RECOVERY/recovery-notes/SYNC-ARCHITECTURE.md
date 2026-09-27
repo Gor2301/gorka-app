@@ -8,9 +8,9 @@ GORKA — SYNC ARCHITECTURE
 
 Document:    SYNC-ARCHITECTURE.md
 
-Version:     1.3 (frozen)
+Version:     1.4 (frozen)
 
-Date:        September 19, 2026 (v1.3 amendment applied September 26, 2026)
+Date:        September 19, 2026 (v1.4 amendment applied September 27, 2026)
 
 Status:      FROZEN — approved by the founder on September 19, 2026.
              v1.1 amendment (Section 25.13 field-semantics
@@ -49,6 +49,15 @@ protocol). The wire device_id is exactly 16 raw bytes: the local
 replica identifier. It does not encode the user identity. The
 change aligns Sections 3, 4, 11.3, 22.4, 22.13.2, and 25 with
 each other. No other section was changed by the v1.3 amendment.
+
+A v1.4 amendment was applied on September 27, 2026. Section 25.9.2
+was extended with a subsection (25.9.2a) that records the founder's
+decision on how debt data is represented in the MVP. Debt remains
+local as a standalone entity type and does not appear as entity
+type 0x02 on the wire. Debt information that is part of the
+synchronized debtor representation is carried inside the debtor's
+data_json field. Two protocol-level rules (receipt and origination)
+are added. No other section was changed by the v1.4 amendment.
 
 ========================================================================
 
@@ -13630,14 +13639,112 @@ synchronization can be added in the funded phase, without
 
 changing the wire format or the reconciliation algorithm.
 
+25.9.2a How debt data is represented in the MVP
 
+This subsection records the founder's decision of September 27,
+2026, resolving an apparent tension between MVP scope (which
+describes debts as synchronized) and the entity-type restriction
+stated in Section 25.9.2.
+
+The decision, stated precisely:
+
+  Debt remains local as a standalone entity type. Entity type
+  0x02 (debt) is not produced and not accepted in MVP sync
+  events, consistent with Section 25.9.2.
+
+  In the MVP, debt information that is part of the
+  synchronized debtor representation MAY be carried inside the
+  debtor's data_json field. The DEBTOR_CREATED event's
+  data_json payload (type code 0x2005) and the ENTITY_UPDATED
+  event's data_json change record (Section 25.13.1) are the
+  transport.
+
+This decision does not change the wire format. data_json already
+exists in both events. It does not add an event type. It does not
+change any cryptographic construction. It does not add a cloud
+table.
+
+Two protocol-level rules follow from the decision.
+
+Rule 1 — Receipt.
+
+  When a device accepts a DEBTOR_CREATED or ENTITY_UPDATED event
+  whose data_json contains debt data, the device updates its
+  local debts table to reflect the debt data. The local debts
+  table remains the query surface. Application code reads debts
+  directly; it does not parse data_json at render time.
+
+  Without this rule, an admin's uploaded debts would arrive in
+  data_json but would not be visible to application queries that
+  read the debts table.
+
+Rule 2 — Origination.
+
+  When a device creates a debt locally, the local transaction
+  that writes the debt row must also update the parent debtor's
+  data_json field to reflect the new debt, and append the
+  corresponding ENTITY_UPDATED event to sync_events. The
+  transaction is atomic; either both writes commit or neither
+  does.
+
+  Without this rule, a debt created locally by an agent would
+  never leave the originating device.
+
+The exact subset of debt fields carried in data_json is a
+specification choice. Candidates: id, amount, currency, status,
+due_date, description. The debt's own data sub-field is optional
+in the wire representation. The subset is defined in the
+implementation notes for the sync engine (Phase 9.6), not in
+this section.
+
+Conscious MVP limitation — sync granularity.
+
+  The data field reconciles as a single unit. Two devices
+  changing two different debts inside the same debtor's data at
+  the same time produce one winner for the whole data value and
+  one losing value recorded in history_records (Section 13.3).
+  This is the same rule the protocol already applies to every
+  field. It is a deliberate MVP granularity choice, not a
+  defect.
+
+  The funded phase may introduce per-debt entity types (entity
+  type 0x02) if finer granularity is needed. That change is
+  additive; it does not require redesigning the wire format,
+  the reconciliation algorithm, or the protocol order.
+
+Size limit.
+
+  data_json is capped at 1 MiB after canonical serialization
+  (Section 25.13.2). A debtor with many debts grows that field.
+  This is the practical ceiling on how much debt data can travel
+  inside a single debtor's data. Debtors with unusually large
+  numbers of debts may approach this ceiling; the funded phase
+  may need per-debt entity types for such cases.
+
+What this subsection does not do.
+
+  It does not change Section 25.9.2's rule that entity type 0x02
+  (debt) is not produced or accepted in MVP sync events.
+
+  It does not introduce a "generic data bag" mechanism by which
+  arbitrary local entities may travel inside data_json. The
+  permission is specific to debt data that is part of the
+  synchronized debtor representation. Other local-only entities
+  (documents, calendar events, AI history) are not covered by
+  this subsection.
+
+  It does not amend the invariant. No debtor data reaches GORKA's
+  cloud in readable form. The debt data travels inside an
+  end-to-end encrypted sync message between the client's own
+  devices.
+
+Source: DECISIONS.md, September 27, 2026 (the Agent App build
+spec entry, decision D10); the Agent App build spec
+(AGENT-APP-SPEC.md v1.2, frozen), Section 7.8.
 
 25.9.3 Payload Wire Format
 
-
-
 The payload is a TLV-encoded structure. Its TLV type codes:
-
 
 
 &#x20; +--------------------------+-----------+

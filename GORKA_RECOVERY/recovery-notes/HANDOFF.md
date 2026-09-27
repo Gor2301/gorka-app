@@ -2342,6 +2342,115 @@ once this entry is written).
   - The design reconnaissance was read-only.
   - The independence rule of the prior task was not implicated.
 
+STATUS UPDATE — September 27, 2026 (Agent App build spec)
+What this session did
+Wrote, reviewed, corrected, and froze the Agent App build spec. The spec is GORKA_RECOVERY/recovery-notes/AGENT-APP-SPEC.md, version 1.2, approved by the founder on September 27, 2026. It is the input to Phase 9.5.
+
+The session also recorded twelve design decisions made during the conversation (D1 through D12), performed a multi-source reconnaissance of the existing code, and received an external review of the first draft.
+
+The spec
+Sections 1 through 13. The full content is recorded in DECISIONS.md (the September 27, 2026 entry "Agent App build spec"). The spec lives as a standalone file.
+
+Key properties:
+
+The Agent App is the second Tauri binary in the same repository. It shares the Rust command layer with the Client Dashboard.
+
+The command registration boundary: each binary registers its own generate_handler! subset. The boundary is the registration list, not the UI. Admin-only commands are not registered in the Agent App.
+
+The three-step entry flow: Login, Unlock, Enroll.
+
+The debtor profile is the core screen: contact details, debts, communication buttons (conditional on contact field + admin enablement), communications log, actions, documents, photo, guarantors/pledgers.
+
+The plan view (calendar) combines manual events with derived views over debts and actions.
+
+Bulk actions send a generic text to many debtors, with per-recipient compliance checks and a "Retry failed" button.
+
+The Phase 9.5 implementation contract (spec Section 2.8): what is built now versus what is specification context for later phases.
+
+The twelve decisions
+Recorded in full in DECISIONS.md. Summary:
+
+D1 — Command registration is per-binary, not per-UI.
+
+D2 — enable_sync is Client Dashboard only.
+
+D3 — export_enrollment_package, get_dashboard_stats, bulk_insert_debtors are Client Dashboard only.
+
+D4 — sync_now is not in the MVP.
+
+D5 — Guarantors and pledgers: role column on debtors; debtor_relations linking table; many-to-many both ways; relations local-only in the MVP.
+
+D6 — Debtor profile photo is a photo_path column, not a document.
+
+D7 — Plan view (calendar) combines manual events with derived views; calendar events are local-only in the MVP.
+
+D8 — Bulk actions send a generic text; per-recipient compliance; report + retry failed; no auto-retry.
+
+D9 — Connector buttons appear conditionally: admin-enabled AND debtor has the required contact field.
+
+D10 — Debts travel inside the parent debtor's data_json. Rules 1 (receipt) and 2 (origination) recorded. Conscious MVP granularity limitation documented.
+
+D11 — The Phase 9.5 implementation contract.
+
+D12 — device_id is the sync origin; created_by is the human actor. Not interchangeable.
+
+The external review
+The founder sent the first draft to an external reviewer. The reviewer classified it "approve after targeted corrections" and identified seven corrections (C1 through C7), all applied. The reviewer's final classification of v1.1 was "approve after final founder review — implementation-ready spec," with three process clarifications, applied in v1.2.
+
+The reviewer's closing principle, adopted by the founder and binding on Phase 9.5 implementation:
+
+Do not let the developer "improve" the architecture while implementing this spec. The developer works mechanically from the approved specification. Any discovered discrepancy becomes a STOP -> report -> founder decision, not an opportunity to redesign.
+
+Pending amendments
+Two amendments to frozen documents are recorded in DECISIONS.md. They are needed to make the Agent App spec's decisions authoritative.
+
+Amendment 1 — LOCAL-TABLES.md. APPLIED this session. Promotes four schema additions to authoritative status: debtors.photo_path, calendar_events, debtors.role, debtor_relations. LOCAL-TABLES.md is now at v1.3. Summary table shows 22 local tables (was 20).
+
+Amendment 2 — SYNC-ARCHITECTURE.md. APPLIED this session. Extends Section 25.9.2 with subsection 25.9.2a recording the debt-in-data_json interpretation and Rules 1 and 2. SYNC-ARCHITECTURE.md is now at v1.4. This amendment was a precondition for Phase 9.6, not Phase 9.5; it was applied now while the decision was fresh.
+
+What is on disk
+GORKA_RECOVERY/recovery-notes/AGENT-APP-SPEC.md — new, v1.2, frozen.
+
+GORKA_RECOVERY/recovery-notes/DECISIONS.md — new long entry.
+
+GORKA_RECOVERY/recovery-notes/LOCAL-TABLES.md — v1.3, Amendment 1 applied.
+
+GORKA_RECOVERY/recovery-notes/SYNC-ARCHITECTURE.md — v1.4, Amendment 2 applied.
+
+GORKA_RECOVERY/recovery-notes/HANDOFF.md — this entry.
+
+What is still open
+Phase 9.5 (the Agent App, local only) — the spec is frozen; implementation is next.
+
+Phase 9.6 (the sync engine) — not started.
+
+Phase 9.7 (the multi-user demonstration) — not started.
+
+All open items listed in the Agent App spec, Section 12, in three buckets (blocks Phase 9.5, does not block Phase 9.5, funded phase).
+
+The Client Dashboard enrollment export UI — needed before the Agent App's Enroll step is usable without devtools.
+
+Every item carried from prior sessions (Excel/TXT upload, the debt due-date bug, the stale supervisor-dashboard\dist, UI honesty issues, Dashboard 401s, the localhost API endpoint preflight).
+
+Repository state
+No commit this session. The spec and the four documentation files are new or modified in the working tree. The founder decides when to commit.
+
+Rule compliance
+No production touched.
+
+No cloud schema change.
+
+No CI/CD touched.
+
+Invariant held.
+
+No Rust code changed. db.rs::derive_key not touched.
+
+The reconnaissance was read-only.
+
+The Agent App spec is a document. No code was written in this session.
+
+
 
 
 
