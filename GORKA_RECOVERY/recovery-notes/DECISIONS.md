@@ -5788,5 +5788,105 @@ It is the input to the Agent App spec.
 
 End of entry.
 
+---
+
+## Recovery Session — September 27, 2026 (D-3: per-agent access control)
+
+Short entry. Records the decision on D-3, the per-agent access
+control question left open in the September 27 architecture
+entry.
+
+### The question
+
+When an agent opens the Agent App, do they see every debtor in
+the organization, or only those assigned to them? The frozen
+architecture states every device in the organization has access
+to every record, and every authorized device can decrypt any
+sync traffic. Three shapes were named in the earlier entry.
+
+### The decision
+
+MVP: all agents see all debtors. No filtering. This is the
+fastest path to a workable pilot product. The trade-off — that
+per-agent visibility is not enforced — is accepted for the MVP
+stage.
+
+Production: sync-layer filtering is a requirement, not optional.
+An agent must eventually see only the debtors assigned to them,
+and the enforcement must be real, not cosmetic. UI-layer hiding
+alone is not sufficient for the funded phase.
+
+### The seam — a low-cost forward-looking commitment
+
+To avoid a redesign when filtering is added later, the outbound
+message path is specified as two steps:
+
+  candidates = events not yet delivered to peer
+  filtered   = filter(candidates, peer)
+  message    = compose(filtered)
+
+In the MVP, filter is the identity function — it returns
+everything. One line. No behavior change. No schema change. No
+protocol change. No new event type. No new table.
+
+In production, filter consults the assignment state and drops
+events for debtors not assigned to the receiving peer. The sync
+engine's outbound path is unchanged. Only the filter function
+and the assignment data behind it are added.
+
+Without this seam, adding filtering later means restructuring
+the outbound path — the part of the sync engine that touches
+delivery bookkeeping, message composition, and the wire format.
+With the seam, adding filtering later is: write the filter,
+build the assignment table, sync assignment events, and wire the
+filter into the outbound path (one line). The first three are
+new work either way; the fourth is the redesign the seam
+prevents.
+
+The cost of the seam today is zero. It is a specification line,
+not an implementation change.
+
+### The limitation, stated plainly
+
+Filtering can only govern future events, not past ones. When an
+agent is unassigned from a debtor, the debtor's historical
+events are already on that agent's device. Filtering stops new
+events from arriving; it cannot recall old ones. This is the
+same property as the multi-user model's revocation caveat:
+revocation prevents future synchronization, it does not remove
+data already replicated.
+
+The funded-phase version of D-3 must therefore state this
+limitation in the client-facing documentation. A bank's
+compliance reviewer will need to hear it said plainly.
+
+### What this changes
+
+Nothing in the frozen architecture. The MVP behavior is
+unchanged from what the frozen documents already describe. The
+only addition is the two-step outbound path — a specification
+of an internal structure, not a change to any protocol, message,
+or table.
+
+### What this does not decide
+
+The shape of the assignment mechanism itself — how debtors are
+assigned to agents, whether by the admin in the Client
+Dashboard, whether via a new event type, whether as an
+`assigned_to` field that is finally synchronized. Those are
+funded-phase design questions. This entry records only that the
+seam exists and that filtering will be added there.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held.
+  - No Rust code changed.
+  - Documentation only.
+
+End of entry.
+
 
 
