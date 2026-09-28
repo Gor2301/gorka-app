@@ -9,6 +9,7 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+gorka-shared = { path = "../shared" }
 tauri = { version = "2", features = ["default", "tray-icon"] }
 tauri-utils = { version = "2" }
 tauri-plugin-store = "2"

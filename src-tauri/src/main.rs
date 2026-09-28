@@ -15,9 +15,11 @@ use chacha20poly1305::{aead::{Aead, KeyInit, Payload}, XChaCha20Poly1305, XNonce
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+use gorka_shared::storage::AppStorage;
 
 mod db;
 mod auth;
+mod storage_migration;
 
 struct AppState {
     db: Mutex<Option<Connection>>,
@@ -259,13 +261,12 @@ fn get_salt(app: tauri::AppHandle) -> Result<Vec<u8>, String> {
 
 
 #[command]
-fn database_exists() -> bool {
-    db::database_exists()
+fn database_exists(storage: tauri::State<AppStorage>) -> bool {
+    db::database_exists(&storage)
 }
 
-
 #[command]
-fn unlock_database(password: String, app: tauri::AppHandle) -> Result<(), String> {
+fn unlock_database(password: String, app: tauri::AppHandle, storage: tauri::State<AppStorage>) -> Result<(), String> {
     println!("========================================");
     println!("🔑 [RUST] unlock_database STARTED");
     println!("========================================");
@@ -295,7 +296,7 @@ fn unlock_database(password: String, app: tauri::AppHandle) -> Result<(), String
     };
 
     println!("📌 [RUST] Step 3: Initializing database with key...");
-    let conn = match db::init_db(&key) {
+    let conn = match db::init_db(&storage, &key) {
         Ok(c) => {
             println!("✅ [RUST] Database initialized successfully");
             c
@@ -611,6 +612,7 @@ fn delete_debtor(
     id: String,
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
 
@@ -623,7 +625,7 @@ fn delete_debtor(
     ).map_err(|e| e.to_string())?;
 
     if affected > 0 {
-        let debtor_dir = db::get_debtor_files_dir(&id)?;
+        let debtor_dir = db::get_debtor_files_dir(&storage, &id)?;
         if debtor_dir.exists() {
             std::fs::remove_dir_all(&debtor_dir)
                 .map_err(|e| format!("Failed to delete debtor files: {}", e))?;
@@ -1265,6 +1267,7 @@ fn upload_document(
     input: DocumentInput,
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
 ) -> Result<Document, String> {
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
@@ -1288,7 +1291,7 @@ fn upload_document(
     let category_str = category.as_str();
     let id = Uuid::new_v4().to_string();
 
-    let debtor_dir = db::get_debtor_files_dir(&input.entity_id)?;
+    let debtor_dir = db::get_debtor_files_dir(&storage, &input.entity_id)?;
     let docs_dir = debtor_dir.join("documents");
     std::fs::create_dir_all(&docs_dir).map_err(|e| e.to_string())?;
 
@@ -2156,6 +2159,39 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .manage(AppState {
             db: Mutex::new(None),
+        })
+        .setup(|app| {
+            let handle = app.handle().clone();
+
+            // Phase 2B: one-time storage-root migration.
+            // Runs before any code path can open the database.
+            storage_migration::migrate_client_storage_if_needed(&handle)
+                .map_err(|e| {
+                    eprintln!("[setup] storage migration failed: {}", e);
+                    Box::<dyn std::error::Error>::from(e)
+                })?;
+
+            // Construct the Client's AppStorage and place it in
+            // managed state. Shared code consumes it via
+            // tauri::State<AppStorage>.
+            let app_data_dir = handle
+                .path()
+                .app_data_dir()
+                .map_err(|e| {
+                    Box::<dyn std::error::Error>::from(format!(
+                        "Failed to resolve app data dir: {}", e
+                    ))
+                })?;
+
+            let storage = AppStorage::new(
+                app_data_dir,
+                "gorka-client.db",
+                "data/files",
+            );
+
+            app.manage(storage);
+
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             login,

@@ -3,7 +3,6 @@
 use rusqlite::{Connection, params};
 use serde_json::Value as JsonValue;
 use std::path::PathBuf;
-use directories::ProjectDirs;
 use uuid::Uuid;
 use chrono::Utc;
 use hex;
@@ -12,13 +11,14 @@ use argon2::{
     Argon2,
 };
 use rand_core::OsRng;
+use gorka_shared::storage::AppStorage;
 
-pub fn get_db_path() -> PathBuf {
-    let proj_dirs = ProjectDirs::from("com", "gorka", "client")
-        .expect("Failed to get project directories");
-    let data_dir = proj_dirs.data_dir();
-    std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
-    data_dir.join("gorka-client.db")
+pub fn get_db_path(storage: &AppStorage) -> PathBuf {
+    let db_path = storage.db_path();
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent).expect("Failed to create data directory");
+    }
+    db_path
 }
 
 /// Returns true if the local encrypted database file exists on disk.
@@ -28,27 +28,21 @@ pub fn get_db_path() -> PathBuf {
 /// (returning run). It is NOT a claim that the database is valid or
 /// that the password is correct. The unlock operation is responsible
 /// for determining that.
-///
-/// Side effect note: this calls get_db_path(), which creates the data
-/// directory if it does not exist. The directory existing is not the
-/// same as the database file existing; this function checks the file.
-pub fn database_exists() -> bool {
-    get_db_path().exists()
+pub fn database_exists(storage: &AppStorage) -> bool {
+    storage.db_path().exists()
 }
 
-pub fn get_files_dir() -> PathBuf {
-    let proj_dirs = ProjectDirs::from("com", "gorka", "client")
-        .expect("Failed to get project directories");
-    let files_dir = proj_dirs.data_dir().join("files").join("debtors");
+pub fn get_files_dir(storage: &AppStorage) -> PathBuf {
+    let files_dir = storage.debtor_files_dir();
     std::fs::create_dir_all(&files_dir).expect("Failed to create files directory");
     files_dir
 }
 
-pub fn get_debtor_files_dir(debtor_id: &str) -> Result<PathBuf, String> {
+pub fn get_debtor_files_dir(storage: &AppStorage, debtor_id: &str) -> Result<PathBuf, String> {
     Uuid::parse_str(debtor_id)
         .map_err(|_| format!("Invalid debtor_id format: {}", debtor_id))?;
-    
-    let files_dir = get_files_dir();
+
+    let files_dir = get_files_dir(storage);
     let debtor_dir = files_dir.join(debtor_id);
     std::fs::create_dir_all(&debtor_dir).expect("Failed to create debtor directory");
     Ok(debtor_dir)
@@ -74,10 +68,10 @@ pub fn generate_salt() -> Vec<u8> {
     salt
 }
 
-pub fn init_db(key: &str) -> Result<Connection, String> {
+pub fn init_db(storage: &AppStorage, key: &str) -> Result<Connection, String> {
     println!("🔍 [RUST] init_db: STARTED");
     
-    let db_path = get_db_path();
+    let db_path = get_db_path(storage);
     println!("🔍 [RUST] db_path: {:?}", db_path);
     
     let conn = Connection::open(db_path).map_err(|e| {

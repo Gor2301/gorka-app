@@ -6,9 +6,8 @@
 //
 // Both gorka-client (Client Dashboard) and gorka-agent
 // (Agent App) depend on this crate.
-//
-// This file is a placeholder. Real contents are extracted
-// from src-tauri/src/main.rs in Phase 1c and later.
+
+pub mod storage;
 
 pub fn placeholder() -> &'static str {
     "gorka-shared"
