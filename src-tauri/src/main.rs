@@ -4,7 +4,6 @@
 
 use rusqlite::{params, Connection};
 use tauri::{command, Manager};
-use uuid::Uuid;
 use chrono::Utc;
 use std::sync::Mutex;
 use rand::RngCore;
