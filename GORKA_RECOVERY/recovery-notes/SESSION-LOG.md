@@ -2595,6 +2595,347 @@ Reconnaissance was read-only.
 
 No code written in this session.
 
+Session Extension - September 28, 2026 (Phase 9.5 begins)
+
+WHAT THIS SESSION DID
+
+Phase 9.5 began. The workspace was created, the Client's storage
+root was migrated, five shared-code slices were extracted, the
+Agent App scaffold was built and verified, and Slice 1 of the
+adapter/command cleanup was completed.
+
+Fourteen commits landed. Nothing touched production. Nothing
+touched the cloud schema. The invariant held.
+
+This is the entry that records the day's work chronologically.
+The technical details of each extraction slice are in the new
+PHASE-9.5-EXTRACTION-LOG.md. The decisions are in DECISIONS.md.
+The status is in HANDOFF.md.
+
+THE SESSION IN ORDER
+
+Opening. State was verified first: main machine at 15c88d3,
+clean; cloud machine at 86f7bac with two known untracked files.
+The recovery discipline (verify both machines, read the exact
+region, one command at a time) was applied throughout.
+
+Phase 1a - Root workspace manifest (199956e).
+
+Created a virtual Cargo workspace at the repository root. One
+member initially: src-tauri. No code touched.
+
+Verified: cargo build -p gorka-client on the cloud passed.
+
+Phase 1b - gorka-shared crate (2c540bc).
+
+Created shared/ with a placeholder lib.rs. Added shared to the
+workspace members. No code moved yet.
+
+Verified: both crates build.
+
+Phase 2 - Storage root migration (52f0915).
+
+The Client's DB and debtor files lived at
+%APPDATA%\gorka\client\data\ (legacy ProjectDirs root), while
+settings.dat and the fs plugin scope lived at
+%APPDATA%\com.gorka.client\ (Tauri bundle-identifier root).
+
+The two did not agree. This was the hazard: an Agent App calling
+the same code would open the Client Dashboard's database.
+
+Decision: Direction 1 plus Option 1b. Unify to the Tauri root
+under a data/ subfolder. One-time deliberate migration. Old
+root preserved as rollback.
+
+Mechanism:
+  - staging into data.migrating/, promoted only after SHA-256
+    verification
+  - atomic fs::rename for promotion
+  - copy .db and .db-wal; do not copy -shm (SQLite recreates it)
+  - old root untouched
+
+Files created:
+  shared/src/storage.rs        AppStorage type
+  src-tauri/src/storage_migration.rs  the migration
+
+Files changed:
+  src-tauri/src/db.rs          five functions take &AppStorage
+  src-tauri/src/main.rs        .setup() runs migration, manages
+                               AppStorage
+
+Verified end-to-end:
+  - migration ran once, at startup, before DB open
+  - DB hash at new location matched pre-migration
+  - old root byte-identical, untouched
+  - dashboard numbers matched
+  - CRUD worked on migrated DB
+  - path routing: renaming the new DB made the app show "Set";
+    restoring it made the app show "Enter"
+  - file upload landed under new root's files/debtors/<id>/
+  - old root's files folder stayed empty
+  - data.migrating did not survive the promotion
+
+ProjectDirs now appears in exactly one file on disk:
+storage_migration.rs. Not in shared/, not in db.rs, not in
+main.rs.
+
+Slice 3.1 - Models (a2ccd73).
+
+Moved all structs and enums from main.rs to
+shared/src/models.rs. main.rs imports them via
+use gorka_shared::models::*.
+
+Verified: build passed. Client smoke test passed.
+
+Slice 3.2 - Enrollment package (8cce268).
+
+Moved build_enrollment_package and parse_enrollment_package
+to shared/src/enrollment.rs. E1-E6 tests moved to
+shared/tests/enrollment.rs as integration tests.
+
+The Tauri commands export_enrollment_package and
+import_enrollment_package stay in main.rs and call the
+shared functions.
+
+Verified: cargo test -p gorka-shared passed 6/6, including E1,
+the byte-exact known-answer test. cargo test -p gorka-client
+passed 8/8 (H, M, V). Client smoke test passed.
+
+Slice 3.3 - Sync primitives (7b06034).
+
+Moved twelve functions to shared/src/sync.rs:
+derive_session_key, compute_handshake_reply_tag,
+compute_handshake_confirm_tag, build_handshake_proof_input,
+encode_tlv, encode_string_value, encode_debtor_created_payload,
+encode_entity_updated_payload,
+encode_communication_logged_payload, encode_event_record,
+build_sync_message, parse_sync_message.
+
+Moved H1-H3, M1, M2, V1, V4, V6 tests to shared/tests/sync.rs.
+
+Cleaned seven dead imports out of main.rs.
+
+Verified: build passed. Warnings dropped from 25 to 11.
+cargo test -p gorka-shared passed 14/14. cargo test -p
+gorka-client reported 0 tests. Client smoke test passed.
+
+Agent scaffold (0e73b34, 699b9fe).
+
+The external review's Q5 answer was refined: the Agent scaffold
+should come once models, storage, enrollment, sync are shared,
+before db and auth are fully extracted. The prose recommendation
+was binding; the sequence table's later placement of the
+scaffold was treated as an inconsistency to correct.
+
+The external review also chose Option B as binding on the
+scaffold timing.
+
+Created:
+  agent-dashboard/            independent React frontend,
+                              Vite port 5174
+  src-tauri-agent/            second Tauri binary
+    Cargo.toml                gorka-agent package
+    build.rs
+    tauri.conf.json           identifier com.gorka.agent
+    capabilities/default.json
+    icons/                    copied from Client, TODO for
+                              distinct Agent icon set
+    src/main.rs               one command: agent_ping
+
+Updated workspace members to add src-tauri-agent.
+
+Verified:
+  - gorka-agent.exe built (15.5 MB initially)
+  - window opened, titled "GORKA Agent"
+  - placeholder frontend rendered from agent-dashboard on 5174
+  - app data folder did not exist initially - Tauri's
+    app_data_dir() resolves a path but does not create it
+
+Fix 699b9fe: added storage.ensure_dirs() in the Agent's setup
+closure. Tauri's app_data_dir() resolves but does not create
+directories; ensure_dirs creates the files/debtors tree.
+
+Verified after the fix:
+  - %APPDATA%\com.gorka.agent\data\files\debtors\ created
+  - %APPDATA%\com.gorka.client\ untouched
+  - %APPDATA%\gorka\ untouched
+
+Slice 3.4 - DB extraction (a959087).
+
+Moved db.rs wholesale to shared/src/db.rs. All ten functions:
+get_db_path, database_exists, get_files_dir,
+get_debtor_files_dir, derive_key, generate_salt, init_db,
+verify_password, run_migrations, log_audit.
+
+One import adjusted: use gorka_shared::storage::AppStorage
+becomes use crate::storage::AppStorage. One path comment
+updated. Nothing else.
+
+Deleted src-tauri/src/db.rs. Removed mod db; from main.rs,
+added use gorka_shared::db;. The db::foo(...) call sites
+kept working.
+
+Also deleted the two tracked September 14 backups:
+main.rs.before-communications-20260914,
+main.rs.before-debts-20260914. This was authorized after the
+Agent scaffold verified.
+
+Verified: both binaries built. cargo test -p gorka-shared
+passed 14/14. Client smoke test passed.
+
+Slice 3.5 - Auth.
+
+Reconnaissance found that the review's Shape 1 (path-based
+pure functions) does not match the actual code. Six of seven
+functions in auth.rs are pure tauri-plugin-store operations
+with no Tauri-free side. Only the HTTP half of login is
+Tauri-free.
+
+The founder asked the external reviewer. Answer: Reading C,
+DEFERRED. No code change. The store is genuinely Tauri-
+specific; the six functions are essentially direct plugin
+operations. The Agent's auth does not exist yet, so there is
+no duplication to remove. Re-evaluate after the Agent's
+authentication exists.
+
+The review's reasoning: the current architecture has simply
+shown there is not a clean, justified extraction boundary for
+the settings portion yet. "Deferred" is not "failed."
+
+No files changed. a959087 stayed.
+
+Adapter/command cleanup, Slice 1 - Debtors (91b5b7e).
+
+Reconnaissance identified 34 Tauri commands in main.rs:
+  - 11 already thin adapters (delegate to db:: or auth::)
+  - 23 with real logic (SQL, row mapping, audit calls in body)
+  - 3 AppState-touching (unlock_database, is_database_unlocked,
+    logout)
+
+The external review chose Reading 3: extract in entity-based
+slices. Debtors first.
+
+Pattern: shared function takes (conn: &Connection,
+organization_id: &str, ...); the Tauri command locks AppState,
+gets the trusted org id, calls the shared function, returns.
+
+Created shared/src/debtors.rs with eight functions. Every SQL
+string, parameter binding, row mapping, transaction boundary,
+and audit call is identical to the original. Only the
+signatures changed.
+
+main.rs: each of the eight commands became a thin adapter.
+bulk_insert_debtors still uses as_mut() for the transaction.
+delete_debtor still takes State<AppStorage> for file deletion.
+
+Warning cleanup (Q5 of the review): removed unused State
+import and the unused app parameter in upload_document.
+
+Verified: build passed (2m 28s). Warnings 8 to 6. cargo test
+-p gorka-shared passed 14/14. Client smoke test passed with
+every debtor operation exercised: list, detail, edit, add,
+search, delete.
+
+Housekeeping - three commits, at the end of the session.
+
+20a1730: .gitignore added target/ and **/target/, plus
+slice1_block.txt, *.bak-slice1, *.bak-phase3-*. The workspace
+target/ was never tracked, but the ignore file did not list
+it; the first post-workspace build produced hundreds of
+untracked artifacts. Verified nothing under target/ was ever
+tracked, so a gitignore fix was sufficient.
+
+ab957d8: root Cargo.lock and src-tauri-agent/gen/schemas/*.json
+tracked. The root Cargo.lock was generated on the cloud but
+never committed. Not committing it recreated the same class of
+cross-machine drift we fixed on September 26. Committed from
+the cloud.
+
+ee8c732: removed the obsolete pre-workspace src-tauri/
+Cargo.lock. Root Cargo.lock is now authoritative. Also deleted
+the two gitignored temp files from Slice 1.
+
+Extraction log (8435179).
+
+Created PHASE-9.5-EXTRACTION-LOG.md in the recovery notes. It
+records Slice 1 in detail with the fields the review required:
+starting and resulting commits, files moved, commands moved,
+function mapping, data preservation (SQL, parameters, row
+mappings, transaction boundaries, audit calls), adapter
+behavior preservation (org id acquisition, AppState
+ownership, error propagation, return values), warning count
+before/after, build and test results, explicit non-changes,
+deviations (none).
+
+Two paste-related defects in the file were caught and fixed
+before commit: markdown escapes (\#, \&, \_, &#x20;) and
+doubled newlines. Final file: 132 lines, clean.
+
+VERIFICATION SUMMARY
+
+  cargo build -p gorka-client        PASS after each slice
+  cargo build -p gorka-agent         PASS after scaffold
+  cargo test -p gorka-shared         14/14 PASS
+  cargo test -p gorka-client         0 tests (all moved)
+  Client smoke test                  PASS after each slice
+  Agent launch test                  PASS after scaffold
+  Path routing checks                PASS after migration
+
+WARNINGS
+
+  gorka-client warnings: 10 at the start of the session,
+  6 at the end. Removed: unused import State; unused variable
+  app (upload_document parameter); three imports that moved
+  to shared with the sync primitives.
+
+  Five auth.rs warnings remain. Deferred with the auth slice.
+
+  One gorka-agent linker warning (LNK4099, OpenSSL PDB) is
+  cosmetic and unavoidable with the vendored OpenSSL build.
+
+UNEXPECTED FINDINGS
+
+  1. .gitignore did not exclude target/. Discovered during
+     the final verification. Fixed at 20a1730.
+
+  2. Root Cargo.lock was untracked. Fixed at ab957d8. The
+     pre-workspace src-tauri/Cargo.lock removed at ee8c732.
+
+  3. The Agent's app data folder did not exist after the
+     first launch. Cause: Tauri's app_data_dir() resolves a
+     path but does not create the directory. Fixed at
+     699b9fe with storage.ensure_dirs() in setup.
+
+STATE AT END OF SESSION
+
+  Main machine:  8435179, clean, pushed.
+  Cloud machine: ee8c732, clean. Two commits behind; needs
+                 git pull before Slice 2.
+  GitHub:        8435179.
+
+NEXT WORK
+
+Slice 2 - debts. Commands to move: get_debts, insert_debt,
+update_debt, delete_debt. Same pattern as Slice 1.
+
+After Slice 2: communications, actions, documents, dashboard.
+Then final Client regression. Then Agent implementation. Then
+Agent authentication. Then re-evaluate the shared auth
+boundary.
+
+RULE COMPLIANCE
+
+No production touched.
+No cloud schema change.
+No CI/CD touched (release.yml unchanged).
+Invariant held.
+No frozen document amended beyond the September 27
+amendments already recorded.
+The extraction was mechanical: SQL, parameters, row mappings,
+transactions, audit calls, and command names unchanged in
+every slice.
+
+End of entry.
 
 
 

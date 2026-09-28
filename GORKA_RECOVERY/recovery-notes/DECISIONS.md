@@ -6177,5 +6177,493 @@ GORKA_RECOVERY/recovery-notes/START-HERE.md (follows, separate update).
 
 End of entry.
 
+## Recovery Session - September 28, 2026 (Phase 9.5 begins: HOW decisions)
+
+This entry records the HOW decisions made on the first day of
+Phase 9.5 implementation. It does not repeat the technical
+slice records, which are in PHASE-9.5-EXTRACTION-LOG.md. It
+does not repeat the status, which is in HANDOFF.md. It records
+the choices that were not obvious, and the reasoning behind
+them.
+
+The session is the first day of Phase 9.5. Fourteen commits
+landed. The workspace was created, the storage root was
+migrated, five shared-code slices were extracted, the Agent
+scaffold was built, and the first adapter slice was completed.
+
+================================================================
+CONTEXT: WHAT THE SPECIFICATION DID NOT SAY
+================================================================
+
+AGENT-APP-SPEC.md v1.2 defines WHAT the Agent App is. It does
+not define HOW the repository is structured for two Tauri
+binaries, how the shared code is organised, or which of the
+existing Client commands are adapter code versus business
+logic.
+
+Before any scaffolding, a set of HOW questions was written
+down. They were sent to an external reviewer. The reviewer's
+answers became the plan for the day. This entry records those
+answers as decisions, with the reasoning that the reviewer
+gave.
+
+================================================================
+D1 - REPOSITORY LAYOUT IS OPTION A
+================================================================
+
+Decision: Cargo workspace at the repository root. Three
+members: shared/, src-tauri/, src-tauri-agent/.
+
+The shared member is a normal library crate, gorka-shared.
+Each Tauri binary has its own package. The Agent depends on
+the shared crate; the Agent does not depend on the Client.
+
+Reasoning recorded by the reviewer:
+
+  "The Agent is not a specialized version of the Client.
+  They are two applications consuming common GORKA
+  functionality."
+
+  The wrong dependency shape would be Agent -> Client. The
+  right shape is Client -> shared <- Agent. The distinction
+  becomes increasingly important when the applications
+  diverge.
+
+Rejected: Option B (two Tauri projects, one depending on the
+other). It would have created an Agent -> Client dependency
+that is conceptually wrong.
+
+================================================================
+D2 - ONE WORKSPACE TARGET DIRECTORY
+================================================================
+
+The workspace shares one target/ directory. This is a benefit
+given the 15-25 minute cloud builds: no redundant
+recompilation across members.
+
+Operational consequence: the signing workflow no longer
+assumes src-tauri/target/debug/. The actual artifact location
+became <workspace>/target/debug/. This was verified during
+Phase 1a.
+
+================================================================
+D3 - THE 14 TESTS RUN ONCE, IN THE SHARED CRATE
+================================================================
+
+E1-E6, H1-H3, M1, M2, V1, V4, V6 test protocol, crypto, and
+serialization properties. They do not belong to either UI.
+
+The tests live in shared/tests/ as integration tests. They run
+with cargo test -p gorka-shared.
+
+Running them twice (once per binary) would test the same
+implementation twice. It would add no information. The second-
+implementation verification (the Node.js implementation)
+already exists and does not need duplication.
+
+================================================================
+D4 - FRONTEND FOLDER AND DEV SERVER
+================================================================
+
+agent-dashboard/ for the Agent's React frontend.
+
+Vite port 5174 for the Agent. The Client uses 5173. Both can
+run simultaneously.
+
+The two frontends are independent. No shared React component
+library in Phase 9.5. Design tokens are duplicated from the
+frozen vocabulary (spec Section 11.2). The reviewer's
+reasoning:
+
+  "Do not create a shared React component library during
+  Phase 9.5. [...] get a second functioning application
+  without destabilizing the first. A shared UI package
+  introduces another dependency boundary that you don't
+  need yet."
+
+If the duplication becomes a maintenance problem later, a
+shared frontend package can be created in a controlled change.
+Not now.
+
+================================================================
+D5 - APPLICATION IDENTITY
+================================================================
+
+Agent:
+  bundle identifier: com.gorka.agent
+  database filename: gorka-agent.db
+  app data folder:   %APPDATA%\com.gorka.agent\
+  settings:          settings.dat (same filename as Client;
+                     isolation is by folder)
+
+Client keeps:
+  bundle identifier: com.gorka.client
+  database filename: gorka-client.db
+  app data folder:   %APPDATA%\com.gorka.client\
+  settings:          settings.dat
+
+The reviewer on settings.dat:
+
+  "The important isolation mechanism is the application-
+  specific storage location, not the filename. If [the two
+  apps have their own app data folders], then there is no
+  collision. [...] settings.dat for both is fine."
+
+================================================================
+D6 - STORAGE ROOT: DIRECTION 1 PLUS OPTION 1B
+================================================================
+
+The Client's DB and files were split across two roots:
+  %APPDATA%\gorka\client\data\     from ProjectDirs
+  %APPDATA%\com.gorka.client\      from the Tauri identifier
+
+The reviewer chose Direction 1: unify to the Tauri root, under
+a data/ subfolder. The precise path:
+
+  %APPDATA%\com.gorka.client\
+      settings.dat
+      data\
+          gorka-client.db
+          files\
+              debtors\
+
+The old path stays as a rollback copy, unmodified.
+
+The reviewer's wording on the checkpoint:
+
+  "Client must preserve the existing Client data and
+  semantics through the storage-root migration. After
+  migration, it must open the migrated database and files
+  from the new authoritative Client AppStorage location,
+  with no data loss or unintended behavioral change."
+
+That replaced the earlier wording ("Client still opens exactly
+the same existing database/files location"), which would have
+frozen a known defect.
+
+================================================================
+D7 - MIGRATION MECHANISM: STAGING AND PROMOTION
+================================================================
+
+Two corrections to the first draft, both accepted:
+
+Correction 1 - crash safety. The first draft used "NEW_DB
+exists" as the sole idempotence test. That fails if the
+process crashes mid-copy. The reviewer required a temporary
+migration directory (data.migrating/) that is promoted to
+data/ only after the full copy has been verified.
+
+The result:
+
+  NEW_ROOT exists                     -> no-op
+  NEW_ROOT absent, TMP_ROOT exists    -> discard TMP_ROOT,
+                                         retry
+  NEW_ROOT absent, TMP_ROOT absent,
+    OLD_DB exists                     -> migrate
+  NEW_ROOT absent, OLD_DB absent      -> fresh install
+
+Correction 2 - WAL treatment. The reviewer required the WAL
+(if present) to be treated as an important auxiliary file, and
+the -shm file to be treated as recreatable by SQLite. The
+first draft copied -shm; the corrected version does not.
+
+================================================================
+D8 - APPSTORAGE TYPE
+================================================================
+
+A shared type in gorka-shared::storage:
+
+  pub struct AppStorage {
+      pub app_data_dir: PathBuf,
+      pub db_filename: String,
+      pub files_subdir: String,
+  }
+
+Constructed once in each binary's main.rs, placed in Tauri-
+managed state, and consumed by the shared layer.
+
+The reviewer's specific rule:
+
+  "Do not pass AppStorage into every shared function as a
+  separate argument. [...] The architectural requirement is
+  simply: no shared code may assume the Client application's
+  storage identity. The application-specific storage context
+  must come from the binary."
+
+================================================================
+D9 - AGENT SCAFFOLD TIMING (OPTION B BINDING)
+================================================================
+
+Two passages in the earlier reviewer answer conflicted.
+
+Prose: scaffold the Agent once models, storage, enrollment,
+and sync are shared, before db and auth are fully extracted.
+
+Sequence table: scaffold the Agent after db extraction and
+auth split.
+
+The reviewer ruled: the prose was the intended architectural
+decision. The sequence table was too conservative and should
+be treated as an inconsistency to correct.
+
+Quote:
+
+  "The Agent should be scaffolded once the following are
+  established: gorka-shared exists, AppStorage is shared,
+  models are shared, enrollment package is shared, sync
+  primitives are shared, the Client still passes its smoke/
+  regression checks. At that point, we have enough evidence
+  that the shared crate is genuinely becoming the common
+  Rust core."
+
+The Agent scaffold was executed once that threshold was met.
+The scaffold proves: second Cargo package/binary, second Tauri
+application, separate bundle identifier, separate app-data
+root, separate frontend, shared crate dependency, independent
+main.rs, independent Tauri configuration, workspace builds
+both.
+
+No Agent functionality was implemented. Only agent_ping, a
+trivial command, exists to prove the per-binary command
+boundary.
+
+================================================================
+D10 - AUTH.RS EXTRACTION IS DEFERRED (READING C)
+================================================================
+
+The review's Shape 1 for auth.rs ("move the pure settings/
+auth-state operations to shared, keep a thin Tauri adapter")
+does not match the actual code. Six of seven functions in
+auth.rs are pure tauri-plugin-store operations. There is no
+Tauri-free side to move.
+
+The three readings:
+
+  A - move only the HTTP half of login
+  B - move the HTTP half and replace tauri-plugin-store with
+      a shared Settings implementation
+  C - defer entirely
+
+The reviewer chose C. The reasoning:
+
+  "The Agent does not have authentication yet. Therefore
+  there is no actual duplication problem to solve today.
+  When Agent authentication is actually implemented, we will
+  have two concrete consumers and can identify the genuinely
+  shared boundary from both sides."
+
+The reviewer also made explicit what is NOT authorised:
+
+  "do not read/reverse-engineer settings.dat, do not replace
+  tauri-plugin-store, do not create a Settings serializer,
+  do not migrate settings, do not change the settings file,
+  do not introduce a shared settings abstraction."
+
+No files changed. a959087 stayed.
+
+================================================================
+D11 - ADAPTER/COMMAND CLEANUP: READING 3
+================================================================
+
+The reviewer chose Reading 3: extract the 23 SQL-bearing
+commands to gorka-shared in entity-based slices.
+
+Slice 1 (debtors) done this session. Slices 2-6 (debts,
+communications, actions, documents, dashboard) to follow.
+
+The pattern:
+
+  Tauri command
+      |
+      v
+  AppState lock
+      |
+      v
+  &Connection
+      |
+      v
+  shared business/database operation
+
+The reviewer on the connection boundary:
+
+  "Keep the connection lifecycle in the binary. The shared
+  function should receive the already-open connection. This
+  preserves the current ownership model and prevents
+  gorka-shared from becoming responsible for Tauri state,
+  mutex lifecycle, connection ownership, application
+  startup/shutdown, or database-open state."
+
+The reviewer on module structure:
+
+  "Approve the entity-oriented structure: shared/src/db.rs,
+  debtors.rs, debts.rs, communications.rs, actions.rs,
+  documents.rs, dashboard.rs. This is preferable to a 1,000-
+  line commands.rs."
+
+The reviewer on audit logging:
+
+  "The audit call belongs inside the shared operation because
+  it is part of the semantic database transaction. The
+  desired preservation is BEGIN / SQL mutation / audit INSERT
+  / COMMIT. [Moving the audit to the adapter] could create a
+  partial-operation/audit inconsistency."
+
+================================================================
+D12 - VERIFICATION MODEL FOR EXTRACTIONS
+================================================================
+
+The reviewer refined the "byte-level comparison" idea:
+
+  "For Rust source, the objective should be: prove semantic/
+  source preservation of the operation, not literally
+  preserve whitespace or formatting."
+
+The stronger verification, as applied:
+
+  Capture the original function.
+  Move it with only necessary signature/module-path changes.
+  Diff old vs new.
+  Confirm SQL text unchanged.
+  Confirm parameter order/types unchanged.
+  Confirm row mapping unchanged.
+  Confirm transaction boundaries unchanged.
+  Confirm audit call unchanged.
+  Run the existing Client smoke test.
+  Build/test on Cloud.
+
+Explicit: "Do not 'improve' SQL during this operation."
+
+================================================================
+D13 - WARNINGS POLICY
+================================================================
+
+The reviewer's earlier guidance ("inspect and report first;
+don't clean yet") was applied. All 8 gorka-client warnings
+were classified as pre-existing, none caused by extraction.
+
+Then the reviewer authorised cleaning three specific warnings
+in main.rs as part of Slice 1:
+
+  - unused import: State
+  - unused variable: app (upload_document parameter)
+  - the third, inherited from imports cleanup
+
+The five auth.rs warnings stay deferred with the auth slice.
+
+The reviewer's rule: "Do not turn this into general warning
+cleanup."
+
+================================================================
+D14 - ROOT CARGO.LOCK IS TRACKED; OBSOLETE LOCK REMOVED
+================================================================
+
+Two housekeeping decisions, both from the reviewer:
+
+Root Cargo.lock: TRACKED. The workspace contains executable
+crates. Tracking the authoritative root lock gives
+reproducible dependency resolution and prevents the cross-
+machine drift we already encountered once. Committed from
+the cloud, which is the only machine that can run cargo
+build.
+
+src-tauri/Cargo.lock: DELETED. It is the obsolete pre-
+workspace lock. Keeping two lock files creates ambiguity
+about which dependency resolution is authoritative.
+
+The Agent's gen/schemas/: COMMITTED, matching the Client's
+tracked src-tauri/gen/.
+
+================================================================
+D15 - TWO UNEXPECTED FINDINGS, RESOLVED
+================================================================
+
+1. .gitignore did not exclude target/. Hundreds of files
+   under target/debug/ appeared as untracked on the cloud
+   after the first workspace build. Verified nothing under
+   target/ was ever tracked (git ls-files confirmed). Fix
+   was a .gitignore entry; no history cleanup needed.
+
+2. Root Cargo.lock was untracked. It had been generated on
+   the cloud but never committed. The same class of cross-
+   machine drift as the September 26 divergence. Now
+   tracked.
+
+Both are recorded in the extraction log and in HANDOFF.md.
+
+================================================================
+D16 - EXTRACTION LOGGING
+================================================================
+
+A new file was created: PHASE-9.5-EXTRACTION-LOG.md.
+
+The reviewer's guidance:
+
+  "Don't make documentation block the first extraction.
+  [For each slice record]: starting commit; files moved/
+  created; commands moved; original/new function mapping;
+  tests/build result; Client smoke result; warning count;
+  confirmation that SQL/parameters/row mapping were
+  preserved; deviations, if any; resulting commit."
+
+The log is updated after each slice. This is better than
+waiting until the entire phase is finished, because the
+recovery record remains useful if something goes wrong
+halfway through.
+
+================================================================
+D17 - WHAT WAS NOT AUTHORISED
+================================================================
+
+The reviewer's guardrails, restated:
+
+  Not authorised during the adapter slices:
+    Agent command implementation.
+    Auth changes.
+    Settings changes.
+    SQL redesign.
+    Schema changes.
+    Audit redesign.
+    Command renaming.
+    generate_handler! redesign.
+    Release configuration changes.
+    Sync changes.
+
+  Not authorised during the Agent scaffold:
+    Agent database.
+    Agent authentication.
+    Agent enrollment implementation.
+    Agent CRUD.
+    Agent sync.
+    command duplication beyond what proves the registration
+      architecture.
+    release.yml changes.
+    Cloud changes.
+    Schema changes.
+    Architecture changes.
+
+================================================================
+END OF THE DAY'S DECISIONS
+================================================================
+
+Fourteen commits landed. Fourteen HOW decisions were made.
+Two unexpected findings were resolved. Three new recovery
+documents were created or updated:
+PHASE-9.5-EXTRACTION-LOG.md (new),
+START-HERE.md, HANDOFF.md, SESSION-LOG.md, PHASE-PLAN.md,
+and this entry.
+
+State at end of session:
+
+  Main machine:  8435179, clean, pushed.
+  Cloud machine: ee8c732, clean. Two commits behind.
+  GitHub:        8435179.
+
+Next: Slice 2 (debts).
+
+See PHASE-9.5-EXTRACTION-LOG.md for the technical record and
+HANDOFF.md for the status update.
+
+End of entry.
+
 
 

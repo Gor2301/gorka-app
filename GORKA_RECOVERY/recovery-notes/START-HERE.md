@@ -1054,5 +1054,104 @@ Phase 9.5 begins after the founder's go.
 
 See DECISIONS.md, HANDOFF.md, and SESSION-LOG.md for the full September 27 entries.
 
+Update - September 28, 2026 (Phase 9.5 begins: workspace, storage, extraction slices)
+
+Phase 9.5 has begun. It is IN PROGRESS, not NOT STARTED.
+The Agent App scaffolding exists. The extraction of shared
+code from the Client Dashboard has started and Slice 1 is
+complete.
+
+The sequence executed today:
+
+  Phase 1a  Root workspace manifest (199956e)
+  Phase 1b  gorka-shared crate (2c540bc)
+  Phase 2   Storage root migration (52f0915)
+  Slice 3.1 Models extraction (a2ccd73)
+  Slice 3.2 Enrollment package (8cce268)
+  Slice 3.3 Sync primitives (7b06034)
+  Agent scaffold (0e73b34, 699b9fe)
+  Slice 3.4 DB extraction (a959087)
+  Slice 1 debtors (91b5b7e)
+  Housekeeping (.gitignore target/, Cargo.lock, gen/schemas)
+  (20a1730, ab957d8, ee8c732)
+  Extraction log created (8435179)
+
+What exists now:
+
+  - Cargo workspace with three members: shared/, src-tauri/,
+    src-tauri-agent/.
+  - The shared crate (gorka-shared) contains: storage.rs
+    (AppStorage), models.rs, enrollment.rs, sync.rs, db.rs,
+    debtors.rs. All Tauri-free.
+  - The Client Dashboard's DB and debtor files moved from
+    %APPDATA%\gorka\client\data\ to
+    %APPDATA%\com.gorka.client\data\, with the old location
+    preserved as a rollback copy.
+  - The Agent App (gorka-agent) builds and launches. It has
+    its own bundle identifier (com.gorka.agent), its own
+    database filename (gorka-agent.db), its own app data
+    folder (%APPDATA%\com.gorka.agent\data\), its own command
+    list (agent_ping only). No Agent functionality yet.
+  - All 14 protocol tests pass. The Client runs and behaves
+    as before each slice.
+
+Decisions recorded during the session:
+
+  - Repository layout: Option A (Cargo workspace plus shared
+    crate). Agent depends on shared, never on Client.
+  - Storage: Direction 1 plus Option 1b (unify to the Tauri
+    bundle-identifier root, with data/ subfolder). One-time
+    migration, crash-safe, old root preserved.
+  - Agent scaffold timing: Option B binding. Scaffold the
+    Agent once models, storage, enrollment, sync are shared,
+    before db and auth are fully extracted. Done.
+  - auth.rs extraction: Reading C, DEFERRED. The proposed
+    path-based shape does not match the actual code; the six
+    store functions have no Tauri-free side. Wait for the
+    Agent's own auth to exist before deciding.
+  - Adapter/command cleanup: Reading 3, entity-based slices.
+    Debtors first. Debts, communications, actions, documents,
+    dashboard to follow.
+  - Warnings: inspected and reported. Three main.rs warnings
+    cleaned in Slice 1. Five auth.rs warnings deferred with
+    auth.
+
+Unexpected findings, both resolved:
+
+  - .gitignore did not exclude target/. Fixed at 20a1730.
+  - Root Cargo.lock was untracked. Now tracked (ab957d8).
+    The obsolete pre-workspace src-tauri/Cargo.lock was
+    removed (ee8c732).
+
+The recovery notes now include a new file:
+
+  GORKA_RECOVERY/recovery-notes/PHASE-9.5-EXTRACTION-LOG.md
+
+It records each slice in detail: starting and resulting
+commits, files moved, commands moved, function mapping, data
+preservation, adapter behavior preservation, warning counts,
+build and test results, explicit non-changes.
+
+State at end of session:
+
+  Main machine:  8435179, clean.
+  Cloud machine: ee8c732, clean. Two commits behind; needs
+                 git pull before Slice 2.
+  GitHub:        8435179.
+
+Next work: Slice 2 (debts). Commands to move:
+get_debts, insert_debt, update_debt, delete_debt.
+Same pattern as Slice 1. See the extraction log.
+
+After Slice 2: communications, actions, documents, dashboard.
+Then final Client regression. Then Agent implementation.
+Then Agent authentication. Then re-evaluate the shared auth
+boundary.
+
+See DECISIONS.md, HANDOFF.md, SESSION-LOG.md, and the new
+PHASE-9.5-EXTRACTION-LOG.md for full details.
+
+
+
 
 

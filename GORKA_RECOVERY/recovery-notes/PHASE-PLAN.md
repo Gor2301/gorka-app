@@ -93,6 +93,7 @@ Status: PARTIAL (September 14, 2026) — debtor CRUD, debtor-attached document u
 
 
 PHASE 9.5 - AGENT APP AND CLIENT DASHBOARD, LOCAL ONLY
+Status: IN PROGRESS (September 28, 2026). See HANDOFF.md and PHASE-9.5-EXTRACTION-LOG.md.
 
 
 
@@ -508,7 +509,7 @@ SUMMARY TABLE
 
 9     Tauri Local Database Verification  PARTIAL
 
-9.5   Agent App and Client Dashboard     NOT STARTED
+9.5   Agent App and Client Dashboard     IN PROGRESS
 
 &#x20;     (local only)
 
