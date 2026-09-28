@@ -20,7 +20,8 @@ SEQUENCE
       Slice 1 debtors           DONE (91b5b7e)
       Slice 2 debts             DONE (d4ca2dc)
       Slice 3 communications   DONE (ce65543)
-      Slices 4-6                NOT STARTED
+      Slice 4 actions            DONE (cef8111)
+      Slices 5-6                NOT STARTED
   Final Client regression       PENDING
   Agent implementation          PENDING
   Agent authentication          PENDING
@@ -309,13 +310,155 @@ DEVIATIONS
   None.
 
 ================================================================
-SLICE 4 - ACTIONS (NEXT)
+SLICE 4 - ACTIONS
+================================================================
+
+Starting commit:   a6d2a6b
+Resulting commit:  cef8111
+Follow-up commit:  8491509 (dead-import cleanup)
+
+Files changed:
+  shared/src/actions.rs    NEW (187 lines)
+  shared/src/lib.rs        MODIFIED (added "pub mod actions;")
+  src-tauri/src/main.rs    MODIFIED (4 commands became thin adapters)
+
+Commands moved (Tauri command -> shared function):
+  get_actions            -> gorka_shared::actions::get_actions
+  insert_action          -> gorka_shared::actions::insert_action
+  update_action          -> gorka_shared::actions::update_action
+  delete_action          -> gorka_shared::actions::delete_action
+
+Shared function signatures:
+  fn get_actions(conn: &Connection, organization_id: &str,
+                 debtor_id: &str) -> Result<Vec<Action>, String>
+  fn insert_action(conn: &Connection, organization_id: &str,
+                   input: ActionInput) -> Result<Action, String>
+  fn update_action(conn: &Connection, organization_id: &str,
+                   id: &str, input: ActionInput)
+                   -> Result<Action, String>
+  fn delete_action(conn: &Connection, organization_id: &str,
+                   id: &str) -> Result<bool, String>
+
+DATA PRESERVATION
+  SQL strings               unchanged
+  Parameter order and types unchanged
+  Row mappings              unchanged
+  Transaction boundaries    unchanged (none; all four use as_ref)
+  Audit calls               unchanged
+    insert_action -> INSERT_ACTION, Some(debtor_id)
+    update_action -> UPDATE_ACTION, Some(debtor_id)
+    delete_action -> DELETE_ACTION, None
+    get_actions   -> none (read-only)
+
+ADAPTER BEHAVIOR PRESERVATION
+  Trusted organization_id acquisition   unchanged
+    (still via get_trusted_organization_id(&app))
+  AppState ownership and connection
+    locking                             unchanged
+    (all four use as_ref(); no mut borrow)
+  Error propagation                     unchanged
+    (same Err(String) strings and paths)
+  Return-value behavior                 unchanged
+    (same shapes, same field values;
+     update_action still omits debtor_id
+     from the UPDATE column list;
+     update_action still returns now as
+     created_at; insert_action still
+     defaults status to PENDING;
+     insert_action returns input.r#type
+     directly; all preserved as-is)
+
+WARNING DELTA
+  gorka-client (bin) warnings: 6 before,
+  7 after the extraction. The new warning
+  was: unused import `serde_json::Value as
+  JsonValue` in main.rs. Cause: the four
+  action commands were the last users of
+  JsonValue in main.rs; once they moved to
+  gorka_shared::actions, the import became
+  dead. This is a mechanical, expected
+  consequence of the extraction, not a
+  behavior change or a defect.
+
+  A separate one-line follow-up commit
+  (8491509) removed this extraction-caused
+  dead import from src-tauri/src/main.rs.
+  This restored the gorka-client warning
+  baseline to 6. No other warning cleanup
+  was performed.
+
+  Note: a `cargo clean -p gorka-client`
+  was performed to obtain the full warning
+  list. It revealed 3 pre-existing
+  warnings in gorka-shared (lib):
+    unused import serde_json::Value
+    unused import PasswordHasher
+    unused import rand_core::OsRng
+  These were hidden in incremental builds.
+  They are pre-existing and were left
+  untouched. They are not caused by this
+  slice and are not a reason to expand
+  cleanup.
+
+VERIFICATION
+  cargo build -p gorka-client    PASS (1m 07s after cleanup, 6 warnings)
+  cargo test -p gorka-shared     (not re-run this slice; no shared
+                                  test files changed)
+  Client smoke test (via debtor detail page, Actions card):
+    login, unlock
+    dashboard baseline: total_debtors=12,
+      total_debt=$2,381,800, total_actions=1
+    open debtor detail from Collections
+    add action CALL/PENDING (insert_action)
+    verify it renders in the Actions card
+    dashboard total_actions = 2
+    edit action status to COMPLETED
+      (update_action)
+    verify change renders
+    dashboard total_actions = 2 (unchanged)
+    delete action (delete_action)
+    dashboard total_actions = 1 (back to baseline)
+    second-debtor scoping check: add action
+      to a different debtor; verify it does
+      not appear under the first
+    delete it; total_actions = 1
+    total_debtors and total_debt unchanged
+      throughout
+  All passed.
+
+EXPLICIT NON-CHANGES
+  No schema changed.
+  No SQL semantics changed.
+  No event semantics changed.
+  No audit semantics changed.
+  No command names changed.
+  No generate_handler! registration changed.
+  No authentication behavior changed.
+  No new dependency added.
+  shared/src/debtors.rs, shared/src/debts.rs,
+    and shared/src/communications.rs untouched.
+
+DEVIATIONS
+  One: the initial post-extraction build
+  produced 7 gorka-client warnings instead
+  of 6, caused by the now-dead JsonValue
+  import. Reported, authorized as a
+  narrowly-scoped extraction-caused
+  cleanup, resolved by follow-up commit
+  8491509. No other deviations.
+
+================================================================
+SLICE 5 - DOCUMENTS (NEXT)
 ================================================================
 
 Not started. Will follow the same pattern:
-shared/src/actions.rs
-Commands: get_actions, insert_action, update_action,
-delete_action.
+shared/src/documents.rs
+Commands: upload_document, get_documents, delete_document.
+Note: upload_document uses AppStorage and
+std::fs; delete_document uses std::fs and
+reads file_path from the row. These may
+require passing &AppStorage into shared,
+matching delete_debtor's pattern in Slice 1.
 
 ================================================================
 END OF DOCUMENT
