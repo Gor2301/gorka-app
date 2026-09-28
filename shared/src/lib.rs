@@ -7,6 +7,7 @@
 // Both gorka-client (Client Dashboard) and gorka-agent
 // (Agent App) depend on this crate.
 
+pub mod communications;
 pub mod db;
 pub mod debtors;
 pub mod debts;
