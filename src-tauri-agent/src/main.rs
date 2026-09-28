@@ -65,6 +65,12 @@ fn main() {
                 "data/files",
             );
 
+            storage.ensure_dirs().map_err(|e| {
+                Box::<dyn std::error::Error>::from(format!(
+                    "Failed to create Agent data directories: {}", e
+                ))
+            })?;
+
             app.manage(storage);
 
             Ok(())
