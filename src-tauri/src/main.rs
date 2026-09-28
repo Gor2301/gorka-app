@@ -3,7 +3,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use rusqlite::{params, Connection};
-use serde_json::Value as JsonValue;
 use tauri::{command, Manager};
 use uuid::Uuid;
 use chrono::Utc;
