@@ -21,7 +21,8 @@ SEQUENCE
       Slice 2 debts             DONE (d4ca2dc)
       Slice 3 communications   DONE (ce65543)
       Slice 4 actions            DONE (cef8111)
-      Slices 5-6                NOT STARTED
+      Slice 5 documents         DONE (5a0f924)
+      Slice 6                  NOT STARTED
   Final Client regression       PENDING
   Agent implementation          PENDING
   Agent authentication          PENDING
@@ -448,17 +449,151 @@ DEVIATIONS
   8491509. No other deviations.
 
 ================================================================
-SLICE 5 - DOCUMENTS (NEXT)
+SLICE 5 - DOCUMENTS
+================================================================
+
+Starting commit:   eadcf56
+Resulting commit:  5a0f924
+Follow-up commit:  34539ff (dead-import cleanup)
+
+Files changed:
+  shared/src/documents.rs    NEW (197 lines)
+  shared/src/lib.rs          MODIFIED (added "pub mod documents;")
+  src-tauri/src/main.rs      MODIFIED (3 commands became thin adapters)
+
+Commands moved (Tauri command -> shared function):
+  upload_document        -> gorka_shared::documents::upload_document
+  get_documents          -> gorka_shared::documents::get_documents
+  delete_document        -> gorka_shared::documents::delete_document
+
+Shared function signatures:
+  fn upload_document(conn: &Connection, storage: &AppStorage,
+                     input: DocumentInput)
+                     -> Result<Document, String>
+  fn get_documents(conn: &Connection, entity_id: &str,
+                   entity_type: Option<&str>)
+                   -> Result<Vec<Document>, String>
+  fn delete_document(conn: &Connection, id: &str)
+                     -> Result<bool, String>
+
+DATA PRESERVATION
+  SQL strings               unchanged
+  Parameter order and types unchanged
+  Row mappings              unchanged
+  Transaction boundaries    unchanged (none; all three use as_ref)
+  Filesystem calls          unchanged
+    upload_document: create_dir_all, write, metadata
+    delete_document: remove_file (eprintln on failure,
+                     DB DELETE continues)
+  Audit calls               unchanged
+    upload_document -> UPLOAD_DOC, Some(entity_id),
+                       "Uploaded document: category=<c>"
+    delete_document -> DELETE_DOC, None,
+                       "Deleted document: <id>"
+    get_documents   -> none (read-only)
+
+ADAPTER BEHAVIOR PRESERVATION
+  Trusted organization_id acquisition   N/A - none of the
+    three commands performs organization
+    scoping. Preserved exactly. Not
+    added during extraction.
+  AppState ownership and connection
+    locking                             unchanged
+    (all three use as_ref(); no mut borrow)
+  AppStorage boundary                   unchanged
+    (upload_document takes State<AppStorage>;
+     get_documents and delete_document do not)
+  Error propagation                     unchanged
+    (same Err(String) strings and paths)
+  Return-value behavior                 unchanged
+    (same shapes, same field values;
+     upload_document writes the file
+     before the DB INSERT; delete_document
+     deletes the file before the DB DELETE
+     and returns affected > 0; both
+     created_at fields computed via two
+     separate Utc::now() calls in
+     upload_document; all preserved as-is)
+
+WARNING DELTA
+  gorka-client (bin) warnings: 6 before,
+  7 after the extraction. The new warning
+  was: unused import `uuid::Uuid` in
+  main.rs. Cause: the three document
+  commands were the last users of
+  uuid::Uuid in main.rs (Uuid::parse_str
+  and Uuid::new_v4 in upload_document);
+  once they moved to gorka_shared::documents,
+  the import became dead. Mechanical,
+  expected consequence of the extraction.
+
+  A separate one-line follow-up commit
+  (34539ff) removed this extraction-caused
+  dead import from src-tauri/src/main.rs.
+  This restored the gorka-client warning
+  baseline to 6. No other warning cleanup
+  was performed.
+
+VERIFICATION
+  cargo build -p gorka-client    PASS (59s after cleanup, 6 warnings)
+  cargo test -p gorka-shared     (not re-run this slice; no shared
+                                  test files changed)
+  Client smoke test (via debtor detail Documents card):
+    login, unlock
+    dashboard baseline: total_debtors=12,
+      total_debt=$2,381,800, total_actions=1
+    open debtor detail from Collections
+    upload document via Documents card
+    verify it renders with correct metadata
+    delete document via Documents card
+    verify it disappears from the list
+    dashboard numbers unchanged (documents
+      do not feed dashboard stats)
+  All passed.
+
+EXPLICIT NON-CHANGES
+  No schema changed.
+  No SQL semantics changed.
+  No event semantics changed.
+  No audit semantics changed.
+  No filesystem semantics changed.
+  No command names changed.
+  No generate_handler! registration changed.
+  No authentication behavior changed.
+  No organization scoping added.
+  No new dependency added.
+  shared/src/debtors.rs, debts.rs,
+    communications.rs, and actions.rs
+    untouched.
+
+DEVIATIONS
+  One: the initial post-extraction build
+  produced 7 gorka-client warnings instead
+  of 6, caused by the now-dead Uuid
+  import. Reported, authorized as a
+  narrowly-scoped extraction-caused
+  cleanup, resolved by follow-up commit
+  34539ff. No other deviations.
+
+OUT-OF-SCOPE OBSERVATION
+  Dashboard "Total Actions" card routes to
+  the Audit Logs page, which returns a 404
+  from the cloud backend. Pre-existing
+  frontend routing issue, unrelated to any
+  extraction slice. Not investigated or
+  changed here. Logged for awareness.
+
+================================================================
+SLICE 6 - DASHBOARD (NEXT)
 ================================================================
 
 Not started. Will follow the same pattern:
-shared/src/documents.rs
-Commands: upload_document, get_documents, delete_document.
-Note: upload_document uses AppStorage and
-std::fs; delete_document uses std::fs and
-reads file_path from the row. These may
-require passing &AppStorage into shared,
-matching delete_debtor's pattern in Slice 1.
+shared/src/dashboard.rs
+Command: get_dashboard_stats.
+Note: get_dashboard_stats takes app: tauri::AppHandle
+and calls get_trusted_organization_id; it does
+organization scoping via the JOIN through
+debtors. Preserved exactly.
 
 ================================================================
 END OF DOCUMENT
