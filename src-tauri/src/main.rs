@@ -15,6 +15,7 @@ use gorka_shared::enrollment::{build_enrollment_package, parse_enrollment_packag
 use gorka_shared::debtors;
 use gorka_shared::debts;
 use gorka_shared::communications;
+use gorka_shared::actions;
 
 mod auth;
 mod storage_migration;
@@ -371,41 +372,9 @@ fn get_actions(
     state: tauri::State<AppState>,
 ) -> Result<Vec<Action>, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let mut stmt = conn.prepare(
-        "SELECT a.id, a.debtor_id, a.type, a.status, a.assigned_to,
-                a.due_date, a.description, a.data, a.created_at, a.updated_at
-         FROM actions a
-         INNER JOIN debtors b ON b.id = a.debtor_id
-         WHERE a.debtor_id = ?1 AND b.organization_id = ?2
-         ORDER BY a.created_at DESC"
-    ).map_err(|e| e.to_string())?;
-
-    let rows = stmt.query_map(params![&debtor_id, &organization_id], |row| {
-        let data_json: String = row.get(7)?;
-        Ok(Action {
-            id: row.get(0)?,
-            debtor_id: row.get(1)?,
-            r#type: row.get(2)?,
-            status: row.get(3)?,
-            assigned_to: row.get(4)?,
-            due_date: row.get(5)?,
-            description: row.get(6)?,
-            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
-        })
-    }).map_err(|e| e.to_string())?;
-
-    let mut actions = Vec::new();
-    for row in rows {
-        actions.push(row.map_err(|e| e.to_string())?);
-    }
-
-    Ok(actions)
+    actions::get_actions(conn, &organization_id, &debtor_id)
 }
 
 #[command]
@@ -415,55 +384,9 @@ fn insert_action(
     state: tauri::State<AppState>,
 ) -> Result<Action, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let debtor_ok: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM debtors WHERE id = ?1 AND organization_id = ?2",
-        params![&input.debtor_id, &organization_id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
-    if debtor_ok == 0 {
-        return Err("Debtor not found or not in this organization".to_string());
-    }
-
-    let id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
-    let status = input.status.unwrap_or_else(|| "PENDING".to_string());
-    let data = input.data.unwrap_or(JsonValue::Object(serde_json::Map::new()));
-
-    conn.execute(
-        "INSERT INTO actions (id, debtor_id, type, status, assigned_to, due_date, description, data, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![
-            &id,
-            &input.debtor_id,
-            &input.r#type,
-            &status,
-            &input.assigned_to,
-            &input.due_date,
-            &input.description,
-            &serde_json::to_string(&data).unwrap_or("{}".to_string()),
-            &now,
-            &now,
-        ],
-    ).map_err(|e| e.to_string())?;
-
-    db::log_audit(conn, "INSERT_ACTION", Some(&input.debtor_id), 1, "Inserted action")?;
-
-    Ok(Action {
-        id,
-        debtor_id: input.debtor_id,
-        r#type: input.r#type,
-        status,
-        assigned_to: input.assigned_to,
-        due_date: input.due_date,
-        description: input.description,
-        data,
-        created_at: now.clone(),
-        updated_at: now,
-    })
+    actions::insert_action(conn, &organization_id, input)
 }
 
 #[command]
@@ -474,60 +397,9 @@ fn update_action(
     state: tauri::State<AppState>,
 ) -> Result<Action, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let ownership_ok: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM actions a
-         INNER JOIN debtors b ON b.id = a.debtor_id
-         WHERE a.id = ?1 AND b.organization_id = ?2",
-        params![&id, &organization_id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
-    if ownership_ok == 0 {
-        return Err("Action not found or not in this organization".to_string());
-    }
-
-    let now = Utc::now().to_rfc3339();
-    let status = input.status.unwrap_or_else(|| "PENDING".to_string());
-    let data = input.data.unwrap_or(JsonValue::Object(serde_json::Map::new()));
-
-    let affected = conn.execute(
-        "UPDATE actions
-         SET type = ?1, status = ?2, assigned_to = ?3, due_date = ?4,
-             description = ?5, data = ?6, updated_at = ?7
-         WHERE id = ?8",
-        params![
-            &input.r#type,
-            &status,
-            &input.assigned_to,
-            &input.due_date,
-            &input.description,
-            &serde_json::to_string(&data).unwrap_or("{}".to_string()),
-            &now,
-            &id,
-        ],
-    ).map_err(|e| e.to_string())?;
-
-    if affected == 0 {
-        return Err("Action not found".to_string());
-    }
-
-    db::log_audit(conn, "UPDATE_ACTION", Some(&input.debtor_id), 1, "Updated action")?;
-
-    Ok(Action {
-        id,
-        debtor_id: input.debtor_id,
-        r#type: input.r#type,
-        status,
-        assigned_to: input.assigned_to,
-        due_date: input.due_date,
-        description: input.description,
-        data,
-        created_at: now.clone(),
-        updated_at: now,
-    })
+    actions::update_action(conn, &organization_id, &id, input)
 }
 
 #[command]
@@ -537,23 +409,9 @@ fn delete_action(
     state: tauri::State<AppState>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let affected = conn.execute(
-        "DELETE FROM actions
-         WHERE id = ?1
-         AND debtor_id IN (SELECT id FROM debtors WHERE organization_id = ?2)",
-        params![&id, &organization_id],
-    ).map_err(|e| e.to_string())?;
-
-    if affected > 0 {
-        db::log_audit(conn, "DELETE_ACTION", None, 1, "Deleted action")?;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    actions::delete_action(conn, &organization_id, &id)
 }
 
 #[command]
