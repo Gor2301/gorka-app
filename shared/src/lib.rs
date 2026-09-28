@@ -8,6 +8,7 @@
 // (Agent App) depend on this crate.
 
 pub mod db;
+pub mod debtors;
 pub mod enrollment;
 pub mod models;
 pub mod storage;

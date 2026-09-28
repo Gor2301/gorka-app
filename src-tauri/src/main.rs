@@ -4,7 +4,7 @@
 
 use rusqlite::{params, Connection};
 use serde_json::Value as JsonValue;
-use tauri::{command, State, Manager};
+use tauri::{command, Manager};
 use uuid::Uuid;
 use chrono::Utc;
 use std::sync::Mutex;
@@ -12,6 +12,7 @@ use rand::RngCore;
 use gorka_shared::storage::AppStorage;
 use gorka_shared::models::*;
 use gorka_shared::enrollment::{build_enrollment_package, parse_enrollment_package};
+use gorka_shared::debtors;
 
 mod auth;
 mod storage_migration;
@@ -183,44 +184,15 @@ fn enable_sync(
 
     Ok(())
 }
-
 #[command]
 fn get_debtors(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
 ) -> Result<Vec<Debtor>, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let mut stmt = conn.prepare(
-        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at
-         FROM debtors WHERE organization_id = ?1
-         ORDER BY surname, name"
-    ).map_err(|e| e.to_string())?;
-
-    let rows = stmt.query_map([&organization_id], |row| {
-        let data_json: String = row.get(6)?;
-        Ok(Debtor {
-            id: row.get(0)?,
-            organization_id: row.get(1)?,
-            name: row.get(2)?,
-            surname: row.get(3)?,
-            email: row.get(4)?,
-            phone: row.get(5)?,
-            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
-        })
-    }).map_err(|e| e.to_string())?;
-
-    let mut debtors = Vec::new();
-    for row in rows {
-        debtors.push(row.map_err(|e| e.to_string())?);
-    }
-
-    Ok(debtors)
+    debtors::get_debtors(conn, &organization_id)
 }
 
 #[command]
@@ -230,31 +202,9 @@ fn get_debtor(
     state: tauri::State<AppState>,
 ) -> Result<Debtor, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let debtor = conn.query_row(
-        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at
-         FROM debtors WHERE id = ?1 AND organization_id = ?2",
-        params![&id, &organization_id],
-        |row| {
-            let data_json: String = row.get(6)?;
-            Ok(Debtor {
-                id: row.get(0)?,
-                organization_id: row.get(1)?,
-                name: row.get(2)?,
-                surname: row.get(3)?,
-                email: row.get(4)?,
-                phone: row.get(5)?,
-                data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-            })
-        }
-    ).map_err(|e| e.to_string())?;
-
-    Ok(debtor)
+    debtors::get_debtor(conn, &organization_id, &id)
 }
 
 #[command]
@@ -264,42 +214,9 @@ fn insert_debtor(
     state: tauri::State<AppState>,
 ) -> Result<Debtor, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
-
-    conn.execute(
-        "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![
-            &id,
-            &organization_id,
-            &input.name,
-            &input.surname,
-            &input.email,
-            &input.phone,
-            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
-            &now,
-            &now,
-        ],
-    ).map_err(|e| e.to_string())?;
-
-    db::log_audit(conn, "INSERT", Some(&id), 1, "Inserted debtor")?;
-
-    Ok(Debtor {
-        id,
-        organization_id,
-        name: input.name,
-        surname: input.surname,
-        email: input.email,
-        phone: input.phone,
-        data: input.data,
-        created_at: now.clone(),
-        updated_at: now,
-    })
+    debtors::insert_debtor(conn, &organization_id, input)
 }
 
 #[command]
@@ -309,53 +226,9 @@ fn bulk_insert_debtors(
     state: tauri::State<AppState>,
 ) -> Result<Vec<Debtor>, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
-
-    let now = Utc::now().to_rfc3339();
-    let mut inserted = Vec::new();
-
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
-
-    for input in inputs {
-        let id = Uuid::new_v4().to_string();
-
-        tx.execute(
-            "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![
-                &id,
-                &organization_id,
-                &input.name,
-                &input.surname,
-                &input.email,
-                &input.phone,
-                &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
-                &now,
-                &now,
-            ],
-        ).map_err(|e| e.to_string())?;
-
-        inserted.push(Debtor {
-            id,
-            organization_id: organization_id.clone(),
-            name: input.name,
-            surname: input.surname,
-            email: input.email,
-            phone: input.phone,
-            data: input.data,
-            created_at: now.clone(),
-            updated_at: now.clone(),
-        });
-    }
-
-    tx.commit().map_err(|e| e.to_string())?;
-
-    let count = inserted.len() as i64;
-    db::log_audit(conn, "BULK_INSERT", None, count, &format!("Inserted {} debtors", count))?;
-
-    Ok(inserted)
+    debtors::bulk_insert_debtors(conn, &organization_id, inputs)
 }
 
 #[command]
@@ -366,45 +239,9 @@ fn update_debtor(
     state: tauri::State<AppState>,
 ) -> Result<Debtor, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let now = Utc::now().to_rfc3339();
-
-    let affected = conn.execute(
-        "UPDATE debtors
-         SET name = ?1, surname = ?2, email = ?3, phone = ?4, data = ?5, updated_at = ?6
-         WHERE id = ?7 AND organization_id = ?8",
-        params![
-            &input.name,
-            &input.surname,
-            &input.email,
-            &input.phone,
-            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
-            &now,
-            &id,
-            &organization_id,
-        ],
-    ).map_err(|e| e.to_string())?;
-
-    if affected == 0 {
-        return Err("Debtor not found or not in this organization".to_string());
-    }
-
-    db::log_audit(conn, "UPDATE", Some(&id), 1, "Updated debtor")?;
-
-    Ok(Debtor {
-        id,
-        organization_id,
-        name: input.name,
-        surname: input.surname,
-        email: input.email,
-        phone: input.phone,
-        data: input.data,
-        created_at: now.clone(),
-        updated_at: now,
-    })
+    debtors::update_debtor(conn, &organization_id, &id, input)
 }
 
 #[command]
@@ -415,27 +252,9 @@ fn delete_debtor(
     storage: tauri::State<AppStorage>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let affected = conn.execute(
-        "DELETE FROM debtors WHERE id = ?1 AND organization_id = ?2",
-        params![&id, &organization_id],
-    ).map_err(|e| e.to_string())?;
-
-    if affected > 0 {
-        let debtor_dir = db::get_debtor_files_dir(&storage, &id)?;
-        if debtor_dir.exists() {
-            std::fs::remove_dir_all(&debtor_dir)
-                .map_err(|e| format!("Failed to delete debtor files: {}", e))?;
-        }
-
-        db::log_audit(conn, "DELETE", Some(&id), 1, "Deleted debtor")?;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    debtors::delete_debtor(conn, &storage, &organization_id, &id)
 }
 
 #[command]
@@ -445,44 +264,9 @@ fn search_debtors(
     state: tauri::State<AppState>,
 ) -> Result<Vec<Debtor>, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let search_pattern = format!("%{}%", query);
-
-    let mut stmt = conn.prepare(
-        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at
-         FROM debtors
-         WHERE organization_id = ?1
-         AND (name LIKE ?2 OR surname LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2
-         OR json_extract(data, '$.contacts.phone1') LIKE ?2
-         OR json_extract(data, '$.contacts.email1') LIKE ?2
-         OR json_extract(data, '$.guarantor.name') LIKE ?2)
-         ORDER BY surname, name"
-    ).map_err(|e| e.to_string())?;
-
-    let rows = stmt.query_map([&organization_id, &search_pattern], |row| {
-        let data_json: String = row.get(6)?;
-        Ok(Debtor {
-            id: row.get(0)?,
-            organization_id: row.get(1)?,
-            name: row.get(2)?,
-            surname: row.get(3)?,
-            email: row.get(4)?,
-            phone: row.get(5)?,
-            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
-        })
-    }).map_err(|e| e.to_string())?;
-
-    let mut debtors = Vec::new();
-    for row in rows {
-        debtors.push(row.map_err(|e| e.to_string())?);
-    }
-
-    Ok(debtors)
+    debtors::search_debtors(conn, &organization_id, &query)
 }
 
 #[command]
@@ -491,19 +275,10 @@ fn get_debtor_count(
     state: tauri::State<AppState>,
 ) -> Result<i64, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM debtors WHERE organization_id = ?1",
-        params![&organization_id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
-
-    Ok(count)
+    debtors::get_debtor_count(conn, &organization_id)
 }
-
 #[command]
 fn get_dashboard_stats(
     app: tauri::AppHandle,
@@ -1065,7 +840,6 @@ fn delete_communication(
 #[command]
 fn upload_document(
     input: DocumentInput,
-    app: tauri::AppHandle,
     state: tauri::State<AppState>,
     storage: tauri::State<AppStorage>,
 ) -> Result<Document, String> {
