@@ -1,4 +1,4 @@
-// src-tauri/src/db.rs
+// shared/src/db.rs
 
 use rusqlite::{Connection, params};
 use serde_json::Value as JsonValue;
@@ -11,7 +11,7 @@ use argon2::{
     Argon2,
 };
 use rand_core::OsRng;
-use gorka_shared::storage::AppStorage;
+use crate::storage::AppStorage;
 
 pub fn get_db_path(storage: &AppStorage) -> PathBuf {
     let db_path = storage.db_path();

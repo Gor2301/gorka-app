@@ -13,9 +13,10 @@ use gorka_shared::storage::AppStorage;
 use gorka_shared::models::*;
 use gorka_shared::enrollment::{build_enrollment_package, parse_enrollment_package};
 
-mod db;
 mod auth;
 mod storage_migration;
+
+use gorka_shared::db;
 
 struct AppState {
     db: Mutex<Option<Connection>>,
