@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "GORKA-Agent-Dashboard",
+  "version": "0.1.0",
+  "identifier": "com.gorka.agent",
+  "build": {
+    "beforeDevCommand": "npm --prefix ../agent-dashboard run dev",
+    "devUrl": "http://localhost:5174",
+    "beforeBuildCommand": "npm --prefix ../agent-dashboard run build",
+    "frontendDist": "../agent-dashboard/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "GORKA Agent",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "connect-src": "'self' https://api.gorka.click",
+        "img-src": "'self' data: blob:",
+        "font-src": "'self'",
+        "media-src": "'self'",
+        "object-src": "'none'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "appimage", "deb", "dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "copyright": "© 2026 GORKA",
+    "category": "Business",
+    "shortDescription": "GORKA Agent",
+    "longDescription": "Work your assigned debtors, log communications, create follow-up actions",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    },
+    "macOS": {
+      "entitlements": null,
+      "signingIdentity": null,
+      "minimumSystemVersion": "10.13"
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    }
+  },
+  "plugins": {}
+}
