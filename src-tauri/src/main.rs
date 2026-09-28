@@ -16,6 +16,7 @@ use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use gorka_shared::storage::AppStorage;
+use gorka_shared::models::*;
 
 mod db;
 mod auth;
@@ -23,203 +24,6 @@ mod storage_migration;
 
 struct AppState {
     db: Mutex<Option<Connection>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Debtor {
-    pub id: String,
-    pub organization_id: String,
-    pub name: String,
-    pub surname: String,
-    pub email: Option<String>,
-    pub phone: Option<String>,
-    pub data: JsonValue,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DebtorInput {
-    pub name: String,
-    pub surname: String,
-    pub email: Option<String>,
-    pub phone: Option<String>,
-    pub data: JsonValue,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Document {
-    pub id: String,
-    pub entity_id: String,
-    pub entity_type: String,
-    pub file_name: String,
-    pub file_path: String,
-    pub file_type: String,
-    pub file_size: i64,
-    pub category: String,
-    pub description: Option<String>,
-    pub uploaded_by: Option<String>,
-    pub is_primary: bool,
-    pub created_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DocumentInput {
-    pub entity_id: String,
-    pub entity_type: String,
-    pub file_name: String,
-    pub file_content: Vec<u8>,
-    pub file_type: String,
-    pub category: String,
-    pub description: Option<String>,
-    pub uploaded_by: Option<String>,
-    pub is_primary: Option<bool>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Debt {
-    pub id: String,
-    pub debtor_id: String,
-    pub amount: f64,
-    pub currency: String,
-    pub status: String,
-    pub due_date: Option<String>,
-    pub description: Option<String>,
-    pub data: JsonValue,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DebtInput {
-    pub debtor_id: String,
-    pub amount: f64,
-    pub currency: Option<String>,
-    pub status: Option<String>,
-    pub due_date: Option<String>,
-    pub description: Option<String>,
-    pub data: Option<JsonValue>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Communication {
-    pub id: String,
-    pub debtor_id: String,
-    pub r#type: String,
-    pub direction: String,
-    pub content: Option<String>,
-    pub duration: Option<i64>,
-    pub created_by: Option<String>,
-    pub data: JsonValue,
-    pub created_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CommunicationInput {
-    pub debtor_id: String,
-    pub r#type: String,
-    pub direction: String,
-    pub content: Option<String>,
-    pub duration: Option<i64>,
-    pub data: Option<JsonValue>,
-}
-
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Action {
-    pub id: String,
-    pub debtor_id: String,
-    pub r#type: String,
-    pub status: String,
-    pub assigned_to: Option<String>,
-    pub due_date: Option<String>,
-    pub description: Option<String>,
-    pub data: JsonValue,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ActionInput {
-    pub debtor_id: String,
-    pub r#type: String,
-    pub status: Option<String>,
-    pub assigned_to: Option<String>,
-    pub due_date: Option<String>,
-    pub description: Option<String>,
-    pub data: Option<JsonValue>,
-}
-
-
-#[derive(Debug, Serialize)]
-pub struct DashboardStats {
-    pub total_debtors: i64,
-    pub total_debt: f64,
-    pub total_actions: i64,
-}
-
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum DocumentCategory {
-    ProfilePhoto,
-    IdCard,
-    Passport,
-    DriverLicense,
-    Contract,
-    ProofOfAddress,
-    IncomeProof,
-    CollateralPhoto,
-    Other,
-}
-
-impl DocumentCategory {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            DocumentCategory::ProfilePhoto => "profile_photo",
-            DocumentCategory::IdCard => "id_card",
-            DocumentCategory::Passport => "passport",
-            DocumentCategory::DriverLicense => "driver_license",
-            DocumentCategory::Contract => "contract",
-            DocumentCategory::ProofOfAddress => "proof_of_address",
-            DocumentCategory::IncomeProof => "income_proof",
-            DocumentCategory::CollateralPhoto => "collateral_photo",
-            DocumentCategory::Other => "other",
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum CommunicationType {
-    Call,
-    Email,
-    Sms,
-    Note,
-}
-
-impl CommunicationType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            CommunicationType::Call => "CALL",
-            CommunicationType::Email => "EMAIL",
-            CommunicationType::Sms => "SMS",
-            CommunicationType::Note => "NOTE",
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum CommunicationDirection {
-    Inbound,
-    Outbound,
-}
-
-impl CommunicationDirection {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            CommunicationDirection::Inbound => "INBOUND",
-            CommunicationDirection::Outbound => "OUTBOUND",
-        }
-    }
 }
 
 fn get_trusted_organization_id(app: &tauri::AppHandle) -> Result<String, String> {
@@ -268,77 +72,77 @@ fn database_exists(storage: tauri::State<AppStorage>) -> bool {
 #[command]
 fn unlock_database(password: String, app: tauri::AppHandle, storage: tauri::State<AppStorage>) -> Result<(), String> {
     println!("========================================");
-    println!("🔑 [RUST] unlock_database STARTED");
+    println!("ðŸ”‘ [RUST] unlock_database STARTED");
     println!("========================================");
 
-    println!("📌 [RUST] Step 1: Getting salt...");
+    println!("ðŸ“Œ [RUST] Step 1: Getting salt...");
     let salt = match auth::get_salt(&app) {
         Ok(s) => {
-            println!("✅ [RUST] Salt retrieved: {} bytes", s.len());
+            println!("âœ… [RUST] Salt retrieved: {} bytes", s.len());
             s
         }
         Err(e) => {
-            println!("❌ [RUST] Failed to get salt: {}", e);
+            println!("âŒ [RUST] Failed to get salt: {}", e);
             return Err(e);
         }
     };
 
-    println!("📌 [RUST] Step 2: Deriving key from password...");
+    println!("ðŸ“Œ [RUST] Step 2: Deriving key from password...");
     let key = match db::derive_key(&password, &salt) {
         Ok(k) => {
-            println!("✅ [RUST] Key derived successfully (length: {})", k.len());
+            println!("âœ… [RUST] Key derived successfully (length: {})", k.len());
             k
         }
         Err(e) => {
-            println!("❌ [RUST] Key derivation failed: {}", e);
+            println!("âŒ [RUST] Key derivation failed: {}", e);
             return Err(format!("Key derivation failed: {}", e));
         }
     };
 
-    println!("📌 [RUST] Step 3: Initializing database with key...");
+    println!("ðŸ“Œ [RUST] Step 3: Initializing database with key...");
     let conn = match db::init_db(&storage, &key) {
         Ok(c) => {
-            println!("✅ [RUST] Database initialized successfully");
+            println!("âœ… [RUST] Database initialized successfully");
             c
         }
         Err(e) => {
-            println!("❌ [RUST] Database init failed: {}", e);
+            println!("âŒ [RUST] Database init failed: {}", e);
             return Err(e);
         }
     };
 
-    println!("📌 [RUST] Step 4: Verifying password...");
+    println!("ðŸ“Œ [RUST] Step 4: Verifying password...");
     match db::verify_password(&conn) {
-        Ok(()) => println!("✅ [RUST] Password verified successfully"),
+        Ok(()) => println!("âœ… [RUST] Password verified successfully"),
         Err(e) => {
-            println!("❌ [RUST] Password verification failed: {}", e);
+            println!("âŒ [RUST] Password verification failed: {}", e);
             return Err(e);
         }
     };
 
-    println!("📌 [RUST] Step 5: Storing connection in app state...");
+    println!("ðŸ“Œ [RUST] Step 5: Storing connection in app state...");
     let state = app.state::<AppState>();
     let mut db_guard = match state.db.lock() {
         Ok(g) => g,
         Err(e) => {
-            println!("❌ [RUST] Failed to lock db: {}", e);
+            println!("âŒ [RUST] Failed to lock db: {}", e);
             return Err(e.to_string());
         }
     };
     *db_guard = Some(conn);
-    println!("✅ [RUST] Connection stored in app state");
+    println!("âœ… [RUST] Connection stored in app state");
 
-    println!("📌 [RUST] Step 6: Setting unlocked state...");
+    println!("ðŸ“Œ [RUST] Step 6: Setting unlocked state...");
     match auth::set_unlocked(&app, true) {
-        Ok(()) => println!("✅ [RUST] Unlocked state set successfully"),
+        Ok(()) => println!("âœ… [RUST] Unlocked state set successfully"),
         Err(e) => {
-            println!("❌ [RUST] Failed to set unlocked state: {}", e);
+            println!("âŒ [RUST] Failed to set unlocked state: {}", e);
             return Err(e);
         }
     };
 
     println!("========================================");
-    println!("✅ [RUST] unlock_database COMPLETE");
+    println!("âœ… [RUST] unlock_database COMPLETE");
     println!("========================================");
 
     Ok(())
@@ -1586,7 +1390,7 @@ fn export_enrollment_package(
 /// generates no randomness: every input is supplied by the
 /// caller.
 ///
-/// Per §22.11.1 and §22.19.1:
+/// Per Â§22.11.1 and Â§22.19.1:
 ///   session_key = HKDF-SHA256(
 ///       IKM  = organization_key,
 ///       salt = initiator_nonce || responder_nonce,
@@ -1638,7 +1442,7 @@ fn derive_session_key(
 /// Compute the H2 proof tag: the HANDSHAKE_REPLY transcript
 /// bound to the REPLY role.
 ///
-/// Per §22.9.3 and §22.19.1:
+/// Per Â§22.9.3 and Â§22.19.1:
 ///   proof_input =
 ///       "GORKA-MVP-HANDSHAKE-REPLY-v1"
 ///       || u16_be(protocol_version)
@@ -2381,7 +2185,7 @@ mod tests {
         let initiator_device_id = "device-test-A";
         let responder_device_id = "device-test-B";
 
-        // Byte-width assertions (spec §7).
+        // Byte-width assertions (spec Â§7).
         assert_eq!(
             (organization_id.len() as u16).to_be_bytes(),
             [0x00, 0x0A],
@@ -2432,7 +2236,7 @@ mod tests {
             0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
         ];
 
-        // Byte-width assertion (spec §7).
+        // Byte-width assertion (spec Â§7).
         assert_eq!(
             protocol_version.to_be_bytes(),
             [0x00, 0x01],
