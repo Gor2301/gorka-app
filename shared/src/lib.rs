@@ -12,6 +12,7 @@ pub mod communications;
 pub mod db;
 pub mod debtors;
 pub mod debts;
+pub mod documents;
 pub mod enrollment;
 pub mod models;
 pub mod storage;
