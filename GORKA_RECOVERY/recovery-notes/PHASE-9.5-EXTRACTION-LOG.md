@@ -19,7 +19,8 @@ SEQUENCE
   Adapter/command cleanup
       Slice 1 debtors           DONE (91b5b7e)
       Slice 2 debts             DONE (d4ca2dc)
-      Slices 3-6                NOT STARTED
+      Slice 3 communications   DONE (ce65543)
+      Slices 4-6                NOT STARTED
   Final Client regression       PENDING
   Agent implementation          PENDING
   Agent authentication          PENDING
@@ -209,13 +210,112 @@ DEVIATIONS
   None.
 
 ================================================================
-SLICE 3 - COMMUNICATIONS (NEXT)
+SLICE 3 - COMMUNICATIONS
+================================================================
+
+Starting commit:   21e350c
+Resulting commit:  ce65543
+
+Files changed:
+  shared/src/communications.rs   NEW (143 lines)
+  shared/src/lib.rs              MODIFIED (added "pub mod communications;")
+  src-tauri/src/main.rs          MODIFIED (3 commands became thin adapters)
+
+Commands moved (Tauri command -> shared function):
+  get_communications         -> gorka_shared::communications::get_communications
+  insert_communication       -> gorka_shared::communications::insert_communication
+  delete_communication       -> gorka_shared::communications::delete_communication
+
+Shared function signatures:
+  fn get_communications(conn: &Connection, organization_id: &str,
+                        debtor_id: &str)
+                        -> Result<Vec<Communication>, String>
+  fn insert_communication(conn: &Connection, organization_id: &str,
+                          input: CommunicationInput)
+                          -> Result<Communication, String>
+  fn delete_communication(conn: &Connection, organization_id: &str,
+                          id: &str) -> Result<bool, String>
+
+DATA PRESERVATION
+  SQL strings               unchanged
+  Parameter order and types unchanged
+  Row mappings              unchanged
+  Transaction boundaries    unchanged (none; all three use as_ref)
+  Audit calls               unchanged
+    insert_communication -> INSERT_COMM, Some(debtor_id)
+    delete_communication -> DELETE_COMM, None
+    get_communications   -> none (read-only)
+
+ADAPTER BEHAVIOR PRESERVATION
+  Trusted organization_id acquisition   unchanged
+    (still via get_trusted_organization_id(&app))
+  AppState ownership and connection
+    locking                             unchanged
+    (all three use as_ref(); no mut borrow)
+  Error propagation                     unchanged
+    (same Err(String) strings and paths)
+  Return-value behavior                 unchanged
+    (same shapes, same field values;
+     insert_communication still binds
+     Option::<String>::None for created_by
+     in the INSERT and returns
+     created_by: None; type/direction
+     return the enum-derived canonical
+     uppercase strings; all preserved
+     as-is)
+
+WARNING CLEANUP
+  None. gorka-client warnings: 6 before,
+  6 after. No new warnings introduced
+  by Slice 3. No cleanup authorized for
+  this slice.
+
+VERIFICATION
+  cargo build -p gorka-client    PASS (2m 03s, 6 warnings)
+  cargo test -p gorka-shared     14/14 PASS (6 enrollment + 8 sync)
+  Client smoke test:
+    login, unlock, dashboard numbers
+    open debtor detail (get_communications)
+    add one communication of each type
+      CALL / OUTBOUND
+      EMAIL / OUTBOUND
+      SMS / INBOUND
+      NOTE / INBOUND
+    verify all four render with correct
+      type and direction labels
+    delete one (NOTE); other three remain
+    open second debtor; add communication;
+      verify it does not appear under
+      the first debtor (JOIN scoping)
+    dashboard invariants: total_debtors,
+      total_debt, total_actions unchanged
+      from baseline (communications do not
+      affect these three)
+  All passed.
+
+EXPLICIT NON-CHANGES
+  No schema changed.
+  No SQL semantics changed.
+  No event semantics changed.
+  No audit semantics changed.
+  No command names changed.
+  No generate_handler! registration changed.
+  No authentication behavior changed.
+  No new dependency added.
+  shared/src/debtors.rs and shared/src/debts.rs
+    untouched.
+
+DEVIATIONS
+  None.
+
+================================================================
+SLICE 4 - ACTIONS (NEXT)
 ================================================================
 
 Not started. Will follow the same pattern:
-shared/src/communications.rs
-Commands: get_communications, insert_communication,
-delete_communication.
+shared/src/actions.rs
+Commands: get_actions, insert_action, update_action,
+delete_action.
 
 ================================================================
 END OF DOCUMENT
