@@ -18,7 +18,8 @@ SEQUENCE
   3.5 auth                      DEFERRED (no code change)
   Adapter/command cleanup
       Slice 1 debtors           DONE (91b5b7e)
-      Slices 2-6                NOT STARTED
+      Slice 2 debts             DONE (d4ca2dc)
+      Slices 3-6                NOT STARTED
   Final Client regression       PENDING
   Agent implementation          PENDING
   Agent authentication          PENDING
@@ -120,12 +121,101 @@ DEVIATIONS
   None.
 
 ================================================================
-SLICE 2 - DEBTS (NEXT)
+SLICE 2 - DEBTS
+================================================================
+
+Starting commit:   415e191
+Resulting commit:  d4ca2dc
+
+Files changed:
+  shared/src/debts.rs       NEW (189 lines)
+  shared/src/lib.rs         MODIFIED (added "pub mod debts;")
+  src-tauri/src/main.rs     MODIFIED (4 commands became thin adapters)
+
+Commands moved (Tauri command -> shared function):
+  get_debts              -> gorka_shared::debts::get_debts
+  insert_debt            -> gorka_shared::debts::insert_debt
+  update_debt            -> gorka_shared::debts::update_debt
+  delete_debt            -> gorka_shared::debts::delete_debt
+
+Shared function signatures:
+  fn get_debts(conn: &Connection, organization_id: &str,
+               debtor_id: &str) -> Result<Vec<Debt>, String>
+  fn insert_debt(conn: &Connection, organization_id: &str,
+                 input: DebtInput) -> Result<Debt, String>
+  fn update_debt(conn: &Connection, organization_id: &str,
+                 id: &str, input: DebtInput) -> Result<Debt, String>
+  fn delete_debt(conn: &Connection, organization_id: &str,
+                 id: &str) -> Result<bool, String>
+
+DATA PRESERVATION
+  SQL strings               unchanged
+  Parameter order and types unchanged
+  Row mappings              unchanged
+  Transaction boundaries    unchanged (none; all four use as_ref)
+  Audit calls               unchanged
+    insert_debt -> INSERT_DEBT, Some(debtor_id)
+    update_debt -> UPDATE_DEBT, Some(debtor_id)
+    delete_debt -> DELETE_DEBT, None
+
+ADAPTER BEHAVIOR PRESERVATION
+  Trusted organization_id acquisition   unchanged
+    (still via get_trusted_organization_id(&app))
+  AppState ownership and connection
+    locking                             unchanged
+    (all four use as_ref(); no mut borrow)
+  Error propagation                     unchanged
+    (same Err(String) strings and paths)
+  Return-value behavior                 unchanged
+    (same shapes, same field values;
+     update_debt still returns now as
+     created_at; update_debt still omits
+     debtor_id from the UPDATE column
+     list; both preserved as-is)
+
+WARNING CLEANUP
+  None. gorka-client warnings: 6 before,
+  6 after. No new warnings introduced
+  by Slice 2. No cleanup authorized for
+  this slice.
+
+VERIFICATION
+  cargo build -p gorka-client    PASS (2m 26s, 6 warnings)
+  cargo test -p gorka-shared     14/14 PASS (6 enrollment + 8 sync)
+  Client smoke test:
+    login, unlock, dashboard numbers
+    open debtor detail (get_debts)
+    add debt 999.99 (insert_debt)
+    dashboard total_debt increases by 999.99
+    edit debt to 888.88 (update_debt)
+    dashboard total_debt moves by -111.11
+    delete debt (delete_debt)
+    dashboard total_debt returns to baseline
+    open a second debtor (scoping isolation)
+  All passed.
+
+EXPLICIT NON-CHANGES
+  No schema changed.
+  No SQL semantics changed.
+  No event semantics changed.
+  No audit semantics changed.
+  No command names changed.
+  No generate_handler! registration changed.
+  No authentication behavior changed.
+  No new dependency added.
+  shared/src/debtors.rs untouched.
+
+DEVIATIONS
+  None.
+
+================================================================
+SLICE 3 - COMMUNICATIONS (NEXT)
 ================================================================
 
 Not started. Will follow the same pattern:
-shared/src/debts.rs
-Commands: get_debts, insert_debt, update_debt, delete_debt.
+shared/src/communications.rs
+Commands: get_communications, insert_communication,
+delete_communication.
 
 ================================================================
 END OF DOCUMENT
