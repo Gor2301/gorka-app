@@ -32,6 +32,16 @@ dist-ssr
 !**/.env.example
 node_modules/
 dist/
+
+# Rust build output
+target/
+**/target/
+
+# Phase 9.5 temporary files
+slice1_block.txt
+*.bak-slice1
+*.bak-phase3-*
+
 # Recovery backup files — exclude from git (large, or contain data)
 GORKA_RECOVERY/backups/*.db*
 GORKA_RECOVERY/backups/*.sql
@@ -39,6 +49,3 @@ GORKA_RECOVERY/backups/*.dat*
 GORKA_RECOVERY/backups/backend-source/
 GORKA_RECOVERY/backups/backend-source-before-cleanup/
 GORKA_RECOVERY/backups/tauri-source/
-
-
-
