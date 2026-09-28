@@ -10,6 +10,7 @@
 pub mod enrollment;
 pub mod models;
 pub mod storage;
+pub mod sync;
 
 pub fn placeholder() -> &'static str {
     "gorka-shared"
