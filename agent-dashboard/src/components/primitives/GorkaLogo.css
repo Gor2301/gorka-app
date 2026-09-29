@@ -1,0 +1,20 @@
+.gorka-logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.gorka-logo__wordmark {
+  color: var(--color-brand-red);
+  font-family: var(--font-family);
+  font-size: var(--font-size-logo);
+  font-weight: var(--font-weight-bold);
+  margin: 0 0 8px 0;
+  letter-spacing: 0.5px;
+}
+
+.gorka-logo__subtitle {
+  color: var(--color-text-muted);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  margin: 0;
+}

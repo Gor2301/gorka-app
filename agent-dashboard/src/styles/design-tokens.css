@@ -1,0 +1,123 @@
+/* agent-dashboard/src/styles/design-tokens.css
+ *
+ * Design tokens for the GORKA Agent App. Single source of truth
+ * for every visual value in the Agent UI. Component CSS files
+ * do not hardcode hex, px, or font values; they reference these
+ * tokens via var(--token-name).
+ *
+ * Values are from AGENT-APP-SPEC.md v1.2 section 11.2. Where a
+ * value is not in 11.2 but is needed for the entry flow, the
+ * source is the Client Dashboard's pre-Tauri Login page, which
+ * is the approved design reference for the Agent's entry flow.
+ */
+
+:root {
+  /* -- Colors --------------------------------------------------- */
+
+  /* Accent (primary) */
+  --color-accent: #7C3AED;
+  --color-accent-tint: #F4F0FF;
+  --color-accent-tint-icon: #f3e8ff;
+
+  /* Text on colored surfaces */
+  --color-text-on-accent: #FFFFFF;
+
+  /* Brand red (logo) */
+  --color-brand-red: #DC2626;
+
+  /* Danger (errors, warnings) */
+  --color-danger: #dc2626;
+  --color-danger-tint: #fef2f2;
+  --color-danger-border: #fecaca;
+
+  /* Success */
+  --color-success: #16a34a;
+  --color-success-tint: #dcfce7;
+
+  /* Warning */
+  --color-warning: #ea580c;
+  --color-warning-tint: #ffedd5;
+
+  /* Text */
+  --color-text-strong: #111827;
+  --color-text-normal: #374151;
+  --color-text-muted: #6b7280;
+  --color-text-dim: #9ca3af;
+  --color-text-sidebar: #4A4A4A;
+
+  /* Borders */
+  --color-border: #e5e7eb;
+  --color-border-sidebar: #E3E3E3;
+
+  /* Backgrounds */
+  --color-bg-main: #f9fafb;
+  --color-bg-sidebar: #FAFAFA;
+  --color-bg-card: #FFFFFF;
+
+  /* Entry flow background (Client Login page, not in spec 11.2) */
+  --color-bg-entry: #f5f5f5;
+
+  /* Overlays */
+  --color-overlay: rgba(0, 0, 0, 0.4);
+  --color-overlay-entry: rgba(0, 0, 0, 0.5);
+
+  /* -- Typography ----------------------------------------------- */
+
+  --font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  --font-size-body: 14px;
+  --font-size-body-sm: 13px;
+  --font-size-label: 13px;
+  --font-size-nav: 16px;
+  --font-size-page-title: 28px;
+  --font-size-card-title: 14px;
+  --font-size-card-value: 24px;
+  --font-size-section-heading: 18px;
+  --font-size-logo: 26px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* -- Spacing -------------------------------------------------- */
+
+  --space-modal-padding: 24px;
+  --space-card-padding: 20px;
+  --space-content-padding: 24px;
+  --space-grid-gap: 16px;
+  --space-grid-gap-sm: 12px;
+  --space-field-spacing: 12px;
+
+  /* -- Shape ---------------------------------------------------- */
+
+  --radius-card: 12px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+  --radius-nav-item: 6px;
+  --radius-icon-container: 12px;
+
+  --sidebar-width: 240px;
+  --header-height: 73px;
+  --nav-item-height: 36px;
+  --modal-width: 440px;
+  --modal-max-width: 90vw;
+  --entry-card-width: 400px;
+
+  /* -- Shadow --------------------------------------------------- */
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-card-hover: 0 10px 25px rgba(0, 0, 0, 0.08);
+  --shadow-entry-card: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  /* -- Icon sizes ----------------------------------------------- */
+
+  --icon-sidebar: 16px;
+  --icon-header: 18px;
+  --icon-card: 24px;
+  --icon-close: 20px;
+
+  /* -- Transitions ---------------------------------------------- */
+
+  --transition-fast: 150ms ease;
+}
