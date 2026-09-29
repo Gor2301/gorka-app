@@ -93,7 +93,7 @@ Status: PARTIAL (September 14, 2026) — debtor CRUD, debtor-attached document u
 
 
 PHASE 9.5 - AGENT APP AND CLIENT DASHBOARD, LOCAL ONLY
-Status: IN PROGRESS (September 28, 2026). See HANDOFF.md and PHASE-9.5-EXTRACTION-LOG.md.
+Status: IN PROGRESS (September 29, 2026). Adapter cleanup and final Client regression complete. Stage B shared functions (photo, calendar, relations) complete. Stage C.1 Agent auth foundation complete. See HANDOFF.md, START-HERE.md, and PHASE-9.5-EXTRACTION-LOG.md.
 
 
 

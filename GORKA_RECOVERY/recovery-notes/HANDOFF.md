@@ -2632,6 +2632,132 @@ the pattern Slice 2 will follow.
     mappings, transactions, audit calls, and command
     names unchanged in every slice.
 
+## STATUS UPDATE - September 29, 2026 (Stage B complete, Stage C.1 complete)
+
+### What this session did
+
+Continued Phase 9.5. Three items from the previous session's
+open list were closed (Item 1, Item 2, Stage A). Then Stage B
+(shared functions for the Agent) was completed in three
+sub-slices. Then Stage C began with C.1 (the Agent's
+authentication foundation).
+
+Nineteen commits landed across the day. No production
+touched. No cloud schema change. The invariant held.
+
+### Items closed from the previous session
+
+  Item 1 - delete_debtor filesystem test. PASSED. A fresh
+  create/upload/delete cycle leaves no folder behind. The
+  pre-existing orphan folder cd972140-... is a historical
+  artifact, not a defect.
+
+  Item 2 - auth boundary. HTTP half of login moved to
+  gorka_shared::auth_http. Store half stays per binary
+  (Reading A from Slice 3.5). Dead reqwest dependency
+  removed from src-tauri/Cargo.toml. Verified on cloud:
+  gorka-client builds, 14/14 shared tests, login works.
+
+  Item 3 / Stage A - schema migrations v5/v6/v7 applied.
+  Adds debtors.photo_path, debtors.role, calendar_events
+  table, debtor_relations table. Client runs them on next
+  launch; data intact (12 / $2,381,550 / 2).
+
+### Stage B - shared functions (three sub-slices)
+
+  Sub-slice 1 (2268a30) - photo functions.
+    set_debtor_photo, get_debtor_photo added to
+    shared/src/debtors.rs. Fixed photo.<ext> target, prior
+    photo removed. No org scoping (matches spec 6.3).
+    Verified on cloud: gorka-client builds.
+
+  Sub-slice 2 (292a3a8) - calendar operations.
+    New shared/src/calendar.rs (279 lines), 6 functions,
+    4 new model structs. All take trusted organization_id
+    (normative LOCAL-TABLES rule over illustrative spec
+    6.3). Inclusive overlap for date ranges. event_type
+    always MANUAL. Verified on cloud: gorka-client builds,
+    14/14 shared tests.
+
+  Sub-slice 3 (884c637) - debtor relations.
+    New shared/src/relations.rs (163 lines), 3 functions,
+    2 new model structs. Same trusted-org-id rule.
+    Reverse-direction view out of scope. Insert validates
+    both debtors, rejects self-relations, validates
+    relation_type, pre-checks the unique constraint.
+    Verified on cloud as part of the next build.
+
+### Stage C.1 - Agent authentication foundation
+
+  Commit 5ab35ae.
+    New src-tauri-agent/src/auth.rs (7 functions, thin
+    login through gorka_shared::auth_http).
+    src-tauri-agent/Cargo.toml gains rusqlite and hex.
+    src-tauri-agent/src/main.rs rewritten: AgentState ->
+    AppState with Mutex<Option<Connection>>; agent_ping
+    removed; 8 commands registered (login, get_auth_token,
+    get_salt, get_organization_id, database_exists,
+    unlock_database, is_database_unlocked, logout).
+    unlock_database written clean (no debug println!s).
+
+  Commit 67b984a - Cargo.lock regenerated on cloud.
+    Reconciles Item 2's reqwest move and Stage C.1's
+    rusqlite/hex additions.
+
+  Commit c69d21e - follow-up: remove unused
+    tauri::Manager import from Agent auth.rs. Agent bin
+    warning count 3 -> 2.
+
+  Verified on cloud: gorka-agent builds (first real build),
+  gorka-client builds, 14/14 shared tests. Warnings:
+  gorka-client bin 3, gorka-agent bin 2, gorka-shared lib 6.
+
+### Documentation
+
+  Combined extraction-log update: four new sections
+  (Stage B 1-3, Stage C.1) plus SEQUENCE. Commit c69d21e
+  state referenced.
+
+  DECISIONS.md: new September 29 entry recording three HOW
+  decisions - D1 (spec 6.3 signatures are illustrative, not
+  normative), D2 (open_local_file deferred to Stage D),
+  D3 (new Agent code written clean). Plus session notes.
+
+### State at end of session
+
+  Main machine:  c69d21e, clean.
+  Cloud machine: c69d21e, clean except the two known
+                 untracked files (check-columns.ts,
+                 test-package.gorka).
+  GitHub:        c69d21e.
+
+### Next work
+
+  Stage C.2 - CRUD adapters in the Agent's main.rs. Adds 21
+  adapter commands for debtors, debts, communications,
+  actions, documents. All main-side; cloud needed only for
+  the build verification.
+
+  After C.2: C.3 (Stage B adapters: photo, calendar,
+  relations), C.4 (enrollment). Then Stage D - the Agent
+  frontend. Then the Agent end-to-end regression.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched (release.yml unchanged).
+  - Invariant held. No debtor data crossed the boundary.
+  - No frozen document amended beyond the September 27
+    amendments already recorded (LOCAL-TABLES v1.3,
+    SYNC-ARCHITECTURE v1.4).
+  - Stage B introduced new code with per-function design
+    decisions, each recorded in the extraction log.
+  - Stage C.1 kept the Client binary untouched.
+
+See PHASE-9.5-EXTRACTION-LOG.md for the four new slice
+records and DECISIONS.md for the September 29 HOW decisions.
+
 
 
 

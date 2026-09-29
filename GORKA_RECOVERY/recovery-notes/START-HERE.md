@@ -1151,7 +1151,91 @@ boundary.
 See DECISIONS.md, HANDOFF.md, SESSION-LOG.md, and the new
 PHASE-9.5-EXTRACTION-LOG.md for full details.
 
+================================================================
+Update - September 29, 2026 (Stage B complete, Stage C.1 complete)
+================================================================
 
+Continued Phase 9.5. The three items left open by the
+September 28 session were closed, Stage B was completed, and
+Stage C began.
+
+The sequence executed on September 29:
+
+  Item 1    delete_debtor filesystem test     PASSED
+  Item 2    auth boundary                     DONE (499e7f5, 10df6f5)
+  Item 3    Stage A schema migrations         DONE (6e83a29)
+  Stage B.1 photo functions                   DONE (2268a30)
+  Stage B.2 calendar operations               DONE (292a3a8)
+  Stage B.3 debtor relations                  DONE (884c637)
+  Stage C.1 Agent auth foundation             DONE (5ab35ae)
+  Cargo.lock reconciliation                   DONE (67b984a)
+  C.1 follow-up Manager cleanup               DONE (c69d21e)
+
+What exists now:
+
+  - gorka-shared gains: auth_http.rs, calendar.rs,
+    relations.rs. Models gain CalendarEvent,
+    CalendarEventInput, UpcomingPayment, UpcomingFollowup,
+    DebtorRelation, DebtorRelationInput.
+
+  - shared/src/db.rs migrations v5/v6/v7: debtors.photo_path,
+    debtors.role, calendar_events table, debtor_relations
+    table.
+
+  - src-tauri-agent now has real code: auth.rs (7 functions),
+    AppState with Mutex<Option<Connection>>, 8 commands
+    registered (login, get_auth_token, get_salt,
+    get_organization_id, database_exists, unlock_database,
+    is_database_unlocked, logout). agent_ping removed.
+
+  - The Client binary is unchanged since Item 2 except for
+    the removed reqwest dependency.
+
+Decisions recorded during the session (DECISIONS.md,
+September 29 entry):
+
+  D1 - Spec section 6.3 example signatures are illustrative,
+       not normative. Where they conflict with a MUST rule in
+       LOCAL-TABLES, the LOCAL-TABLES rule wins. All Stage B
+       functions take trusted organization_id as a result.
+
+  D2 - open_local_file deferred to Stage D, when the
+       Agent's Documents UI actually consumes it. Stage C
+       registers 41 commands instead of 42.
+
+  D3 - New Agent code is written clean. No debug println!s,
+       no dead imports. "Preserve exactly" applies to
+       extraction, not to new code.
+
+Verification (cloud, September 29):
+
+  cargo build -p gorka-client    PASS (2m 16s, 3 warnings)
+  cargo build -p gorka-agent     PASS (2m 39s, 3 -> 2 warnings
+                                  after c69d21e)
+  cargo test -p gorka-shared     14/14 PASS
+  Client login -> unlock -> dashboard works on the migrated
+  schema; existing data intact (12 / $2,381,550 / 2).
+
+State at end of session:
+
+  Main machine:  c69d21e, clean.
+  Cloud machine: c69d21e, clean except the two known
+                 untracked files (check-columns.ts,
+                 test-package.gorka).
+  GitHub:        c69d21e.
+
+Next work: Stage C.2 - CRUD adapters in the Agent's main.rs.
+21 adapter commands for debtors, debts, communications,
+actions, documents. All main-side; cloud needed only for
+build verification.
+
+After C.2: C.3 (photo, calendar, relations adapters), C.4
+(enrollment). Then Stage D - the Agent frontend. Then the
+Agent end-to-end regression.
+
+See DECISIONS.md (September 29 entry), HANDOFF.md,
+SESSION-LOG.md, and PHASE-9.5-EXTRACTION-LOG.md for full
+details.
 
 
 

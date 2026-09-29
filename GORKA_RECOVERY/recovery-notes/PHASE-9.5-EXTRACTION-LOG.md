@@ -27,8 +27,8 @@ SEQUENCE
   Item 1 delete_debtor test     DONE (verified 2026-09-29)
   Item 2 auth boundary          DONE (499e7f5, 10df6f5)
   Item 3 Stage A migrations     DONE (6e83a29)
-  Stage B shared functions      NOT STARTED
-  Stage C Agent commands        NOT STARTED
+  Stage B shared functions      DONE (2268a30, 292a3a8, 884c637)
+  Stage C Agent commands        IN PROGRESS (C.1 done: 5ab35ae, 67b984a, c69d21e)
   Stage D Agent frontend        NOT STARTED
   Agent end-to-end regression   NOT STARTED
 
@@ -970,6 +970,212 @@ VERIFICATION (cloud, 2026-09-29)
 
 DEVIATIONS
   None.
+
+================================================================
+STAGE B SUB-SLICE 1 - PHOTO FUNCTIONS
+================================================================
+
+Date: September 29, 2026.
+
+COMMIT
+  2268a30
+
+FILES CHANGED
+  shared/src/debtors.rs    MODIFIED (two functions appended)
+
+FUNCTIONS ADDED
+  set_debtor_photo(conn, storage, debtor_id, source_file_path)
+    -> Result<(), String>
+  get_debtor_photo(conn, debtor_id) -> Result<Option<String>, String>
+
+DECISIONS
+  - No organization scoping. Matches spec section 6.3 and the
+    Slice 5 documents precedent.
+  - Photo target: fixed name photo.<ext>. Prior photo.* is
+    removed before writing the new one. One photo per debtor.
+  - Debtor existence is checked before any filesystem mutation.
+  - get_debtor_photo returns Ok(None) for both a nonexistent
+    debtor and a NULL photo_path.
+  - Debtor and DebtorInput models are untouched. Photo read and
+    write is column-specific for this sub-slice.
+
+VERIFICATION (cloud, 2026-09-29)
+  cargo build -p gorka-client   PASS (1m 29s)
+  Warning count unchanged.
+  No runtime test; commands not registered until Stage C.
+
+DEVIATIONS
+  None.
+
+================================================================
+STAGE B SUB-SLICE 2 - CALENDAR
+================================================================
+
+Date: September 29, 2026.
+
+COMMIT
+  292a3a8
+
+FILES CHANGED
+  shared/src/calendar.rs    NEW (279 lines)
+  shared/src/models.rs      MODIFIED (+74: four structs)
+  shared/src/lib.rs         MODIFIED (added "pub mod calendar;")
+
+FUNCTIONS ADDED
+  get_calendar_events(conn, organization_id, start_date, end_date)
+  insert_calendar_event(conn, organization_id, input)
+  update_calendar_event(conn, organization_id, id, input)
+  delete_calendar_event(conn, organization_id, id)
+  get_upcoming_payments(conn, organization_id, start_date, end_date)
+  get_upcoming_followups(conn, organization_id, start_date, end_date)
+
+MODELS ADDED
+  CalendarEvent
+  CalendarEventInput
+  UpcomingPayment
+  UpcomingFollowup
+
+DECISIONS
+  - All six functions take a trusted organization_id. The
+    spec's section 6.3 example signatures omitted it, but
+    LOCAL-TABLES.md v1.3 Amendment 1 requires organization_id
+    in calendar_events to be derived from trusted context, not
+    from the frontend. The normative rule wins.
+  - get_calendar_events uses inclusive overlap semantics:
+    start_date <= requested_end AND end_date >= requested_start.
+  - event_type is always MANUAL on insert. Not settable by
+    callers, not changed by update.
+  - Explicit debtor-existence check when debtor_id is supplied
+    to insert or update.
+  - Dates are stored as sent by the frontend. No normalization.
+
+VERIFICATION (cloud, 2026-09-29)
+  cargo build -p gorka-client   PASS (2m 16s)
+  Warning count unchanged (3).
+  cargo test -p gorka-shared    14/14 PASS.
+  No runtime test; commands not registered until Stage C.
+
+DEVIATIONS
+  None.
+
+================================================================
+STAGE B SUB-SLICE 3 - RELATIONS
+================================================================
+
+Date: September 29, 2026.
+
+COMMIT
+  884c637
+
+FILES CHANGED
+  shared/src/relations.rs    NEW (163 lines)
+  shared/src/models.rs       MODIFIED (+22: two structs)
+  shared/src/lib.rs          MODIFIED (added "pub mod relations;")
+
+FUNCTIONS ADDED
+  get_debtor_relations(conn, organization_id, debtor_id)
+  insert_debtor_relation(conn, organization_id, input)
+  delete_debtor_relation(conn, organization_id, id)
+
+MODELS ADDED
+  DebtorRelation (with joined related-debtor fields)
+  DebtorRelationInput
+
+DECISIONS
+  - All three functions take a trusted organization_id.
+    Same normative override as calendar.
+  - get_debtor_relations returns only rows where debtor_id
+    matches the requested debtor. Reverse-direction view is
+    out of scope for Phase 9.5.
+  - Insert validates both debtors exist in the org, rejects
+    self-relations, validates relation_type against GUARANTOR
+    and PLEDGER, and pre-checks the unique constraint.
+  - No audit in Phase 9.5 (consistent with calendar).
+
+VERIFICATION (cloud, 2026-09-29)
+  cargo build -p gorka-client   PASS (2m 16s)
+  Warning count unchanged (3).
+  No runtime test; commands not registered until Stage C.
+
+DEVIATIONS
+  None.
+
+================================================================
+STAGE C SUB-SLICE 1 - AGENT AUTH FOUNDATION
+================================================================
+
+Date: September 29, 2026.
+
+COMMITS
+  5ab35ae   Agent auth foundation
+  67b984a   Cargo.lock regeneration (from cloud)
+  c69d21e   Follow-up: remove unused tauri::Manager import
+
+FILES CHANGED
+  src-tauri-agent/src/auth.rs    NEW
+  src-tauri-agent/Cargo.toml     MODIFIED (added rusqlite, hex)
+  src-tauri-agent/src/main.rs    MODIFIED (rewritten)
+  Cargo.lock                     MODIFIED (regenerated on cloud)
+
+WHAT WAS BUILT
+  The Agent's own auth.rs, mirroring the Client's post-Item-2
+  shape: seven functions (login, get_token,
+  get_organization_id, get_salt, set_unlocked, is_unlocked,
+  logout). login is thin: it calls gorka_shared::auth_http for
+  the HTTP half, then writes auth_token, organization_id, and
+  salt to the Agent's own settings.dat.
+
+  Agent's AppState: db field changes from
+  Mutex<Option<()>> to Mutex<Option<Connection>>.
+
+  Agent's main.rs: agent_ping removed; eight commands
+  registered (login, get_auth_token, get_salt,
+  get_organization_id, database_exists, unlock_database,
+  is_database_unlocked, logout).
+
+  unlock_database is written clean, without the Client's
+  debug println!s, but preserves the "Key derivation failed"
+  error wrapper. Q2 decision Clean applied.
+
+DECISIONS
+  - open_local_file deferred to Stage D (Q1 decision B).
+  - agent_ping removed (Q4 decision).
+  - is_unlocked kept in the Agent's auth.rs for symmetry with
+    the Client. Same deferral as Slice 3.5.
+  - unlock_database written clean; no debug println!s.
+
+CLEANUP
+  c69d21e removed the unused tauri::Manager import from
+  src-tauri-agent/src/auth.rs. It became dead because
+  AppHandle methods resolve inherently, not through the
+  Manager trait. Agent bin warning count dropped 3 -> 2.
+  A third warning was counted by cargo but suppressed by
+  deduplication. The two identified warnings were both in
+  auth.rs; the first was removed, the second (is_unlocked)
+  is a deferred parity warning.
+
+CARGO.LOCK RECONCILIATION
+  67b984a regenerated Cargo.lock on cloud, catching up two
+  dependency changes that could not be applied from main:
+  Item 2's reqwest move (gorka-client -> gorka-shared) and
+  Stage C.1's hex and rusqlite additions to gorka-agent.
+  No package additions beyond those, no version bumps.
+
+VERIFICATION (cloud, 2026-09-29)
+  cargo build -p gorka-agent    PASS (2m 39s, 3 warnings)
+    after c69d21e:              agent bin warnings 3 -> 2
+  cargo build -p gorka-client   PASS (2m 16s, 3 warnings)
+  cargo test -p gorka-shared    14/14 PASS
+  gorka-shared lib warnings     6 (unchanged)
+  No runtime test; the Agent UI does not call any of the new
+  commands yet. Behavioral verification is Stage D.
+
+DEVIATIONS
+  One: the Q1 cleanup edit was made on cloud, not main, because
+  the cloud session was already open for verification. The
+  change was committed from cloud (c69d21e), then pulled to
+  main. Same pattern used for Cargo.lock regeneration. No
+  behavior impact.
 
 ================================================================
 END OF DOCUMENT

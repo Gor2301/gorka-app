@@ -2937,6 +2937,214 @@ every slice.
 
 End of entry.
 
+Session Extension - September 29, 2026 (Stage B complete, Stage C.1 complete)
+
+WHAT THIS SESSION DID
+
+Continued Phase 9.5. Three items left open by the previous
+session were closed: Item 1 (delete_debtor filesystem test),
+Item 2 (auth boundary), and Item 3 / Stage A (schema
+migrations). Then Stage B was completed in three sub-slices:
+photo functions, calendar operations, and debtor relations.
+Then Stage C began with C.1, the Agent's authentication
+foundation.
+
+Nineteen commits landed. No production touched. No cloud
+schema change. The invariant held.
+
+This is the entry that records the day's work
+chronologically. Technical details of each slice are in
+PHASE-9.5-EXTRACTION-LOG.md. The HOW decisions are in
+DECISIONS.md (September 29 entry). Status is in HANDOFF.md.
+
+THE SESSION IN ORDER
+
+Item 1 - delete_debtor filesystem test.
+
+Isolated test on the cloud. Created a test debtor in the
+Client UI, uploaded one document, deleted the debtor. The
+filesystem was inspected before and after. The folder and
+its documents subfolder were both gone after the delete.
+PASS. A pre-existing orphan folder (cd972140-...) from an
+earlier manual test remained, but a fresh create/upload/
+delete cycle leaves nothing behind. The delete path is
+correct.
+
+Item 2 - auth boundary.
+
+Decision Reading A from Slice 3.5 was finally applied. The
+HTTP half of login moved to a new shared module
+(gorka_shared::auth_http) holding the request/response
+types and one async function. The Client's login became a
+thin orchestrator: call shared HTTP, then write auth_token,
+organization_id, and salt to its own settings.dat. The
+store half stays per binary by design.
+
+Two dead imports (json, Deserialize) removed from the
+Client's auth.rs in the same commit. A follow-up commit
+(10df6f5) removed reqwest from src-tauri/Cargo.toml, since
+no file under src-tauri/src uses it directly anymore.
+
+Verified on cloud: gorka-client built, 14/14 shared tests,
+login through the thin orchestrator worked.
+
+Item 3 / Stage A - schema migrations.
+
+Three migration blocks appended to shared/src/db.rs:
+  v5 - debtors.photo_path TEXT
+  v6 - calendar_events table + 2 indexes
+  v7 - debtors.role + debtor_relations table + 3 indexes
+
+Migration-only. No models, no commands, no CRUD. The shared
+schema means the Client ran them on its next launch.
+Verified on cloud: Client login -> unlock -> dashboard
+worked. Existing data intact: 12 debtors, $2,381,550,
+2 actions.
+
+Stage B - shared functions.
+
+Sub-slice 1 (2268a30) - photo functions.
+
+set_debtor_photo and get_debtor_photo added to
+shared/src/debtors.rs. Photo written to the debtor's files
+directory at photo.<ext>; prior photo.* removed before
+replacement; debtor existence checked before any filesystem
+mutation. No organization scoping (matches spec 6.3 and the
+Slice 5 documents precedent). Debtor and DebtorInput models
+untouched.
+
+Verified on cloud: gorka-client built.
+
+Sub-slice 2 (292a3a8) - calendar operations.
+
+New shared/src/calendar.rs (279 lines) with six functions:
+get_calendar_events, insert_calendar_event,
+update_calendar_event, delete_calendar_event,
+get_upcoming_payments, get_upcoming_followups. Four new
+model structs (CalendarEvent, CalendarEventInput,
+UpcomingPayment, UpcomingFollowup).
+
+Key decisions:
+  - All six take trusted organization_id. The spec's
+    section 6.3 example signatures omitted it, but
+    LOCAL-TABLES v1.3 Amendment 1 requires the field to be
+    derived from trusted context. The normative rule won.
+  - get_calendar_events uses inclusive overlap semantics.
+  - event_type is always MANUAL on insert.
+  - Explicit debtor-existence check on insert and update.
+
+Verified on cloud: gorka-client built, 14/14 tests.
+
+Sub-slice 3 (884c637) - debtor relations.
+
+New shared/src/relations.rs (163 lines) with three
+functions: get_debtor_relations, insert_debtor_relation,
+delete_debtor_relation. Two new model structs (DebtorRelation
+with joined related-debtor info, DebtorRelationInput).
+
+get_debtor_relations returns only rows where debtor_id
+matches the requested debtor; reverse-direction view is out
+of scope. Insert validates both debtors exist in the org,
+rejects self-relations, validates relation_type against
+GUARANTOR and PLEDGER, and pre-checks the unique constraint.
+No audit in Phase 9.5, consistent with calendar.
+
+Stage C.1 - Agent authentication foundation.
+
+Commit 5ab35ae.
+
+New src-tauri-agent/src/auth.rs mirroring the Client's
+post-Item-2 shape: seven functions (login, get_token,
+get_organization_id, get_salt, set_unlocked, is_unlocked,
+logout). login is thin: calls gorka_shared::auth_http for
+the HTTP half, writes auth_token, organization_id, and salt
+to the Agent's own settings.dat.
+
+src-tauri-agent/Cargo.toml gains rusqlite and hex.
+
+src-tauri-agent/src/main.rs rewritten:
+  - AppState (was AgentState) with db: Mutex<Option<Connection>>
+  - agent_ping removed
+  - eight commands registered (login, get_auth_token,
+    get_salt, get_organization_id, database_exists,
+    unlock_database, is_database_unlocked, logout)
+  - unlock_database written clean (no debug println!s),
+    but preserves the "Key derivation failed" error wrapper
+
+Commit 67b984a - Cargo.lock regeneration on cloud. The lock
+lives only on cloud. Two reconciliations were needed:
+Item 2's reqwest move (gorka-client loses it, gorka-shared
+gains it) and Stage C.1's hex and rusqlite additions to
+gorka-agent.
+
+Commit c69d21e - follow-up: remove the unused
+tauri::Manager import from the Agent's auth.rs. The import
+became dead because AppHandle methods resolve inherently,
+not through the Manager trait. Agent bin warning count went
+3 -> 2. The other warning (is_unlocked never used) is kept
+deliberately for symmetry with the Client's deferred
+warning from Slice 3.5.
+
+Verified on cloud: gorka-agent built for the first time
+with real commands. gorka-client built. 14/14 tests.
+Warning counts: gorka-client bin 3 (unchanged),
+gorka-agent bin 2, gorka-shared lib 6 (unchanged).
+
+DOCUMENTATION
+
+Combined extraction-log update: four new sections (Stage B
+1-3, Stage C.1) plus SEQUENCE showing Stage B DONE, Stage C
+IN PROGRESS (C.1 done).
+
+DECISIONS.md: new September 29 entry recording three HOW
+decisions:
+  D1 - spec 6.3 signatures are illustrative, not normative.
+       LOCAL-TABLES rules win.
+  D2 - open_local_file deferred to Stage D, when the
+       Documents UI actually consumes it.
+  D3 - new Agent code is written clean (no debug println!s,
+       no dead imports). "Preserve exactly" is for
+       extraction; it does not apply to new code.
+
+Plus session notes on cloud-side edits (Cargo.lock
+regeneration, the Manager cleanup) and warning count changes.
+
+HANDOFF.md, SESSION-LOG.md, and this extension record status
+and chronology.
+
+STATE AT END OF SESSION
+
+  Main machine:  c69d21e, clean.
+  Cloud machine: c69d21e, clean except the two known
+                 untracked files (check-columns.ts,
+                 test-package.gorka).
+  GitHub:        c69d21e.
+
+NEXT WORK
+
+Stage C.2 - CRUD adapters in the Agent's main.rs. 21
+adapter commands for debtors, debts, communications,
+actions, documents. All main-side. Cloud needed only for
+the build verification.
+
+After C.2: C.3 (photo, calendar, relations adapters), C.4
+(enrollment). Then Stage D - the Agent frontend. Then the
+Agent end-to-end regression.
+
+RULE COMPLIANCE
+
+No production touched.
+No cloud schema change.
+No CI/CD touched (release.yml unchanged).
+Invariant held.
+No frozen document amended beyond the September 27
+amendments already recorded.
+Stage B introduced new code with per-function design
+decisions, each recorded in the extraction log.
+Stage C.1 kept the Client binary untouched.
+
+End of entry.
+
 
 
 

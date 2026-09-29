@@ -6665,5 +6665,139 @@ HANDOFF.md for the status update.
 
 End of entry.
 
+## Recovery Session - September 29, 2026 (Stage B + Stage C.1)
+
+This entry records the HOW decisions from the September 29
+session. It does not repeat the technical slice records, which
+are in PHASE-9.5-EXTRACTION-LOG.md. It does not repeat the
+status, which is in HANDOFF.md.
+
+The session covered:
+
+  - Item 1 (delete_debtor test), Item 2 (auth boundary), and
+    Item 3 (Stage A migrations) - recorded earlier in the
+    extraction log at commit a7c985c.
+  - Stage B sub-slices 1-3: photo functions, calendar
+    operations, debtor relations.
+  - Stage C sub-slice 1: the Agent's authentication
+    foundation.
+
+Three HOW decisions were made that were not obvious.
+
+### D1 - The spec's section 6.3 signatures are illustrative
+
+Decision: Where the Agent spec's section 6.3 example
+signatures disagree with a normative rule in LOCAL-TABLES.md,
+the LOCAL-TABLES rule wins. Section 6.3 signatures are
+illustrative.
+
+Specifically: section 6.3 shows the calendar and relation
+commands without an app: AppHandle parameter. But
+LOCAL-TABLES.md v1.3 Amendment 1 states that
+calendar_events.organization_id MUST be derived from the
+authenticated/trusted organization context, not from a
+frontend-supplied value. To satisfy the normative rule, all
+six calendar functions and all three relation functions take
+a trusted organization_id, and their Tauri adapters will
+take app: AppHandle and call get_trusted_organization_id.
+
+Reasoning: The binding principle is "spec is authority." But
+when two frozen documents are in tension, the one that states
+a hard rule (MUST) is normative, and the one that shows a
+code example is illustrative. The spec itself acknowledges
+this in its Section 1.4: "Where this document appears to
+contradict a frozen document, the frozen document wins."
+
+Impact: All eleven Stage B functions take organization_id.
+Future Agent spec signatures are read the same way:
+illustrative by default, normative only when the surrounding
+text says so.
+
+### D2 - open_local_file is deferred to Stage D
+
+Decision: The open_local_file command (spec section 6.3) is
+not wired in Stage C. It is wired in Stage D, when the
+Agent's Documents UI actually consumes it.
+
+Reasoning: Wiring it in Stage C would require choosing a
+Tauri plugin before the consumer exists. Choosing a plugin
+before the UI is built risks an implementation choice made
+without sight of the real use. Spec section 2.8 lists
+open_local_file as Phase 9.5 scope. Deferring within Phase
+9.5 keeps it in scope without pre-committing to a plugin.
+
+Impact: Stage C registers 41 commands instead of 42. The
+Documents card in Stage D adds the 42nd. No user-visible
+difference; the command was never callable from any UI.
+
+### D3 - New Agent code is written clean
+
+Decision: The Agent's own Rust code is written without the
+Client's debug println!s, dead imports, or incidental noise.
+The Agent's auth.rs, unlock_database, and every subsequent
+Agent module are clean.
+
+Reasoning: The Client's auth.rs contains historical debug
+output and an unused rand::RngCore import. The Agent's
+auth.rs is new code, not an extraction. "Preserve exactly"
+is a rule for extraction slices; it does not apply to new
+code. There is no reason to reproduce the Client's debug
+noise in a fresh module.
+
+Impact: The Agent's auth.rs is smaller and carries no
+avoidable warnings. The is_unlocked warning is kept
+deliberately, for symmetry with the Client's deferred
+warning from Slice 3.5. The Agent's warning baseline starts
+lower than the Client's. Future Agent code follows the same
+rule.
+
+### Session notes
+
+Cloud-side edits accepted.
+
+Two edits were made on the cloud machine rather than on main,
+because the cloud session was already open and the
+alternative would have been a full turn-on/turn-off cycle
+for one-line changes:
+
+  1. Cargo.lock regeneration (67b984a). The lock lives only
+     on cloud. Main cannot regenerate it.
+  2. Removal of the unused tauri::Manager import from the
+     Agent's auth.rs (c69d21e). One line, no behavior.
+
+Both are recorded as deviations in the extraction log.
+Neither touched shared code. The standard workflow (main
+edits, cloud builds) resumes with the next code change.
+
+Warning count changes.
+
+  gorka-agent (bin): first real build produced 3 warnings.
+  Two were identified in auth.rs (unused tauri::Manager
+  import; is_unlocked never used). A third was counted by
+  cargo but suppressed by deduplication - most likely a
+  duplicate of the Manager warning from another compilation
+  unit. The Manager warning was removed (c69d21e). Agent bin
+  warning baseline is now 2.
+
+  gorka-client (bin): 3 warnings, unchanged.
+  gorka-shared (lib): 6 warnings, unchanged.
+
+State at end of session.
+
+  Main machine:  c69d21e, clean.
+  Cloud machine: c69d21e, clean except the two known
+                 untracked files (check-columns.ts,
+                 test-package.gorka).
+  GitHub:        c69d21e.
+
+Next work: Stage C.2 - CRUD adapters (debtors, debts,
+communications, actions, documents) in the Agent's main.rs.
+
+See PHASE-9.5-EXTRACTION-LOG.md for the slice records and
+HANDOFF.md for the status update.
+
+End of entry.
+
+
 
 
