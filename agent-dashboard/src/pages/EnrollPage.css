@@ -1,0 +1,17 @@
+.enroll-page__hint {
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+
+.enroll-page__file-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.enroll-page__file-row .input {
+  flex: 1;
+}

@@ -1,47 +1,82 @@
-// GORKA Agent Dashboard
+// GORKA Agent Dashboard - Stage D.2 entry flow.
 //
-// Phase 9.5 scaffold. This is a placeholder screen.
-//
-// The real Agent UI (the three-step entry flow, the debtor profile,
-// the plan view, the Communication Tools screen) is Phase 9.5
-// implementation work. It does not exist yet. This file exists only
-// to prove the second Tauri binary can load its own frontend.
+// State machine: loading -> login -> unlock -> enroll -> shell.
+// The bootstrap and each screen's success handler call advance(),
+// which re-reads the current session state and moves the machine
+// to wherever the user should be right now. This avoids manual
+// step-to-step wiring and keeps the flow self-correcting.
 
-function App() {
-  return (
-    <div
-      style={{
-        fontFamily: "system-ui, 'Segoe UI', Roboto, sans-serif",
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        margin: 0,
-        background: '#f9fafb',
-        color: '#111827',
-      }}
-    >
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: 12,
-          padding: 24,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-          maxWidth: 480,
-          textAlign: 'center',
-        }}
-      >
-        <h1 style={{ fontSize: 28, fontWeight: 'bold', margin: 0 }}>
-          GORKA Agent
-        </h1>
-        <p style={{ fontSize: 14, color: '#6b7280', marginTop: 12 }}>
-          Scaffold verified. The Agent App is the second Tauri binary in
-          the GORKA repository. The full UI is Phase 9.5 implementation
-          work, not part of this scaffold.
-        </p>
-      </div>
-    </div>
-  )
+import { useCallback, useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import AppShell from '@/components/AppShell';
+import LoginPage from '@/pages/LoginPage';
+import UnlockPage from '@/pages/UnlockPage';
+import EnrollPage from '@/pages/EnrollPage';
+import { EntryCard, Spinner } from '@/components/primitives';
+
+type EntryStep = 'loading' | 'login' | 'unlock' | 'enroll' | 'shell';
+
+export default function App() {
+  const [step, setStep] = useState<EntryStep>('loading');
+
+  const advance = useCallback(async () => {
+    try {
+      await invoke<string>('get_auth_token');
+    } catch {
+      setStep('login');
+      return;
+    }
+
+    try {
+      const unlocked = await invoke<boolean>('is_database_unlocked');
+      if (!unlocked) {
+        setStep('unlock');
+        return;
+      }
+    } catch {
+      setStep('unlock');
+      return;
+    }
+
+    try {
+      const enrolled = await invoke<boolean>('is_enrolled');
+      if (!enrolled) {
+        setStep('enroll');
+        return;
+      }
+    } catch {
+      setStep('enroll');
+      return;
+    }
+
+    setStep('shell');
+  }, []);
+
+  useEffect(() => {
+    advance();
+  }, [advance]);
+
+  if (step === 'loading') {
+    return (
+      <EntryCard>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <Spinner />
+        </div>
+      </EntryCard>
+    );
+  }
+
+  if (step === 'login') {
+    return <LoginPage onSuccess={advance} />;
+  }
+
+  if (step === 'unlock') {
+    return <UnlockPage onSuccess={advance} />;
+  }
+
+  if (step === 'enroll') {
+    return <EnrollPage onSuccess={advance} />;
+  }
+
+  return <AppShell onLogout={advance} />;
 }
-
-export default App

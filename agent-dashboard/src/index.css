@@ -34,3 +34,11 @@ textarea,
 select {
   font-family: inherit;
 }
+
+.form-field {
+  margin-bottom: 16px;
+}
+
+.form-field--last {
+  margin-bottom: 24px;
+}
