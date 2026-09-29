@@ -15,6 +15,7 @@ use gorka_shared::debts;
 use gorka_shared::communications;
 use gorka_shared::actions;
 use gorka_shared::documents;
+use gorka_shared::dashboard;
 
 mod auth;
 mod storage_migration;
@@ -287,31 +288,9 @@ fn get_dashboard_stats(
     state: tauri::State<AppState>,
 ) -> Result<DashboardStats, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-
-    let stats = conn.query_row(
-        "SELECT
-            (SELECT COUNT(*) FROM debtors
-               WHERE organization_id = ?1) AS total_debtors,
-            (SELECT COALESCE(SUM(d.amount), 0)
-               FROM debts d
-               INNER JOIN debtors b ON b.id = d.debtor_id
-               WHERE b.organization_id = ?1
-                 AND d.status NOT IN ('PAID', 'CANCELLED')) AS total_debt,
-            (SELECT COUNT(*) FROM actions a
-               INNER JOIN debtors b ON b.id = a.debtor_id
-               WHERE b.organization_id = ?1) AS total_actions",
-        params![&organization_id],
-        |row| Ok(DashboardStats {
-            total_debtors: row.get(0)?,
-            total_debt: row.get(1)?,
-            total_actions: row.get(2)?,
-        }),
-    ).map_err(|e| e.to_string())?;
-
-    Ok(stats)
+    dashboard::get_dashboard_stats(conn, &organization_id)
 }
 
 #[command]

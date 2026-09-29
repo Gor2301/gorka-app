@@ -9,6 +9,7 @@
 
 pub mod actions;
 pub mod communications;
+pub mod dashboard;
 pub mod db;
 pub mod debtors;
 pub mod debts;
