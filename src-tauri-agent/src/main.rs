@@ -11,9 +11,8 @@
 // Stage C.1 wires the Agent's authentication foundation: login,
 // unlock, logout, and the session reads the entry flow requires.
 // Stage C.2 adds the CRUD adapters (debtors, debts,
-// communications, actions, documents), mirroring the Client's
-// adapter shapes. The Stage B adapters (photo, calendar,
-// relations) follow in C.3; enrollment in C.4.
+// communications, actions, documents). Stage C.3 adds the Stage B
+// adapters (photo, calendar, relations). Enrollment follows in C.4.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -28,6 +27,8 @@ use gorka_shared::debts;
 use gorka_shared::communications;
 use gorka_shared::actions;
 use gorka_shared::documents;
+use gorka_shared::calendar;
+use gorka_shared::relations;
 
 mod auth;
 
@@ -369,6 +370,150 @@ fn delete_document(
     documents::delete_document(conn, &id)
 }
 
+// ---------------------------------------------------------------------
+// Stage C.3 - Stage B adapters.
+//
+// Photo commands do NOT perform organization scoping, matching
+// the shared functions in Stage B.1 and the Slice 5 documents
+// precedent. Calendar and relations commands DO acquire the
+// trusted organization id via the helper, per LOCAL-TABLES.md
+// v1.3 Amendment 1. The asymmetry is intentional.
+// ---------------------------------------------------------------------
+
+#[command]
+fn set_debtor_photo(
+    debtor_id: String,
+    source_file_path: String,
+    state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
+) -> Result<(), String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::set_debtor_photo(conn, &storage, &debtor_id, &source_file_path)
+}
+
+#[command]
+fn get_debtor_photo(
+    debtor_id: String,
+    state: tauri::State<AppState>,
+) -> Result<Option<String>, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::get_debtor_photo(conn, &debtor_id)
+}
+
+#[command]
+fn get_calendar_events(
+    start_date: String,
+    end_date: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<CalendarEvent>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    calendar::get_calendar_events(conn, &organization_id, &start_date, &end_date)
+}
+
+#[command]
+fn insert_calendar_event(
+    input: CalendarEventInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<CalendarEvent, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    calendar::insert_calendar_event(conn, &organization_id, input)
+}
+
+#[command]
+fn update_calendar_event(
+    id: String,
+    input: CalendarEventInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<CalendarEvent, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    calendar::update_calendar_event(conn, &organization_id, &id, input)
+}
+
+#[command]
+fn delete_calendar_event(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    calendar::delete_calendar_event(conn, &organization_id, &id)
+}
+
+#[command]
+fn get_upcoming_payments(
+    start_date: String,
+    end_date: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<UpcomingPayment>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    calendar::get_upcoming_payments(conn, &organization_id, &start_date, &end_date)
+}
+
+#[command]
+fn get_upcoming_followups(
+    start_date: String,
+    end_date: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<UpcomingFollowup>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    calendar::get_upcoming_followups(conn, &organization_id, &start_date, &end_date)
+}
+
+#[command]
+fn get_debtor_relations(
+    debtor_id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<DebtorRelation>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    relations::get_debtor_relations(conn, &organization_id, &debtor_id)
+}
+
+#[command]
+fn insert_debtor_relation(
+    input: DebtorRelationInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<DebtorRelation, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    relations::insert_debtor_relation(conn, &organization_id, input)
+}
+
+#[command]
+fn delete_debtor_relation(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    relations::delete_debtor_relation(conn, &organization_id, &id)
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -435,6 +580,17 @@ fn main() {
             upload_document,
             get_documents,
             delete_document,
+            set_debtor_photo,
+            get_debtor_photo,
+            get_calendar_events,
+            insert_calendar_event,
+            update_calendar_event,
+            delete_calendar_event,
+            get_upcoming_payments,
+            get_upcoming_followups,
+            get_debtor_relations,
+            insert_debtor_relation,
+            delete_debtor_relation,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
