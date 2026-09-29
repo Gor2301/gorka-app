@@ -12,13 +12,15 @@
 // unlock, logout, and the session reads the entry flow requires.
 // Stage C.2 adds the CRUD adapters (debtors, debts,
 // communications, actions, documents). Stage C.3 adds the Stage B
-// adapters (photo, calendar, relations). Enrollment follows in C.4.
+// adapters (photo, calendar, relations). Stage C.4 adds the
+// enrollment import command.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::sync::Mutex;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use tauri::{command, Manager};
+use chrono::Utc;
 use gorka_shared::storage::AppStorage;
 use gorka_shared::models::*;
 use gorka_shared::db;
@@ -29,6 +31,7 @@ use gorka_shared::actions;
 use gorka_shared::documents;
 use gorka_shared::calendar;
 use gorka_shared::relations;
+use gorka_shared::enrollment::parse_enrollment_package;
 
 mod auth;
 
@@ -514,6 +517,62 @@ fn delete_debtor_relation(
     relations::delete_debtor_relation(conn, &organization_id, &id)
 }
 
+// ---------------------------------------------------------------------
+// Stage C.4 - Enrollment import.
+//
+// Mirrors the Client's import_enrollment_package exactly. The
+// Agent imports an enrollment package exported by the admin's
+// Client Dashboard. Export is Client-only (spec 6.4) and is not
+// added to the Agent.
+// ---------------------------------------------------------------------
+
+#[command]
+fn import_enrollment_package(
+    passphrase: String,
+    file_path: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+
+    // Read the package file.
+    let file = std::fs::read(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let organization_key = parse_enrollment_package(&file, &passphrase, &organization_id)?;
+    // Begin the transaction.
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    // Check for an existing key inside the transaction.
+    let existing: Option<i64> = tx
+        .query_row("SELECT id FROM organization_keys WHERE id = 1", [], |row| row.get(0))
+        .ok();
+
+    if existing.is_some() {
+        return Err("Sync is already enabled for this organization".to_string());
+    }
+
+    // Insert the key.
+    tx.execute(
+        "INSERT INTO organization_keys (id, organization_id, key_material, created_at)
+         VALUES (1, ?1, ?2, ?3)",
+        params![&organization_id, &organization_key, Utc::now().to_rfc3339()],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Commit.
+    tx.commit().map_err(|e| e.to_string())?;
+
+    // Delete the package file after commit. Failure is logged, not fatal.
+    if let Err(e) = std::fs::remove_file(&file_path) {
+        eprintln!("Failed to delete package file: {}", e);
+    }
+
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -591,6 +650,7 @@ fn main() {
             get_debtor_relations,
             insert_debtor_relation,
             delete_debtor_relation,
+            import_enrollment_package,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
