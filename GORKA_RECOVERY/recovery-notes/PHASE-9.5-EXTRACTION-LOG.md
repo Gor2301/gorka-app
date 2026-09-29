@@ -15,17 +15,22 @@ SEQUENCE
   3.3 sync primitives           DONE (7b06034)
       Agent scaffold            DONE (0e73b34, 699b9fe)
   3.4 db                        DONE (a959087)
-  3.5 auth                      DEFERRED (no code change)
+  3.5 auth                      RESOLVED (Item 2)
   Adapter/command cleanup
       Slice 1 debtors           DONE (91b5b7e)
       Slice 2 debts             DONE (d4ca2dc)
-      Slice 3 communications   DONE (ce65543)
-      Slice 4 actions            DONE (cef8111)
+      Slice 3 communications    DONE (ce65543)
+      Slice 4 actions           DONE (cef8111)
       Slice 5 documents         DONE (5a0f924)
       Slice 6 dashboard         DONE (1c17ebb)
   Final Client regression       DONE (562e17d, with caveats)
-  Agent implementation          PENDING
-  Agent authentication          PENDING
+  Item 1 delete_debtor test     DONE (verified 2026-09-29)
+  Item 2 auth boundary          DONE (499e7f5, 10df6f5)
+  Item 3 Stage A migrations     DONE (6e83a29)
+  Stage B shared functions      NOT STARTED
+  Stage C Agent commands        NOT STARTED
+  Stage D Agent frontend        NOT STARTED
+  Agent end-to-end regression   NOT STARTED
 
 Repository layout: Cargo workspace at the repository root.
 Members: shared/, src-tauri/, src-tauri-agent/.
@@ -796,6 +801,175 @@ STATE AT END OF REGRESSION
   Cloud machine: 562e17d, clean except the two known
                  untracked files.
   GitHub:        562e17d.
+
+================================================================
+ITEM 1 - DELETE_DEBTOR FILESYSTEM TEST
+================================================================
+
+Date: September 29, 2026.
+
+PURPOSE
+  Close the open observation from the final Client regression:
+  when a debtor is deleted, does the debtor's files folder
+  under %APPDATA%\com.gorka.client\data\files\debtors\<id>\
+  actually get removed?
+
+ISOLATED TEST
+  A fresh test debtor (FolderTest DeleteMe,
+  id cc8e4d73-1c47-4093-a4cb-5edf7f224108) was created via
+  the Client UI. One document was uploaded to it. The
+  filesystem was inspected before and after deleting the
+  debtor from Collections.
+
+BEFORE DELETE
+  The debtor's folder existed with a documents\ subfolder
+  containing the uploaded file (other_1790669668.png).
+
+AFTER DELETE
+  The debtor's row was removed from the database.
+  The debtor's folder and its documents\ subfolder were
+  both gone from disk.
+
+RESULT
+  PASS. delete_debtor correctly removes both the database
+  row and the filesystem folder in the expected sequence.
+  The isolated test is definitive: a fresh create -> upload
+  -> delete cycle leaves no folder behind.
+
+OPEN ITEM, NOT A DEFECT
+  A pre-existing empty folder for debtor id
+  cd972140-35ca-4301-bf06-b7ca5b227da8 remained after its
+  own regression-era delete. Its provenance is not
+  determined (likely an artifact of repeated create/delete
+  cycles during manual testing). It is empty, harmless, and
+  not caused by the delete path verified here. Left in
+  place, not cleaned up.
+
+DEVIATIONS
+  None.
+
+================================================================
+ITEM 2 - AUTH BOUNDARY (READING A)
+================================================================
+
+Date: September 29, 2026.
+
+COMMITS
+  499e7f5  the auth-boundary change
+  10df6f5  follow-up: remove dead reqwest from src-tauri
+
+PURPOSE
+  Resolve the Slice 3.5 deferral of auth.rs extraction.
+  The Agent now needs the same auth commands, so the
+  condition the earlier reviewer named ("wait until there
+  are two concrete consumers") is met.
+
+DECISION
+  Reading A. Move only the HTTP half of login to shared.
+  Keep the six store functions per binary. No shared
+  Settings trait. No new abstraction. The ~65 lines of
+  store boilerplate are duplicated deliberately, matching
+  the Slice 3.5 prohibition on a shared settings
+  abstraction.
+
+FILES CHANGED
+  shared/src/auth_http.rs    NEW (82 lines)
+  shared/src/lib.rs          MODIFIED (added "pub mod auth_http;")
+  shared/Cargo.toml          MODIFIED (added reqwest)
+  src-tauri/src/auth.rs      MODIFIED (header + thin login)
+  src-tauri/Cargo.toml       MODIFIED (removed dead reqwest)
+
+WHAT MOVED
+  The three response types: LoginResponse, LoginData,
+  UserData (now private to shared::auth_http).
+  The HTTP POST to http://localhost:3000/api/auth/login
+  (now the single place the endpoint is named).
+  The response parsing and error strings.
+
+WHAT STAYED IN THE BINARY
+  The store half of login (writing auth_token,
+  organization_id, salt-if-absent to settings.dat).
+  The six store functions: get_token, get_organization_id,
+  get_salt, set_unlocked, is_unlocked, logout.
+  Debug println!s in get_token. All preserved as-is.
+
+DEAD IMPORT CLEANUP
+  Two imports in src-tauri/src/auth.rs became dead because
+  of the move: json (used only in the old login body) and
+  Deserialize (used only by the moved response types).
+  Both removed in the same commit, matching the Slices 4
+  and 5 precedent for change-caused dead imports.
+
+FOLLOW-UP COMMIT
+  reqwest was no longer used anywhere in src-tauri/src
+  after the move. Removed from src-tauri/Cargo.toml in a
+  separate follow-up commit (10df6f5). gorka-shared retains
+  its own reqwest. Same pattern as the Slice 4/5 dead
+  import cleanups.
+
+WARNING DELTA
+  gorka-client (bin): 6 -> 3
+  gorka-shared (lib): 3 -> 6
+  Net across both crates: unchanged (9 -> 9). The three
+  response-type warnings moved from bin to lib. No new
+  warnings, no lost warnings. No cleanup beyond the two
+  change-caused dead imports.
+
+VERIFICATION (cloud, 2026-09-29)
+  cargo build -p gorka-client    PASS (2m 31s, 3 warnings)
+  cargo test -p gorka-shared     14/14 PASS
+  Client login -> unlock -> dashboard: works with the thin
+    login. Data intact. No regression.
+
+DEVIATIONS
+  None.
+
+================================================================
+ITEM 3 - STAGE A: SCHEMA MIGRATIONS
+================================================================
+
+Date: September 29, 2026.
+
+COMMIT
+  6e83a29
+
+PURPOSE
+  Add the four local schema additions required by
+  AGENT-APP-SPEC.md v1.2 sections 5.4-5.6 and recorded as
+  authoritative in LOCAL-TABLES.md v1.3 Amendment 1.
+
+WHAT WAS ADDED
+  v5  debtors.photo_path TEXT
+  v6  calendar_events table + 2 indexes
+  v7  debtors.role TEXT NOT NULL DEFAULT 'DEBTOR'
+      debtor_relations table + 3 indexes (one unique)
+
+SCOPE DISCIPLINE
+  Migration-only. No models. No commands. No CRUD. No photo
+  logic. No calendar logic. No relation logic. No frontend
+  changes. Only shared/src/db.rs was modified.
+
+SHARED SCHEMA
+  The schema is shared between the two binaries. The Client
+  runs these migrations on its next launch and gains the
+  new columns and tables without displaying them. The
+  Client's existing commands use explicit column lists, so
+  no behavior changes.
+
+VERIFICATION (cloud, 2026-09-29)
+  cargo build -p gorka-client    PASS (2m 31s)
+  Client login -> unlock -> dashboard: PASS.
+  Existing data intact:
+    total_debtors = 12
+    total_debt    = $2,381,550
+    total_actions = 2
+  Debtor detail page renders correctly with debts,
+    actions, communications, and documents cards.
+  Full Client regression (from the previous session)
+    remains valid on the migrated schema.
+
+DEVIATIONS
+  None.
 
 ================================================================
 END OF DOCUMENT
