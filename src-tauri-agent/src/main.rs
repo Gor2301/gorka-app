@@ -10,9 +10,10 @@
 //
 // Stage C.1 wires the Agent's authentication foundation: login,
 // unlock, logout, and the session reads the entry flow requires.
-// CRUD adapters (debtors, debts, communications, actions,
-// documents) follow in C.2; the Stage B adapters (photo,
-// calendar, relations) in C.3; enrollment in C.4.
+// Stage C.2 adds the CRUD adapters (debtors, debts,
+// communications, actions, documents), mirroring the Client's
+// adapter shapes. The Stage B adapters (photo, calendar,
+// relations) follow in C.3; enrollment in C.4.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -20,7 +21,13 @@ use std::sync::Mutex;
 use rusqlite::Connection;
 use tauri::{command, Manager};
 use gorka_shared::storage::AppStorage;
+use gorka_shared::models::*;
 use gorka_shared::db;
+use gorka_shared::debtors;
+use gorka_shared::debts;
+use gorka_shared::communications;
+use gorka_shared::actions;
+use gorka_shared::documents;
 
 mod auth;
 
@@ -28,6 +35,10 @@ mod auth;
 /// SQLCipher connection, if any. Mirrors the Client's AppState.
 struct AppState {
     db: Mutex<Option<Connection>>,
+}
+
+fn get_trusted_organization_id(app: &tauri::AppHandle) -> Result<String, String> {
+    auth::get_organization_id(app.clone())
 }
 
 #[command]
@@ -95,6 +106,269 @@ fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), St
     auth::logout(app)
 }
 
+// ---------------------------------------------------------------------
+// Stage C.2 - CRUD adapters.
+//
+// Each adapter mirrors the Client's equivalent in
+// src-tauri/src/main.rs. Thin wrapper: lock AppState, acquire the
+// trusted organization id where applicable, call the shared
+// function.
+//
+// Documents commands do NOT perform organization scoping. That is
+// the Client's existing behavior (Slice 5 preserved it); the Agent
+// mirrors it. No Agent-only behavior is introduced here.
+// ---------------------------------------------------------------------
+
+#[command]
+fn get_debtors(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::get_debtors(conn, &organization_id)
+}
+
+#[command]
+fn get_debtor(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::get_debtor(conn, &organization_id, &id)
+}
+
+#[command]
+fn insert_debtor(
+    input: DebtorInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::insert_debtor(conn, &organization_id, input)
+}
+
+#[command]
+fn update_debtor(
+    id: String,
+    input: DebtorInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::update_debtor(conn, &organization_id, &id, input)
+}
+
+#[command]
+fn delete_debtor(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
+) -> Result<bool, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::delete_debtor(conn, &storage, &organization_id, &id)
+}
+
+#[command]
+fn search_debtors(
+    query: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::search_debtors(conn, &organization_id, &query)
+}
+
+#[command]
+fn get_debtor_count(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<i64, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::get_debtor_count(conn, &organization_id)
+}
+
+#[command]
+fn get_debts(
+    debtor_id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debt>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debts::get_debts(conn, &organization_id, &debtor_id)
+}
+
+#[command]
+fn insert_debt(
+    input: DebtInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debt, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debts::insert_debt(conn, &organization_id, input)
+}
+
+#[command]
+fn update_debt(
+    id: String,
+    input: DebtInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debt, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debts::update_debt(conn, &organization_id, &id, input)
+}
+
+#[command]
+fn delete_debt(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debts::delete_debt(conn, &organization_id, &id)
+}
+
+#[command]
+fn get_communications(
+    debtor_id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Communication>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    communications::get_communications(conn, &organization_id, &debtor_id)
+}
+
+#[command]
+fn insert_communication(
+    input: CommunicationInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Communication, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    communications::insert_communication(conn, &organization_id, input)
+}
+
+#[command]
+fn delete_communication(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    communications::delete_communication(conn, &organization_id, &id)
+}
+
+#[command]
+fn get_actions(
+    debtor_id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Action>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    actions::get_actions(conn, &organization_id, &debtor_id)
+}
+
+#[command]
+fn insert_action(
+    input: ActionInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Action, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    actions::insert_action(conn, &organization_id, input)
+}
+
+#[command]
+fn update_action(
+    id: String,
+    input: ActionInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Action, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    actions::update_action(conn, &organization_id, &id, input)
+}
+
+#[command]
+fn delete_action(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    actions::delete_action(conn, &organization_id, &id)
+}
+
+#[command]
+fn upload_document(
+    input: DocumentInput,
+    state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
+) -> Result<Document, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    documents::upload_document(conn, &storage, input)
+}
+
+#[command]
+fn get_documents(
+    entity_id: String,
+    entity_type: Option<String>,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Document>, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    documents::get_documents(conn, &entity_id, entity_type.as_deref())
+}
+
+#[command]
+fn delete_document(
+    id: String,
+    state: tauri::State<AppState>,
+) -> Result<bool, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    documents::delete_document(conn, &id)
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -140,6 +414,27 @@ fn main() {
             unlock_database,
             is_database_unlocked,
             logout,
+            get_debtors,
+            get_debtor,
+            insert_debtor,
+            update_debtor,
+            delete_debtor,
+            search_debtors,
+            get_debtor_count,
+            get_debts,
+            insert_debt,
+            update_debt,
+            delete_debt,
+            get_communications,
+            insert_communication,
+            delete_communication,
+            get_actions,
+            insert_action,
+            update_action,
+            delete_action,
+            upload_document,
+            get_documents,
+            delete_document,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
