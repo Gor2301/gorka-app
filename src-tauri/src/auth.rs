@@ -2,71 +2,20 @@
 
 use tauri::Manager;
 use tauri_plugin_store::StoreBuilder;
-use serde_json::{json, Value};
-use serde::Deserialize;
+use serde_json::Value;
 use rand::RngCore;
 use crate::db;
-
-#[derive(Debug, Deserialize)]
-struct LoginResponse {
-    success: bool,
-    data: Option<LoginData>,
-    error: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct LoginData {
-    user: UserData,
-    redirectUrl: Option<String>,
-    token: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct UserData {
-    id: String,
-    email: String,
-    name: String,
-    role: String,
-    #[serde(rename = "organizationId")]
-    organization_id: String,
-}
+use gorka_shared::auth_http;
 
 pub async fn login(email: String, password: String, app: tauri::AppHandle) -> Result<String, String> {
-    let client = reqwest::Client::new();
-    
-    let response = client
-        .post("http://localhost:3000/api/auth/login")
-        .json(&json!({
-            "email": email,
-            "password": password,
-        }))
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let text = response.text().await.unwrap_or_default();
-        return Err(format!("Login failed: {} - {}", status, text));
-    }
-
-    let data: LoginResponse = response.json().await.map_err(|e| e.to_string())?;
-    
-    if !data.success {
-        return Err(data.error.unwrap_or("Login failed".to_string()));
-    }
-
-    let login_data = data.data.ok_or("No data in response")?;
-    let token = login_data.token.clone();
-    let org_id = login_data.user.organization_id;
+    let result = auth_http::login(&email, &password).await?;
 
     let store = StoreBuilder::new(&app, "settings.dat")
         .build()
         .map_err(|e| e.to_string())?;
-    
-    store.set("auth_token", Value::String(token.clone()));
-    store.set("organization_id", Value::String(org_id));
-    
+
+    store.set("auth_token", Value::String(result.token.clone()));
+    store.set("organization_id", Value::String(result.organization_id));
     store.save().map_err(|e| e.to_string())?;
 
     let salt_exists = store.get("salt").is_some();
@@ -77,7 +26,7 @@ pub async fn login(email: String, password: String, app: tauri::AppHandle) -> Re
         store.save().map_err(|e| e.to_string())?;
     }
 
-    Ok(token)
+    Ok(result.token)
 }
 
 pub fn get_token(app: tauri::AppHandle) -> Result<String, String> {

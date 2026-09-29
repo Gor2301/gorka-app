@@ -8,6 +8,7 @@
 // (Agent App) depend on this crate.
 
 pub mod actions;
+pub mod auth_http;
 pub mod communications;
 pub mod dashboard;
 pub mod db;
