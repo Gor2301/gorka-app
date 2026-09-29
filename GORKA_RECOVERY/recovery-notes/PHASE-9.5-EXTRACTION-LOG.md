@@ -28,7 +28,7 @@ SEQUENCE
   Item 2 auth boundary          DONE (499e7f5, 10df6f5)
   Item 3 Stage A migrations     DONE (6e83a29)
   Stage B shared functions      DONE (2268a30, 292a3a8, 884c637)
-  Stage C Agent commands        IN PROGRESS (C.1 done: 5ab35ae, 67b984a, c69d21e)
+  Stage C Agent commands        DONE (C.1 5ab35ae/67b984a/c69d21e; C.2 b4b448f; C.3 b598a97; C.4 6e0c135; lock f8f3f4d)
   Stage D Agent frontend        NOT STARTED
   Agent end-to-end regression   NOT STARTED
 
