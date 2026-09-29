@@ -309,6 +309,102 @@ fn run_migrations(conn: &mut Connection) -> Result<(), String> {
         tx.commit().map_err(|e| e.to_string())?;
     }
 
+    if current_version < 5 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "ALTER TABLE debtors ADD COLUMN photo_path TEXT",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute("PRAGMA user_version = 5", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    if current_version < 6 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS calendar_events (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                start_date DATETIME NOT NULL,
+                end_date DATETIME NOT NULL,
+                all_day BOOLEAN DEFAULT 0,
+                event_type TEXT NOT NULL DEFAULT 'MANUAL',
+                debtor_id TEXT,
+                data JSON DEFAULT '{}',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (debtor_id) REFERENCES debtors(id) ON DELETE SET NULL
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_calendar_events_dates ON calendar_events(start_date, end_date)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_calendar_events_debtor_id ON calendar_events(debtor_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute("PRAGMA user_version = 6", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    if current_version < 7 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "ALTER TABLE debtors ADD COLUMN role TEXT NOT NULL DEFAULT 'DEBTOR'",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS debtor_relations (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                debtor_id TEXT NOT NULL,
+                related_debtor_id TEXT NOT NULL,
+                relation_type TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (debtor_id) REFERENCES debtors(id) ON DELETE CASCADE,
+                FOREIGN KEY (related_debtor_id) REFERENCES debtors(id) ON DELETE CASCADE
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_debtor_relations_unique
+                ON debtor_relations(debtor_id, related_debtor_id, relation_type)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_debtor_relations_debtor ON debtor_relations(debtor_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_debtor_relations_related ON debtor_relations(related_debtor_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute("PRAGMA user_version = 7", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 
