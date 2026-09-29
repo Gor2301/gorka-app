@@ -118,6 +118,29 @@ pub fn verify_password(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
+
+/// Returns true if the local database contains an organization
+/// key row, i.e. this device has completed enrollment.
+///
+/// The organization_keys table has a single-row constraint
+/// (id = 1). A row is present if and only if
+/// import_enrollment_package has successfully committed.
+///
+/// This is a query, not an operation. It does not attempt to
+/// import anything, does not read the enrollment package, and
+/// does not change state.
+pub fn is_enrolled(conn: &Connection) -> Result<bool, String> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM organization_keys WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(count > 0)
+}
+
 fn run_migrations(conn: &mut Connection) -> Result<(), String> {
     let current_version: i32 = conn.query_row(
         "PRAGMA user_version",

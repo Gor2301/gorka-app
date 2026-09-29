@@ -102,6 +102,13 @@ fn is_database_unlocked(state: tauri::State<AppState>) -> Result<bool, String> {
 }
 
 #[command]
+fn is_enrolled(state: tauri::State<AppState>) -> Result<bool, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    db::is_enrolled(conn)
+}
+
+#[command]
 fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     {
         let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
@@ -617,6 +624,7 @@ fn main() {
             database_exists,
             unlock_database,
             is_database_unlocked,
+            is_enrolled,
             logout,
             get_debtors,
             get_debtor,
