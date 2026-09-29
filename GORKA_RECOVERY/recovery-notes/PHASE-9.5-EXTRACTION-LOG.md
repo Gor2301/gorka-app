@@ -23,7 +23,7 @@ SEQUENCE
       Slice 4 actions            DONE (cef8111)
       Slice 5 documents         DONE (5a0f924)
       Slice 6 dashboard         DONE (1c17ebb)
-  Final Client regression       PENDING
+  Final Client regression       DONE (562e17d, with caveats)
   Agent implementation          PENDING
   Agent authentication          PENDING
 
@@ -711,8 +711,91 @@ removed in separate follow-up commits:
 No other warning cleanup was performed. The gorka-client (bin)
 warning baseline is 6.
 
-The next Phase 9.5 step is the final Client regression, then
-Agent implementation, then Agent authentication.
+The next Phase 9.5 step is Agent implementation, then
+Agent authentication.
+
+================================================================
+FINAL CLIENT REGRESSION
+================================================================
+
+Date: September 29, 2026.
+Starting commit: 562e17d.
+
+SCOPE
+  All 23 commands extracted during the six adapter slices,
+  plus the 11 untouched Client commands, exercised through
+  the running Client Dashboard on the cloud's gorka_test
+  database. Production untouched.
+
+WHAT WAS VERIFIED
+  Entry flow:
+    login, unlock, logout, login, unlock - PASS.
+  Debtors (Slice 1):
+    get_debtors, get_debtor, insert_debtor, search_debtors,
+    update_debtor, get_debtor_count - PASS (each exercised
+    through the Client UI on a test debtor).
+    bulk_insert_debtors - NOT COVERED (no UI path).
+  Debts (Slice 2):
+    insert_debt, get_debts, update_debt - PASS.
+  Communications (Slice 3):
+    insert_communication (CALL/OUTBOUND and NOTE/INBOUND),
+    get_communications, delete_communication - PASS.
+  Actions (Slice 4):
+    insert_action, get_actions, update_action, delete_action,
+    dashboard total_actions movement - PASS.
+  Documents (Slice 5):
+    upload_document, get_documents, delete_document,
+    filesystem presence and removal of the uploaded file -
+    PASS with dir verification.
+  Dashboard (Slice 6):
+    get_dashboard_stats reads and renders - PASS.
+  Persistence across process restart (Pass H):
+    closed the Client, relaunched, logged in, unlocked,
+    state read back correctly - PASS. Strong evidence the
+    extracted functions write to disk correctly and the
+    app reads them back.
+
+WHAT WAS NOT CONCLUSIVELY VERIFIED
+  1. The strict arithmetic chain (baseline -> deltas ->
+     baseline) across the entire pass. Manual state changes
+     were made between passes outside the plan, so the
+     dashboard numbers could not be tracked against a frozen
+     baseline. The dashboard was observed to reflect the
+     current database state correctly, but the chain was
+     not clean.
+
+  2. delete_debtor's filesystem cascade. On one delete of
+     the Regression TestSlice debtor
+     (id cd972140-35ca-4301-bf06-b7ca5b227da8), the database
+     row was removed but an empty files folder was still
+     present on disk afterward. Cause not determined during
+     the pass; the sequence of operations in the UI included
+     manual re-create / re-delete cycles that may account
+     for the observation. Tagged as an open observation, not
+     a defect.
+
+OPEN OBSERVATION (logged, not pursued)
+  Delete-debtor filesystem cascade: when a debtor is
+  deleted from the Client UI, does the debtor's files
+  folder under %APPDATA%\com.gorka.client\data\files\
+  debtors\<id>\ get removed? The Slice 1 smoke test did
+  not check this. A dedicated isolated test (create test
+  debtor, upload one document, delete debtor, check disk)
+  is recommended before Agent implementation begins. If
+  the folder is left behind, the fix is a separate
+  reviewed change, not a modification during regression.
+
+RESULT
+  PASSED with two open caveats and one open observation.
+  No code changes were made during the regression. No
+  code commits resulted from the regression; this log
+  update is the only record.
+
+STATE AT END OF REGRESSION
+  Main machine:  562e17d, clean.
+  Cloud machine: 562e17d, clean except the two known
+                 untracked files.
+  GitHub:        562e17d.
 
 ================================================================
 END OF DOCUMENT
