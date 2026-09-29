@@ -18,6 +18,7 @@ pub mod debts;
 pub mod documents;
 pub mod enrollment;
 pub mod models;
+pub mod relations;
 pub mod storage;
 pub mod sync;
 

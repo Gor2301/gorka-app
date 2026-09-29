@@ -186,6 +186,28 @@ pub struct UpcomingFollowup {
     pub due_date: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DebtorRelation {
+    pub id: String,
+    pub organization_id: String,
+    pub debtor_id: String,
+    pub related_debtor_id: String,
+    pub relation_type: String,
+    pub created_at: String,
+    pub related_name: String,
+    pub related_surname: String,
+    pub related_email: Option<String>,
+    pub related_phone: Option<String>,
+    pub related_role: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DebtorRelationInput {
+    pub debtor_id: String,
+    pub related_debtor_id: String,
+    pub relation_type: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct DashboardStats {
     pub total_debtors: i64,
