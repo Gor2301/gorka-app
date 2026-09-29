@@ -136,6 +136,56 @@ pub struct ActionInput {
     pub data: Option<JsonValue>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CalendarEvent {
+    pub id: String,
+    pub organization_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub start_date: String,
+    pub end_date: String,
+    pub all_day: bool,
+    pub event_type: String,
+    pub debtor_id: Option<String>,
+    pub data: JsonValue,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CalendarEventInput {
+    pub title: String,
+    pub description: Option<String>,
+    pub start_date: String,
+    pub end_date: String,
+    pub all_day: Option<bool>,
+    pub debtor_id: Option<String>,
+    pub data: Option<JsonValue>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpcomingPayment {
+    pub debt_id: String,
+    pub debtor_id: String,
+    pub debtor_name: String,
+    pub debtor_surname: String,
+    pub amount: f64,
+    pub currency: String,
+    pub status: String,
+    pub due_date: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpcomingFollowup {
+    pub action_id: String,
+    pub debtor_id: String,
+    pub debtor_name: String,
+    pub debtor_surname: String,
+    pub r#type: String,
+    pub status: String,
+    pub due_date: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct DashboardStats {
     pub total_debtors: i64,

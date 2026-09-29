@@ -9,6 +9,7 @@
 
 pub mod actions;
 pub mod auth_http;
+pub mod calendar;
 pub mod communications;
 pub mod dashboard;
 pub mod db;
