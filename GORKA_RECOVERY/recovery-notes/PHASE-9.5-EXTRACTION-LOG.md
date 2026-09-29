@@ -22,7 +22,7 @@ SEQUENCE
       Slice 3 communications   DONE (ce65543)
       Slice 4 actions            DONE (cef8111)
       Slice 5 documents         DONE (5a0f924)
-      Slice 6                  NOT STARTED
+      Slice 6 dashboard         DONE (1c17ebb)
   Final Client regression       PENDING
   Agent implementation          PENDING
   Agent authentication          PENDING
@@ -584,16 +584,135 @@ OUT-OF-SCOPE OBSERVATION
   changed here. Logged for awareness.
 
 ================================================================
-SLICE 6 - DASHBOARD (NEXT)
+SLICE 6 - DASHBOARD
 ================================================================
 
-Not started. Will follow the same pattern:
-shared/src/dashboard.rs
-Command: get_dashboard_stats.
-Note: get_dashboard_stats takes app: tauri::AppHandle
-and calls get_trusted_organization_id; it does
-organization scoping via the JOIN through
-debtors. Preserved exactly.
+Starting commit:   1060ce2
+Resulting commit:  1c17ebb
+Follow-up commit:  none (no dead import)
+
+Files changed:
+  shared/src/dashboard.rs    NEW (45 lines)
+  shared/src/lib.rs          MODIFIED (added "pub mod dashboard;")
+  src-tauri/src/main.rs      MODIFIED (1 command became a thin adapter)
+
+Command moved (Tauri command -> shared function):
+  get_dashboard_stats    -> gorka_shared::dashboard::get_dashboard_stats
+
+Shared function signature:
+  fn get_dashboard_stats(conn: &Connection,
+                         organization_id: &str)
+                         -> Result<DashboardStats, String>
+
+DATA PRESERVATION
+  SQL string                unchanged
+  Parameter order and types unchanged (single ?1 used three times)
+  Row mapping               unchanged
+  Transaction boundaries    unchanged (none)
+  Audit calls               none
+
+ADAPTER BEHAVIOR PRESERVATION
+  Trusted organization_id acquisition   unchanged
+    (still via get_trusted_organization_id(&app))
+  AppState ownership and connection
+    locking                             unchanged
+    (uses as_ref(); no mut borrow)
+  Error propagation                     unchanged
+    (same Err(String) strings and paths)
+  Return-value behavior                 unchanged
+    (DashboardStats with the same three
+     fields, mapped from the same query
+     columns)
+  Formatting                            preserved
+    (the missing blank line between
+     get_debtor_count's closing brace
+     and get_dashboard_stats's #[command]
+     was preserved, not tidied)
+
+WARNING DELTA
+  None. gorka-client (bin) warnings: 6
+  before, 6 after. Prediction was 6 -> 6.
+  The extraction did not create a new
+  unused import because DashboardStats is
+  consumed via the glob import
+  `use gorka_shared::models::*;`, and glob
+  imports do not emit per-item unused
+  warnings. No cleanup was needed. No
+  other warning was touched.
+
+VERIFICATION
+  cargo build -p gorka-client    PASS (2m 08s, 6 warnings)
+  cargo test -p gorka-shared     14/14 PASS (6 enrollment + 8 sync)
+  Client smoke test:
+    login, unlock
+    dashboard baseline recorded
+    add debt (insert_debt); dashboard
+      total_debt increases by exact amount
+    edit amount (update_debt); dashboard
+      total_debt moves by exact delta
+    set status to PAID; dashboard total_debt
+      returns to baseline (proves the
+      NOT IN ('PAID', 'CANCELLED') filter
+      is preserved through the shared module)
+    set status back to ACTIVE; dashboard
+      total_debt re-includes the debt
+    delete debt (delete_debt); dashboard
+      total_debt returns to baseline
+    add action (insert_action); dashboard
+      total_actions +1
+    delete action (delete_action); dashboard
+      total_actions back to baseline
+    total_debtors unchanged (12) throughout
+  All passed.
+
+EXPLICIT NON-CHANGES
+  No schema changed.
+  No SQL semantics changed.
+  No audit semantics changed.
+  No command names changed.
+  No generate_handler! registration changed.
+  No authentication behavior changed.
+  No new dependency added.
+  No formatting cleanup.
+  shared/src/debtors.rs, debts.rs,
+    communications.rs, actions.rs,
+    and documents.rs untouched.
+
+DEVIATIONS
+  None.
+
+================================================================
+ADAPTER/COMMAND CLEANUP PHASE - COMPLETE
+================================================================
+
+All six adapter slices are done and verified:
+
+  Slice 1 debtors          DONE (91b5b7e)
+  Slice 2 debts            DONE (d4ca2dc)
+  Slice 3 communications   DONE (ce65543)
+  Slice 4 actions          DONE (cef8111)
+  Slice 5 documents        DONE (5a0f924)
+  Slice 6 dashboard        DONE (1c17ebb)
+
+The 23 SQL-bearing commands identified at the start of the
+adapter cleanup are now thin #[tauri::command] adapters that
+lock AppState, acquire the trusted organization id where
+applicable, and call gorka-shared functions. Each shared
+function takes an already-open connection and the trusted
+organization id; the binary retains the connection lifecycle.
+
+Two extraction-caused dead imports were identified and
+removed in separate follow-up commits:
+
+  Slice 4: serde_json::Value as JsonValue  (8491509)
+  Slice 5: uuid::Uuid                      (34539ff)
+  Slice 6: none
+
+No other warning cleanup was performed. The gorka-client (bin)
+warning baseline is 6.
+
+The next Phase 9.5 step is the final Client regression, then
+Agent implementation, then Agent authentication.
 
 ================================================================
 END OF DOCUMENT
