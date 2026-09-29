@@ -291,3 +291,70 @@ pub fn get_debtor_count(
 
     Ok(count)
 }
+
+pub fn set_debtor_photo(
+    conn: &Connection,
+    storage: &AppStorage,
+    debtor_id: &str,
+    source_file_path: &str,
+) -> Result<(), String> {
+    Uuid::parse_str(debtor_id)
+        .map_err(|_| format!("Invalid debtor_id format: {}", debtor_id))?;
+
+    let exists: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM debtors WHERE id = ?1",
+        params![debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if exists == 0 {
+        return Err("Debtor not found".to_string());
+    }
+
+    let debtor_dir = db::get_debtor_files_dir(storage, debtor_id)?;
+
+    if let Ok(entries) = std::fs::read_dir(&debtor_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with("photo.") && path.is_file() {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
+    }
+
+    let file_extension = source_file_path
+        .split('.')
+        .last()
+        .unwrap_or("bin");
+
+    let target_path = debtor_dir.join(format!("photo.{}", file_extension));
+    std::fs::copy(source_file_path, &target_path)
+        .map_err(|e| format!("Failed to save photo: {}", e))?;
+
+    let target_path_str = target_path.to_string_lossy().to_string();
+    let now = Utc::now().to_rfc3339();
+
+    conn.execute(
+        "UPDATE debtors SET photo_path = ?1, updated_at = ?2 WHERE id = ?3",
+        params![&target_path_str, &now, debtor_id],
+    ).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+pub fn get_debtor_photo(
+    conn: &Connection,
+    debtor_id: &str,
+) -> Result<Option<String>, String> {
+    let photo_path: Option<String> = conn
+        .query_row(
+            "SELECT photo_path FROM debtors WHERE id = ?1",
+            params![debtor_id],
+            |row| row.get(0),
+        )
+        .ok()
+        .flatten();
+
+    Ok(photo_path)
+}
