@@ -13,7 +13,6 @@
 // The store half is duplicated per binary by design (Item 2,
 // Reading A). The HTTP half is shared.
 
-use tauri::Manager;
 use tauri_plugin_store::StoreBuilder;
 use serde_json::Value;
 use crate::db;
