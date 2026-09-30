@@ -1,0 +1,14 @@
+.communication-edit-modal__error {
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.communication-edit-modal__fields {
+  display: grid;
+  gap: var(--space-grid-gap-sm);
+}
+
+.communication-edit-modal__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-gap-sm);
+}

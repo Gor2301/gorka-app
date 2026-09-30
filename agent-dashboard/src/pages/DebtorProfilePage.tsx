@@ -1,12 +1,38 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
-import { Button, Card, ErrorBanner, Spinner } from '@/components/primitives';
-import { localDB, Debtor, Debt, Action } from '@/services/local.db';
+import { ArrowLeft, Pencil, Trash2, FileText, Upload } from 'lucide-react';
+import {
+  Button,
+  Card,
+  ErrorBanner,
+  Select,
+  Spinner,
+} from '@/components/primitives';
+import {
+  localDB,
+  Debtor,
+  Debt,
+  Action,
+  Communication,
+  Document,
+} from '@/services/local.db';
 import DebtorEditModal from '@/components/DebtorEditModal';
 import DebtEditModal from '@/components/DebtEditModal';
 import ActionEditModal from '@/components/ActionEditModal';
+import CommunicationEditModal from '@/components/CommunicationEditModal';
 import './DebtorProfilePage.css';
+
+const DOCUMENT_CATEGORIES: { value: string; label: string }[] = [
+  { value: 'profile_photo',    label: 'Profile Photo' },
+  { value: 'id_card',          label: 'ID Card' },
+  { value: 'passport',         label: 'Passport' },
+  { value: 'driver_license',   label: "Driver's License" },
+  { value: 'contract',         label: 'Contract' },
+  { value: 'proof_of_address', label: 'Proof of Address' },
+  { value: 'income_proof',     label: 'Income Proof' },
+  { value: 'collateral_photo', label: 'Collateral Photo' },
+  { value: 'other',            label: 'Other' },
+];
 
 export default function DebtorProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -23,12 +49,23 @@ export default function DebtorProfilePage() {
   const [editingDebtId, setEditingDebtId] = useState<string | null>(null);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
 
+  const [communications, setCommunications] = useState<Communication[]>([]);
+  const [communicationsLoading, setCommunicationsLoading] = useState(true);
+  const [communicationsError, setCommunicationsError] = useState('');
+  const [showCommunicationForm, setShowCommunicationForm] = useState(false);
+
   const [actions, setActions] = useState<Action[]>([]);
   const [actionsLoading, setActionsLoading] = useState(true);
   const [actionsError, setActionsError] = useState('');
   const [showActionForm, setShowActionForm] = useState(false);
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
   const [editingAction, setEditingAction] = useState<Action | null>(null);
+
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsError, setDocumentsError] = useState('');
+  const [uploadCategory, setUploadCategory] = useState('other');
+  const [uploading, setUploading] = useState(false);
 
   const [showEdit, setShowEdit] = useState(false);
 
@@ -60,6 +97,20 @@ export default function DebtorProfilePage() {
     }
   };
 
+  const loadCommunications = async () => {
+    if (!id) return;
+    try {
+      setCommunicationsLoading(true);
+      setCommunicationsError('');
+      const rows = await localDB.getCommunications(id);
+      setCommunications(rows);
+    } catch (err) {
+      setCommunicationsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCommunicationsLoading(false);
+    }
+  };
+
   const loadActions = async () => {
     if (!id) return;
     try {
@@ -74,10 +125,26 @@ export default function DebtorProfilePage() {
     }
   };
 
+  const loadDocuments = async () => {
+    if (!id) return;
+    try {
+      setDocumentsLoading(true);
+      setDocumentsError('');
+      const rows = await localDB.getDocuments(id, 'debtor');
+      setDocuments(rows);
+    } catch (err) {
+      setDocumentsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadDebtor();
     loadDebts();
+    loadCommunications();
     loadActions();
+    loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -114,6 +181,24 @@ export default function DebtorProfilePage() {
     }
   };
 
+  const openCommunicationForm = () => setShowCommunicationForm(true);
+  const closeCommunicationForm = () => setShowCommunicationForm(false);
+
+  const handleCommunicationSaved = async () => {
+    closeCommunicationForm();
+    await loadCommunications();
+  };
+
+  const handleDeleteCommunication = async (c: Communication) => {
+    if (!window.confirm(`Delete this ${c.type} communication?`)) return;
+    try {
+      await localDB.deleteCommunication(c.id);
+      await loadCommunications();
+    } catch (err) {
+      setCommunicationsError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const openAddAction = () => {
     setEditingActionId(null);
     setEditingAction(null);
@@ -147,6 +232,39 @@ export default function DebtorProfilePage() {
     }
   };
 
+  const handleUploadDocument = async (file: File) => {
+    if (!id) return;
+    try {
+      setUploading(true);
+      setDocumentsError('');
+      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+      await localDB.uploadDocument({
+        entity_id: id,
+        entity_type: 'debtor',
+        file_name: file.name,
+        file_content: bytes,
+        file_type: file.type || 'application/octet-stream',
+        category: uploadCategory,
+        is_primary: false,
+      });
+      await loadDocuments();
+    } catch (err) {
+      setDocumentsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (doc: Document) => {
+    if (!window.confirm(`Delete document "${doc.file_name}"?`)) return;
+    try {
+      await localDB.deleteDocument(doc.id);
+      await loadDocuments();
+    } catch (err) {
+      setDocumentsError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const handleDeleteDebtor = async () => {
     if (!debtor) return;
     const label = `${debtor.name} ${debtor.surname}`.trim();
@@ -177,6 +295,13 @@ export default function DebtorProfilePage() {
     if (status === 'CANCELLED') return 'debtor-profile__badge--neutral';
     if (status === 'IN_PROGRESS') return 'debtor-profile__badge--info';
     return 'debtor-profile__badge--warning';
+  };
+
+  const formatBytes = (n: number): string => {
+    if (!n) return '0 B';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / 1024 / 1024).toFixed(1)} MB`;
   };
 
   if (loading) {
@@ -321,6 +446,58 @@ export default function DebtorProfilePage() {
 
       <Card>
         <div className="debtor-profile__card-header">
+          <h2 className="debtor-profile__card-heading">Communications</h2>
+          <Button variant="primary" size="sm" onClick={openCommunicationForm}>
+            + Log Communication
+          </Button>
+        </div>
+
+        {communicationsError && <ErrorBanner message={communicationsError} />}
+
+        {communicationsLoading ? (
+          <p className="debtor-profile__muted">Loading communications...</p>
+        ) : communications.length === 0 ? (
+          <p className="debtor-profile__muted">No communications logged yet.</p>
+        ) : (
+          <ul className="debtor-profile__list">
+            {communications.map((c) => (
+              <li key={c.id} className="debtor-profile__row">
+                <span className="debtor-profile__badge debtor-profile__badge--accent">
+                  {c.type}
+                </span>
+                <span
+                  className={
+                    c.direction === 'INBOUND'
+                      ? 'debtor-profile__badge debtor-profile__badge--info'
+                      : 'debtor-profile__badge debtor-profile__badge--warning'
+                  }
+                >
+                  {c.direction}
+                </span>
+                <span className="debtor-profile__row-text">
+                  {c.content || '-'}
+                  {c.duration != null && ` - ${c.duration}s`}
+                </span>
+                <span className="debtor-profile__timestamp">
+                  {new Date(c.created_at).toLocaleString()}
+                </span>
+                <Button
+                  variant="danger"
+                  iconOnly
+                  onClick={() => handleDeleteCommunication(c)}
+                  title="Delete communication"
+                  aria-label="Delete communication"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card>
+        <div className="debtor-profile__card-header">
           <h2 className="debtor-profile__card-heading">Actions</h2>
           <Button variant="primary" size="sm" onClick={openAddAction}>
             + Add Action
@@ -378,6 +555,68 @@ export default function DebtorProfilePage() {
         )}
       </Card>
 
+      <Card>
+        <div className="debtor-profile__card-header">
+          <h2 className="debtor-profile__card-heading">Documents</h2>
+        </div>
+
+        {documentsError && <ErrorBanner message={documentsError} />}
+
+        {documentsLoading ? (
+          <p className="debtor-profile__muted">Loading documents...</p>
+        ) : documents.length === 0 ? (
+          <p className="debtor-profile__muted">No documents yet.</p>
+        ) : (
+          <ul className="debtor-profile__list">
+            {documents.map((doc) => (
+              <li key={doc.id} className="debtor-profile__row">
+                <FileText size={14} className="debtor-profile__doc-icon" />
+                <span className="debtor-profile__row-text">{doc.file_name}</span>
+                <span className="debtor-profile__doc-meta">
+                  {doc.category} - {formatBytes(doc.file_size)}
+                </span>
+                <Button
+                  variant="danger"
+                  iconOnly
+                  onClick={() => handleDeleteDocument(doc)}
+                  title="Delete document"
+                  aria-label="Delete document"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="debtor-profile__upload-row">
+          <Select
+            className="debtor-profile__upload-category"
+            value={uploadCategory}
+            onChange={(e) => setUploadCategory(e.target.value)}
+          >
+            {DOCUMENT_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </Select>
+
+          <label className="debtor-profile__upload-label">
+            <Upload size={14} />
+            {uploading ? 'Uploading...' : 'Choose file'}
+            <input
+              type="file"
+              className="debtor-profile__upload-input"
+              disabled={uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleUploadDocument(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+      </Card>
+
       {showEdit && (
         <DebtorEditModal
           editingId={debtor.id}
@@ -394,6 +633,14 @@ export default function DebtorProfilePage() {
           initial={editingDebt}
           onSaved={handleDebtSaved}
           onClose={closeDebtForm}
+        />
+      )}
+
+      {showCommunicationForm && id && (
+        <CommunicationEditModal
+          debtorId={id}
+          onSaved={handleCommunicationSaved}
+          onClose={closeCommunicationForm}
         />
       )}
 

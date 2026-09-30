@@ -183,3 +183,63 @@
   background: var(--color-badge-warning-bg);
   color: var(--color-badge-warning-text);
 }
+
+/* Communications row timestamp (D.4b-1). */
+.debtor-profile__timestamp {
+  color: var(--color-text-dim);
+  font-size: var(--font-size-badge);
+  white-space: nowrap;
+}
+
+/* Document row icon and meta (D.4b-1). */
+.debtor-profile__doc-icon {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.debtor-profile__doc-meta {
+  color: var(--color-text-dim);
+  font-size: var(--font-size-badge);
+  white-space: nowrap;
+}
+
+/* Documents upload row (D.4b-1). Category select fixed width
+   via two of our own classes, to win specificity over the
+   Select primitive's width:100%. */
+.debtor-profile__upload-row {
+  display: flex;
+  gap: var(--space-gap-sm);
+  align-items: center;
+  margin-top: var(--space-grid-gap-sm);
+}
+
+.debtor-profile .debtor-profile__upload-category {
+  width: 200px;
+  flex: 0 0 auto;
+}
+
+/* File-picker label, styled as a ghost button. The hidden
+   input is inside it. Mirrors the Client's label-wrapping-
+   hidden-input pattern, but with a class instead of inline
+   styles. */
+.debtor-profile__upload-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-gap-xs);
+  padding: 8px 16px;
+  background: var(--color-bg-card);
+  color: var(--color-text-normal);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  cursor: pointer;
+}
+
+.debtor-profile__upload-label:hover {
+  background: var(--color-bg-main);
+}
+
+.debtor-profile__upload-input {
+  display: none;
+}

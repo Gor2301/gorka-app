@@ -106,6 +106,54 @@ export interface ActionInput {
   data?: any;
 }
 
+export interface Communication {
+  id: string;
+  debtor_id: string;
+  type: string;
+  direction: string;
+  content: string | null;
+  duration: number | null;
+  created_by: string | null;
+  data: any;
+  created_at: string;
+}
+
+export interface CommunicationInput {
+  debtor_id: string;
+  type: string;
+  direction: string;
+  content?: string | null;
+  duration?: number | null;
+  data?: any;
+}
+
+export interface Document {
+  id: string;
+  entity_id: string;
+  entity_type: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  file_size: number;
+  category: string;
+  description: string | null;
+  uploaded_by: string | null;
+  is_primary: boolean;
+  created_at: string;
+}
+
+export interface DocumentInput {
+  entity_id: string;
+  entity_type: string;
+  file_name: string;
+  file_content: number[];
+  file_type: string;
+  category: string;
+  description?: string | null;
+  uploaded_by?: string | null;
+  is_primary?: boolean;
+}
+
 // --- Local DB -------------------------------------------------
 
 export const localDB = {
@@ -226,5 +274,44 @@ export const localDB = {
 
   async deleteAction(id: string): Promise<boolean> {
     return await invoke<boolean>('delete_action', { id });
+  },
+
+  async getCommunications(debtorId: string): Promise<Communication[]> {
+    return await invoke<Communication[]>('get_communications', { debtorId });
+  },
+
+  async insertCommunication(input: CommunicationInput): Promise<Communication> {
+    return await invoke<Communication>('insert_communication', {
+      input: {
+        debtor_id: input.debtor_id,
+        type: input.type,
+        direction: input.direction,
+        content: input.content ?? null,
+        duration: input.duration ?? null,
+        data: input.data ?? null,
+      },
+    });
+  },
+
+  async deleteCommunication(id: string): Promise<boolean> {
+    return await invoke<boolean>('delete_communication', { id });
+  },
+
+  async getDocuments(
+    entityId: string,
+    entityType?: string,
+  ): Promise<Document[]> {
+    return await invoke<Document[]>('get_documents', {
+      entityId,
+      entityType: entityType ?? null,
+    });
+  },
+
+  async uploadDocument(input: DocumentInput): Promise<Document> {
+    return await invoke<Document>('upload_document', { input });
+  },
+
+  async deleteDocument(id: string): Promise<boolean> {
+    return await invoke<boolean>('delete_document', { id });
   },
 };
