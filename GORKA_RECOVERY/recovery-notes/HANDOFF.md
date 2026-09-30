@@ -2847,7 +2847,142 @@ DECISIONS.md for the September 30 HOW decisions.
 
 End of entry.
 
+## STATUS UPDATE - October 1, 2026 (Stage D.4a-0 through D.4b-2c Rust half)
 
+### What this session did
 
+Continued Phase 9.5. Built the Agent App's first data
+pages from scratch. Six slice commits and two documentation
+commits landed. No production touched. No cloud schema
+change. The invariant held.
 
+### The commits
 
+  d4a-0   7f122e1  primitive gap-fill (10 files)
+  d4a     32f1475  debtor list and profile (12 files)
+  d4b-1   c5e2d6e  communications and documents cards (5 files)
+  d4b-2a  8ddb6ef  read_debtor_photo Rust half (3 files)
+  d4b-2a  3688d9f  debtor profile photo frontend (3 files)
+  d4b-2b  68440de  relations card (5 files)
+  d4b-2c  c73373d  role column and orphan cleanup Rust (4 files)
+  docs    d0eb175  extraction log entries (1 file)
+  docs    829dcea  DECISIONS entries (1 file)
+
+### What is now working on the Agent
+
+Entry flow: Login, Unlock, Enroll. Unchanged from D.2.
+
+Debtors:
+  - List with search, add, edit, delete.
+  - Profile with header card (photo + info grid), Debts
+    card, Relations card, Communications card, Actions
+    card, Documents card.
+
+Photo:
+  - Read from disk via Rust bytes, displayed as blob URL.
+  - Change-photo via the dialog plugin, filtered to
+    images.
+
+Relations:
+  - Two header buttons: Add Guarantor, Add Pledger.
+  - Modal with create-new and link-existing modes.
+  - Collateral fields (PLEDGER only).
+  - Row click navigates to that person's profile.
+  - Delete removes the relation and, if the person is
+    orphaned, removes the person row too.
+
+### What is verified
+
+All behavioral tests on cloud passed, for:
+  - D.4a (list, profile, debt CRUD, action CRUD, persistence)
+  - D.4b-1 (comms CRUD, docs upload/delete, persistence)
+  - D.4b-2a (photo set, display, persistence)
+  - D.4b-2b (relations create, collateral, delete, navigate,
+              persistence)
+
+### What is committed but NOT yet compiled on cloud
+
+c73373d - D.4b-2c Rust half. Four new commands, one
+modified, registration updated. Compiles on main? Not
+tested. Cloud is on. The next cloud action is:
+
+  cd /d C:\gorka-app
+  git pull
+  cargo build -p gorka-agent
+  cargo build -p gorka-client
+  cargo test -p gorka-shared
+
+Expected: 2 warnings, 3 warnings, 14/14.
+
+### What is NOT started
+
+D.4b-2c frontend half. Five files:
+  - local.db.ts: RelatedDebtorRole, DebtorDebtTotal
+    types; getRelatedDebtorRoles, getDebtorDebtTotals,
+    insertRelatedDebtor, cleanupOrphanedRelatedDebtors
+    methods.
+  - RelationEditModal.tsx: create-new path switches from
+    insertDebtor to insertRelatedDebtor.
+  - DebtorsPage.tsx: Role column between Phone and
+    Actions, Debt and Currency columns, two-row sticky
+    header (header row + TOTAL row), cleanup on mount.
+  - DebtorsPage.css: sticky thead, scrollable container,
+    role badge styling, right-aligned Debt/Currency.
+  - DebtorProfilePage.tsx: read get_related_debtor_roles,
+    compute isRelated, hide the two relation add-buttons,
+    hide the Debts card on related persons.
+
+Planned after D.4b-2c:
+  - D.5 - plan view / calendar (FullCalendar).
+  - D.6 - remaining screens (Communication Tools,
+    cross-debtor Actions, cross-debtor Documents,
+    Settings).
+  - Agent end-to-end regression.
+
+### Deviations recorded for this session
+
+1. Documentation deferred to end-of-session. D.4a-0,
+   D.4a, D.4b-1, D.4b-2a, D.4b-2b, D.4b-2c-Rust were
+   all documented in one pass, not after each slice.
+   Founder-authorised.
+
+2. D.4b-2a and D.4b-2b verified in one cloud trip, not
+   two. Founder-authorised.
+
+3. D.4b-2c Rust half is committed but not yet compiled
+   on cloud. Founder paused to write documentation
+   before the compile.
+
+### Forward-looking notes
+
+Relations and photo will exist on the Client Dashboard
+too, in a later phase. The Rust commands and the two
+components (RelationEditModal, photo block) are designed
+to be client-neutral. No Agent-only assumptions encoded.
+See DECISIONS.md "Seams for the Client Dashboard" section.
+
+### State at end of session
+
+  Main machine:  829dcea, clean, pushed.
+  Cloud machine: c5e2d6e (off or on; behind by seven
+                 commits). Needs git pull before any
+                 Rust build.
+  GitHub:        829dcea.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched (release.yml unchanged).
+  - Invariant held. No debtor data crossed the boundary.
+  - No frozen document amended beyond the September 27
+    amendments already recorded.
+  - Client binary untouched in this session. Only the
+    shared crate changed, and both binaries rebuild
+    against it. The Client's generate_handler! list is
+    unchanged.
+
+See PHASE-9.5-EXTRACTION-LOG.md for the slice records and
+DECISIONS.md for the HOW decisions.
+
+End of entry.
