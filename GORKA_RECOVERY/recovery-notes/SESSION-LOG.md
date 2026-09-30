@@ -3145,6 +3145,179 @@ Stage C.1 kept the Client binary untouched.
 
 End of entry.
 
+Session Extension - September 30, 2026 (Stage C.5 complete, Stage D.0-D.3 complete)
+
+WHAT THIS SESSION DID
+
+Continued Phase 9.5. Closed Stage C with a small backend
+addition (C.5, is_enrolled). Then began Stage D - the Agent
+frontend - and completed D.0 (prerequisites), D.1 (design
+tokens and primitives), D.2 (entry flow), and D.3 (main
+shell).
+
+Six commits landed. No production touched. No cloud schema
+change. The invariant held.
+
+This is the entry that records the day's work
+chronologically. Technical details of each slice are in
+PHASE-9.5-EXTRACTION-LOG.md. The HOW decisions are in
+DECISIONS.md (September 30 entry). Status is in HANDOFF.md.
+
+THE SESSION IN ORDER
+
+C.5 - is_enrolled backend command.
+
+Commit a085b8d.
+
+Added shared::db::is_enrolled(conn) -> Result<bool, String>.
+The function queries organization_keys for a row. Returns
+Ok(true) if present, Ok(false) if absent, Err if the query
+fails.
+
+Added the Agent adapter and registered it between
+is_database_unlocked and logout in generate_handler!.
+
+Reason: the Agent entry flow needs to know whether the
+device is already enrolled. Before this commit, the only way
+to learn that was to attempt import_enrollment_package and
+interpret its refusal. That forced the user to select a
+package file on every launch. is_enrolled is a query, not
+an operation.
+
+Scope discipline: Client untouched, schema untouched,
+enrollment package format and import behavior unchanged,
+organization-key semantics unchanged.
+
+Verified on cloud: gorka-agent builds (2 warnings),
+gorka-client builds (3 warnings), 14/14 shared tests,
+Cargo.lock unchanged.
+
+Stage D.0 - Agent frontend prerequisites.
+
+Commit 71948ab.
+
+Installed Agent dashboard dependencies: react-router-dom,
+lucide-react, FullCalendar v6 (react, daygrid, interaction,
+list, timegrid), @tauri-apps/plugin-dialog. Versions match
+the Client.
+
+Added tsconfig.json: strict, @/* path alias, vite/client
+types, no baseUrl (TS 6.0 deprecation).
+
+Changed build script to tsc -p tsconfig.json && vite build
+for type-checking parity with the Client.
+
+Stage D.1 - design tokens and shared primitives.
+
+Commit 38ae126.
+
+Added design-tokens.css with values from AGENT-APP-SPEC.md
+v1.2 section 11.2, plus entry-flow tokens sourced from the
+Client's pre-Tauri Login page. Single source of truth for
+every visual value.
+
+Added index.css: minimal reset, no Tailwind, no Vite
+template.
+
+Added ten primitives (Button, Input, Label, ErrorBanner,
+Spinner, EntryCard, GorkaLogo, Card, Avatar, Modal), each
+with a .tsx and a .css. Barrel export in
+primitives/index.ts.
+
+Added postcss.config.js with empty plugins so the Agent
+does not inherit the repo-root Tailwind pipeline.
+
+Stage D.2 - entry flow.
+
+Commit 2eb97b9.
+
+Rewrote App.tsx as a state machine: loading -> login ->
+unlock -> enroll -> shell. Each screen's success handler
+re-runs the bootstrap; the machine self-corrects.
+
+Added LoginPage (invoke('login')), UnlockPage (reads
+database_exists for set/enter mode; invoke('unlock_database')),
+EnrollPage (dialog.open() filtered to .gorka;
+invoke('import_enrollment_package')).
+
+Added AppShell as a placeholder for D.3.
+
+Stage D.3 - main shell.
+
+Commit efbbc4d.
+
+Replaced AppShell placeholder with the real layout:
+Sidebar + TopHeader + Outlet.
+
+Sidebar: 240px fixed, GORKA wordmark, seven nav items
+(Today, Debtors, Communication Tools, Actions, Documents,
+Copilot disabled with "Soon" badge, Settings).
+
+TopHeader: page title (route-driven), static "Sync not yet
+enabled" placeholder per spec 7.6, Avatar, logout button.
+
+App.tsx: the shell step now wraps in HashRouter with seven
+routes as inline StubPage usages.
+
+DOCUMENTATION
+
+Commit bdf93a2 covered C.5 and D.0-D.2 slice records plus
+the September 30 DECISIONS entry (five HOW decisions:
+design source is Client real design, spec 11.3 six
+inconsistencies corrected, entry-flow reference is Client
+pre-Tauri Login with purple button, is_enrolled replaces
+literal refusal-as-signal, Agent icon deferred).
+
+The Stage D.3 slice record plus this extension update and
+the HANDOFF, PHASE-PLAN, START-HERE updates are appended
+after the visual verification in the same session.
+
+VERIFICATION ON CLOUD
+
+cargo build -p gorka-agent    PASS (2 warnings, unchanged)
+cargo build -p gorka-client   PASS (3 warnings, unchanged)
+cargo test -p gorka-shared    14/14 PASS
+npm install on cloud          OK, 0 vulnerabilities
+npm run build on cloud        PASS (227.44 kB JS, 7.43 kB CSS)
+
+Visual verification:
+  Login page renders correctly (red GORKA wordmark, purple
+  Sign In button).
+  Shell renders correctly (240px sidebar, seven nav items,
+  Today stub active state, header with sync placeholder and
+  avatar).
+
+Both confirmed.
+
+STATE AT END OF SESSION
+
+  Main machine:  efbbc4d, clean.
+  Cloud machine: efbbc4d after next pull (currently at
+                 2eb97b9, plus the two known untracked
+                 files).
+  GitHub:        efbbc4d.
+
+NEXT WORK
+
+  Stage D.4 - debtor list and debtor profile. The core
+  screen. Then D.5 (plan view / calendar), D.6 (remaining
+  screens). Then the Agent end-to-end regression.
+
+RULE COMPLIANCE
+
+No production touched.
+No cloud schema change.
+No CI/CD touched (release.yml unchanged).
+Invariant held.
+No frozen document amended beyond the September 27
+amendments already recorded.
+Client binary untouched since Item 2.
+The design-source decision (Path B) recorded in DECISIONS.md
+September 30 entry.
+
+End of entry.
+
+
 
 
 

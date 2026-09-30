@@ -29,7 +29,7 @@ SEQUENCE
   Item 3 Stage A migrations     DONE (6e83a29)
   Stage B shared functions      DONE (2268a30, 292a3a8, 884c637)
   Stage C Agent commands        DONE (C.1 5ab35ae/67b984a/c69d21e; C.2 b4b448f; C.3 b598a97; C.4 6e0c135; C.5 a085b8d; lock f8f3f4d)
-  Stage D Agent frontend        IN PROGRESS (D.0 71948ab; D.1 38ae126; D.2 2eb97b9)
+  Stage D Agent frontend        IN PROGRESS (D.0 71948ab; D.1 38ae126; D.2 2eb97b9; D.3 efbbc4d)
   Agent end-to-end regression   NOT STARTED
 
 Repository layout: Cargo workspace at the repository root.
@@ -1214,11 +1214,11 @@ Verification (cloud, 2026-09-30):
 DEVIATIONS: None.
 
 ================================================================
-STAGE D - AGENT FRONTEND, SUB-SLICES D.0 THROUGH D.2
+STAGE D - AGENT FRONTEND, SUB-SLICES D.0 THROUGH D.3
 ================================================================
 
 Date: September 30, 2026.
-Status: IN PROGRESS. D.0, D.1, D.2 complete. D.3-D.6 remain.
+Status: IN PROGRESS. D.0, D.1, D.2, D.3 complete. D.4-D.6 remain.
 
 D.0 - PREREQUISITES (71948ab)
   Agent dashboard dependencies installed: react-router-dom,
@@ -1252,6 +1252,20 @@ D.2 - ENTRY FLOW (2eb97b9)
     invoke('import_enrollment_package').
   AppShell: placeholder for D.3.
 
+D.3 - MAIN SHELL (efbbc4d)
+  Replaced AppShell placeholder with the real layout:
+  Sidebar + TopHeader + Outlet.
+  Sidebar: 240px fixed, GORKA wordmark, seven nav items
+  (Today, Debtors, Communication Tools, Actions, Documents,
+  Copilot disabled with "Soon" badge, Settings). Active item
+  uses accent tint. Icons from lucide-react at 16px.
+  TopHeader: page title (route-driven), static "Sync not yet
+  enabled" placeholder per spec 7.6, Avatar, logout button.
+  StubPage: shared placeholder body.
+  App.tsx: the shell step now wraps in HashRouter with seven
+  routes. Entry flow remains a state machine.
+  All values from design-tokens.css.
+
 VERIFICATION (cloud, 2026-09-30):
   cargo build -p gorka-agent    PASS (2 warnings, unchanged)
   cargo build -p gorka-client   PASS (3 warnings, unchanged)
@@ -1260,12 +1274,15 @@ VERIFICATION (cloud, 2026-09-30):
   npm run build on cloud        PASS (227.44 kB JS, 7.43 kB CSS)
   Visual: agent binary renders Login page correctly
     (red wordmark, purple Sign In button). Confirmed.
+  Visual (D.3): agent binary renders the shell correctly.
+    Sidebar, header, seven nav items, Today stub verified.
 
 DEVIATIONS: None.
 
-NEXT: D.3 shell, D.4 debtor profile, D.5 plan view, D.6
-remaining screens. Then Agent end-to-end regression.
+DEVIATIONS: None.
 
+NEXT: D.4 debtor list and profile, D.5 plan view, D.6
+remaining screens. Then Agent end-to-end regression.
 ================================================================
 END OF DOCUMENT
 ================================================================

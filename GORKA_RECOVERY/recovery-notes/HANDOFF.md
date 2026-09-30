@@ -2758,6 +2758,96 @@ touched. No cloud schema change. The invariant held.
 See PHASE-9.5-EXTRACTION-LOG.md for the four new slice
 records and DECISIONS.md for the September 29 HOW decisions.
 
+## STATUS UPDATE - September 30, 2026 (Stage C.5 complete, Stage D.0-D.3 complete)
+
+### What this session did
+
+Continued Phase 9.5. Closed Stage C with the small C.5
+backend addition (is_enrolled). Then began Stage D - the
+Agent frontend - and completed D.0 (prerequisites), D.1
+(design tokens and shared primitives), D.2 (entry flow),
+and D.3 (main shell).
+
+Six commits landed. No production touched. No cloud schema
+change. The invariant held.
+
+### Stage C.5 - is_enrolled
+
+Commit a085b8d. Added shared::db::is_enrolled(conn) ->
+Result<bool, String> and the Agent adapter. It queries the
+organization_keys table to determine whether the device is
+already enrolled. Query only, no side effect.
+
+Reason: the spec's literal "refusal as signal" mechanism
+forced the user to select a package file on every launch.
+is_enrolled replaces it. See DECISIONS.md September 30
+entry, D4.
+
+### Stage D - Agent frontend
+
+  D.0 (71948ab) - prerequisites. React Router, lucide-react,
+  FullCalendar v6, @tauri-apps/plugin-dialog installed. tsconfig
+  added. Build script becomes tsc && vite build.
+
+  D.1 (38ae126) - design tokens and ten primitives. Tokens
+  sourced from spec 11.2 plus entry-flow values from the
+  Client's pre-Tauri Login page. All component CSS uses
+  var(--token). postcss.config.js added to stop inheriting
+  the repo-root Tailwind pipeline.
+
+  D.2 (2eb97b9) - entry flow. App.tsx is now a state machine
+  (loading -> login -> unlock -> enroll -> shell). LoginPage,
+  UnlockPage (set/enter modes), EnrollPage (.gorka picker).
+
+  D.3 (efbbc4d) - main shell. Sidebar (seven items), TopHeader
+  (title, static sync placeholder, avatar, logout), StubPage.
+  App.tsx wraps the shell in HashRouter with seven routes.
+
+Documentation commit bdf93a2 covered C.5 and D.0-D.2 slice
+records plus the September 30 DECISIONS entry.
+
+### Verification (cloud, September 30)
+
+  cargo build -p gorka-agent    PASS (2 warnings, unchanged)
+  cargo build -p gorka-client   PASS (3 warnings, unchanged)
+  cargo test -p gorka-shared    14/14 PASS
+  npm install on cloud          OK, 0 vulnerabilities
+  npm run build on cloud        PASS (227.44 kB JS, 7.43 kB CSS)
+  Visual: Login page renders correctly (red wordmark, purple
+    Sign In button). Shell renders correctly (sidebar, header,
+    seven nav items, Today stub). Both confirmed.
+
+### State at end of session
+
+  Main machine:  efbbc4d, clean.
+  Cloud machine: efbbc4d after next pull (currently at 2eb97b9,
+                 plus the two known untracked files).
+  GitHub:        efbbc4d.
+
+### Next work
+
+  Stage D.4 - debtor list and debtor profile. The core screen.
+  Then D.5 (plan view / calendar), D.6 (remaining screens).
+  Then the Agent end-to-end regression.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched (release.yml unchanged).
+  - Invariant held. No debtor data crossed the boundary.
+  - No frozen document amended beyond the September 27
+    amendments already recorded.
+  - Client binary untouched since Item 2.
+  - The design-source decision (Path B) recorded in
+    DECISIONS.md September 30 entry.
+
+See PHASE-9.5-EXTRACTION-LOG.md for the slice records and
+DECISIONS.md for the September 30 HOW decisions.
+
+End of entry.
+
+
 
 
 

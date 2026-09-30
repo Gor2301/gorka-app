@@ -1238,4 +1238,91 @@ SESSION-LOG.md, and PHASE-9.5-EXTRACTION-LOG.md for full
 details.
 
 
+================================================================
+Update - September 30, 2026 (Stage C complete, Stage D.0-D.3 complete)
+================================================================
+
+Continued Phase 9.5. Closed Stage C with a small backend
+addition (C.5), then began and advanced Stage D - the Agent
+frontend.
+
+The sequence executed on September 30:
+
+  Stage C.5 is_enrolled backend          DONE (a085b8d)
+  Stage D.0 frontend prerequisites       DONE (71948ab)
+  Stage D.1 design tokens + primitives   DONE (38ae126)
+  Stage D.2 entry flow                   DONE (2eb97b9)
+  Stage D.3 main shell                   DONE (efbbc4d)
+  Documentation batch                    DONE (bdf93a2 + this update)
+
+What exists now:
+
+  - shared/src/db.rs gains is_enrolled(conn) -> Result<bool,
+    String>. Queries organization_keys for a row.
+
+  - src-tauri-agent registers 42 commands now (was 41).
+    is_enrolled added between is_database_unlocked and
+    logout.
+
+  - agent-dashboard has a real frontend: design tokens,
+    ten shared primitives, three entry-flow pages, and the
+    main shell with sidebar and header.
+
+  - The Client binary is unchanged since Item 2.
+
+Decisions recorded during the session (DECISIONS.md,
+September 30 entry):
+
+  D1 - Design source is the Client's real design, not
+       spec-11.2-verbatim. Spec 11.2 states its own intent
+       as "the Agent uses the same vocabulary as the
+       Client." Following the Client's component layer
+       matches that intent.
+
+  D2 - Spec 11.3's six named inconsistencies are corrected,
+       not carried. Purple #7C3AED primary buttons, error
+       banner in #fef2f2/#fecaca/#dc2626, input border
+       #e5e7eb, modal padding 24px, radius 8px. Red is
+       reserved for the GORKA wordmark and danger indicators.
+
+  D3 - Entry-flow visual reference is the Client's
+       pre-Tauri Login page, with the primary button
+       changed from red to purple.
+
+  D4 - is_enrolled replaces the spec's literal
+       "refusal as signal." The refusal message from
+       import_enrollment_package remains; it is simply no
+       longer the mechanism by which the UI discovers
+       enrollment state.
+
+  D5 - The Agent icon is deferred past Phase 9.5. Both
+       binaries keep their Tauri-default icons for now.
+
+Verification (cloud, September 30):
+
+  cargo build -p gorka-agent    PASS (2 warnings, unchanged)
+  cargo build -p gorka-client   PASS (3 warnings, unchanged)
+  cargo test -p gorka-shared    14/14 PASS
+  Cargo.lock                    unchanged
+  npm install on cloud          OK, 0 vulnerabilities
+  npm run build on cloud        PASS (227.44 kB JS, 7.43 kB CSS)
+  Visual: Login page renders correctly (red wordmark, purple
+    Sign In button). Shell renders correctly (sidebar, header,
+    seven nav items, Today stub).
+
+State at end of session:
+
+  Main machine:  efbbc4d, clean.
+  Cloud machine: efbbc4d after next pull (currently at
+                 2eb97b9, plus the two known untracked files).
+  GitHub:        efbbc4d.
+
+Next work: Stage D.4 - debtor list and debtor profile. Then
+D.5 (plan view / calendar), D.6 (remaining screens). Then
+the Agent end-to-end regression.
+
+See DECISIONS.md (September 30 entry), HANDOFF.md,
+SESSION-LOG.md, and PHASE-9.5-EXTRACTION-LOG.md for full
+details.
+
 
