@@ -1284,5 +1284,653 @@ DEVIATIONS: None.
 NEXT: D.4 debtor list and profile, D.5 plan view, D.6
 remaining screens. Then Agent end-to-end regression.
 ================================================================
+STAGE D.4a-0 - PRIMITIVE GAP-FILL FOR DATA PAGES
+================================================================
+
+Date: September 30, 2026.
+Commit: 7f122e1
+
+PURPOSE
+  Extend the D.1 primitive set so that the upcoming data
+  pages (debtors list, debtor profile) can be built without
+  hardcoding visual values or duplicating the Client's inline
+  styles. Discovered during D.4a reconnaissance: D.1's
+  reconnaissance read the Client's shell and entry-flow
+  files, not its Collections.tsx or DebtorDetail.tsx. Five
+  gaps fell out of that scope boundary. All additive.
+
+  Framing rule: this is extending the design vocabulary
+  discovered to be incomplete during the first data-page
+  implementation. It is not fixing a bad D.1. D.1 was
+  appropriately scoped to what was known at that point.
+
+FILES CHANGED (10)
+  agent-dashboard/src/styles/design-tokens.css   MODIFIED
+  agent-dashboard/src/components/primitives/Modal.tsx    MODIFIED
+  agent-dashboard/src/components/primitives/Button.tsx   MODIFIED
+  agent-dashboard/src/components/primitives/Button.css   MODIFIED
+  agent-dashboard/src/components/primitives/Select.tsx   NEW
+  agent-dashboard/src/components/primitives/Select.css   NEW
+  agent-dashboard/src/components/primitives/Textarea.tsx NEW
+  agent-dashboard/src/components/primitives/Textarea.css NEW
+  agent-dashboard/src/components/primitives/index.ts     MODIFIED
+  agent-dashboard/src/components/TopHeader.tsx           MODIFIED
+
+WHAT WAS ADDED
+
+  design-tokens.css: 24 new tokens across four existing
+  groups. Values sourced from Collections.tsx and
+  DebtorDetail.tsx. No existing token name or value changed.
+    - Badge colors (10): success, danger, neutral, info,
+      warning tint/text pairs.
+    - Data-page font sizes (5): badge 11px, label-sm 12px,
+      value 15px, card-heading 16px, profile-title 26px.
+    - Data-page spacing (8): hairline, gap-2xs/xs/sm/md,
+      value-margin, list-row padding y/x.
+    - Pill radius (1): 12px.
+
+  Modal.tsx: closeOnOverlayClick prop, default true. Callers
+  can opt out. Form modals use false so an accidental
+  overlay click does not discard unsaved input.
+
+  Button.tsx, Button.css: size prop (sm/md, default md) and
+  iconOnly prop (default false). Chromeless icon buttons for
+  row actions. Color driven by the existing variant axis.
+  No new variant value.
+
+  Select.tsx/.css, Textarea.tsx/.css: new primitives, thin
+  wrappers modelled on Input.tsx/.css. No placeholder on
+  Select. Textarea adds resize:vertical and min-height:90px.
+
+  primitives/index.ts: export Select and Textarea.
+
+  TopHeader.tsx: one prefix rule. /debtors/... now resolves
+  to "Debtor Profile" instead of falling through to "GORKA".
+
+CALL-SITE INVENTORY BEFORE EDITS
+  Modal:     no external call sites. Confirmed by findstr.
+  Button:    five, all in LoginPage.tsx, UnlockPage.tsx,
+             EnrollPage.tsx. None use the new props.
+  TopHeader: one (AppShell.tsx).
+
+VERIFICATION (main, September 30, 2026)
+  npm run build PASS (tsc clean, vite clean)
+  JS 272.67 kB, CSS 12.01 kB.
+
+EXPLICIT NON-CHANGES
+  No Rust edit.
+  No schema change.
+  No new npm dependency.
+  No change to any existing token value.
+  No change to any existing variant behavior.
+  No entry-flow change.
+  No D.3 file change except TopHeader prefix rule.
+
+DEVIATIONS
+  Two deliberate deviations from the pre-D.4a promise that
+  D.4a would touch no D.1 or D.3 files:
+    - D.4a-0 exists as its own sub-slice, not folded into
+      D.4a.
+    - TopHeader.tsx is a D.3 file.
+  Both were authorised by the founder after D.4a
+  reconnaissance surfaced the gaps. Recorded as a
+  founder-approved scope extension, not silent drift.
+
+================================================================
+STAGE D.4a - DEBTOR LIST AND DEBTOR PROFILE
+================================================================
+
+Date: September 30, 2026.
+Commit: 32f1475
+
+PURPOSE
+  The Agent's first data-page slice. Debtor list with search
+  and CRUD, and debtor profile with header card, debt card,
+  and actions card. Frontend only.
+
+FILES CHANGED (12)
+  agent-dashboard/src/services/local.db.ts        NEW
+  agent-dashboard/src/components/DebtorEditModal.tsx + .css  NEW
+  agent-dashboard/src/components/DebtEditModal.tsx + .css    NEW
+  agent-dashboard/src/components/ActionEditModal.tsx + .css  NEW
+  agent-dashboard/src/pages/DebtorsPage.tsx + .css           NEW
+  agent-dashboard/src/pages/DebtorProfilePage.tsx + .css     NEW
+  agent-dashboard/src/App.tsx                     MODIFIED
+
+WHAT WAS BUILT
+  local.db.ts: Agent's own transport adapter. Types and
+  methods only for the 15 commands D.4a uses. Thin adapter,
+  no validation, no error translation, no logging, no
+  organization-id injection.
+
+  DebtorEditModal, DebtEditModal, ActionEditModal: three
+  create/edit modals using the primitives. closeOnOverlayClick
+  = false on all three (the D.4a-0 M4 decision, in use).
+
+  DebtorsPage: list, search, add, edit, delete, empty state.
+  DebtorProfilePage: header card (info grid), Debts card,
+  Actions card. Add / edit / delete on both cards.
+
+  App.tsx: two routes. /debtors replaced its StubPage.
+  /debtors/:id added.
+
+DESIGN CHOICES
+  Shell owns the page title. The list page has no repeated
+  h1 (the H1 decision from D.4a planning). The profile page
+  has the debtor's own name as an h1, but that is content,
+  not a duplicate of the shell title.
+
+  Empty email and phone cells render '-' (hyphen), not an
+  em-dash. ASCII-safe.
+
+  Error banner: page-level retry button sits next to the
+  ErrorBanner, not inside it.
+
+  Form modals pass closeOnOverlayClick={false}.
+
+  Errors bubble from local.db.ts without translation.
+
+VERIFICATION (cloud, September 30, 2026)
+  npm install on cloud OK, 0 vulnerabilities.
+  npm run build PASS.
+  Agent binary launched. Entry flow completed once
+  (Login, Set password, Enroll via test-package.gorka).
+  Behavioral tests, all PASS:
+    List renders empty, then with a debtor after Add.
+    Search by name/surname/email/phone.
+    Edit debtor surname.
+    Profile route loads, title reads "Debtor Profile".
+    Header card shows all six fields.
+    created_at unchanged after update.
+    Add/edit/delete debt.
+    Add/edit/delete action.
+    Delete debtor navigates back to list.
+    Create debtor B, edit surname.
+    Quit, relaunch: Debtor B still present with edited
+    surname, Debtor A stayed deleted.
+  DB file confirmed on disk (gorka-agent.db + WAL).
+
+EXPLICIT NON-CHANGES
+  No Rust change.
+  No schema change.
+  No new dependency.
+  No new command registration.
+  No entry-flow change.
+  No change to AppShell.tsx, Sidebar.tsx, StubPage.tsx.
+  No change to design-tokens.css, primitives, or TopHeader.
+
+DEVIATIONS
+  One observation recorded, not fixed: the "+ Add Debtor"
+  and debtor Edit/Delete controls are present in Phase 9.5
+  because sync does not yet deliver debtors. In the funded
+  phase these become redundant. Their continued presence
+  is to be revisited at D.6 or before the Agent end-to-end
+  regression. Founder accepted (Option A).
+
+================================================================
+STAGE D.4b-1 - COMMUNICATIONS AND DOCUMENTS CARDS
+================================================================
+
+Date: September 30, 2026.
+Commit: c5e2d6e
+
+PURPOSE
+  Add the Communications and Documents cards to the debtor
+  profile, mirroring the Client's DebtorDetail.tsx.
+
+FILES CHANGED (5)
+  agent-dashboard/src/services/local.db.ts              MODIFIED
+  agent-dashboard/src/components/CommunicationEditModal.tsx + .css  NEW
+  agent-dashboard/src/pages/DebtorProfilePage.tsx       MODIFIED
+  agent-dashboard/src/pages/DebtorProfilePage.css       MODIFIED
+
+WHAT WAS BUILT
+  local.db.ts: Communication and Document types plus six
+  methods (getCommunications, insertCommunication,
+  deleteCommunication, getDocuments, uploadDocument,
+  deleteDocument).
+
+  CommunicationEditModal: create-only. No editingId. No
+  update path. Duration field visible only when Type is
+  CALL. Empty content sent as null. Duration sent as null
+  when Type is not CALL or field is empty. Modal title
+  "Log Communication".
+
+  DebtorProfilePage: Communications card inserted between
+  Debts and Actions so the card order matches the Client
+  (Info, Debts, Communications, Actions, Documents). The
+  Actions card moved from position 3 to position 4; same
+  JSX, same handlers, position only. Documents card added
+  at position 5, with a category dropdown and a
+  label-wrapping-hidden-input upload control.
+
+  DebtorProfilePage.css: upload row rules, document row
+  rules.
+
+DESIGN CHOICES
+  Communications are append-only. No edit path. Corrections
+  are delete-and-relog.
+
+  File upload wraps a hidden input inside a styled label,
+  mirroring the Client's pattern but using classes instead
+  of inline styles. The hidden input is display:none.
+
+  The category select is fixed at 200px via a
+  page-scoped selector that wins specificity over the
+  Select primitive's width:100%. No primitive change.
+
+  Error banner: retry is not applicable on the profile
+  cards; the card's own state is shown inline.
+
+VERIFICATION (cloud, September 30, 2026)
+  npm install OK. npm run build PASS.
+  Behavioral tests, all PASS:
+    Communications card rendered empty with heading and
+    "+ Log Communication" button.
+    Add CALL/OUTBOUND with duration 120. Row rendered
+    with purple CALL badge, amber OUTBOUND badge,
+    content, "120s".
+    Add NOTE/INBOUND. Duration field hidden. Row rendered
+    with purple NOTE badge, blue INBOUND badge.
+    Delete one. Row disappeared.
+    Documents card rendered empty with category select
+    and "Choose file" label.
+    Upload file with category "Contract". Row rendered
+    with "contract - 205.1 KB".
+    Category select correctly bound at upload time.
+    Delete document. Row disappeared.
+    Quit, relaunch: surviving communication and document
+    persisted; deleted ones stayed deleted.
+
+EXPLICIT NON-CHANGES
+  No Rust change.
+  No schema change.
+  No new dependency.
+  No new command registration.
+  No change to App.tsx, AppShell.tsx, Sidebar.tsx,
+    StubPage.tsx, TopHeader.tsx.
+  No change to design-tokens.css or any primitive.
+
+DEVIATIONS
+  One observation recorded, not fixed: the Client's
+  CommunicationEditModal uses a 480px width; the Agent uses
+  the Modal primitive's 440px. Deliberate. Consistent with
+  using the primitive everywhere rather than carrying the
+  Client's per-modal inline width.
+
+================================================================
+STAGE D.4b-2a - DEBTOR PROFILE PHOTO
+================================================================
+
+Date: September 30, 2026.
+Commits: 8ddb6ef (Rust), 3688d9f (frontend)
+
+PURPOSE
+  Display the debtor profile photo. The commands
+  set_debtor_photo and get_debtor_photo already existed and
+  were registered. The missing piece was reading the file
+  bytes so the webview could display them.
+
+DESIGN CONSTRAINT DISCOVERED
+  The Agent's CSP has img-src: 'self' data: blob:. It does
+  not include asset: or file:. Storing a path and pointing
+  an <img> at it would be blocked. Three paths considered:
+  enable the Tauri asset protocol (widens CSP), return a
+  data URI from Rust (adds base64 crate), use the
+  @tauri-apps/plugin-fs npm package (new dependency).
+  Fourth path chosen: return bytes + MIME from Rust;
+  frontend builds a blob: URL. CSP already allows blob:.
+  No config change, no new crate, no new npm package.
+
+FILES CHANGED (RUST - 3)
+  shared/src/models.rs           MODIFIED (DebtorPhotoData struct)
+  shared/src/debtors.rs          MODIFIED (read_debtor_photo,
+                                 mime_from_extension)
+  src-tauri-agent/src/main.rs    MODIFIED (one command,
+                                 one registration line)
+
+FILES CHANGED (FRONTEND - 3)
+  agent-dashboard/src/services/local.db.ts              MODIFIED
+  agent-dashboard/src/pages/DebtorProfilePage.tsx       MODIFIED
+  agent-dashboard/src/pages/DebtorProfilePage.css       MODIFIED
+
+WHAT WAS BUILT
+  Rust: DebtorPhotoData { bytes: Vec<u8>, mime: String }.
+  read_debtor_photo(conn, debtor_id) reads photo_path from
+  the debtors table. Returns Ok(None) if NULL, empty, or
+  file not found. Reads the file, infers MIME from the
+  extension. mime_from_extension covers png, jpg/jpeg,
+  gif, webp, bmp, else application/octet-stream. No
+  organization scoping, matching set_debtor_photo and
+  get_debtor_photo.
+
+  Frontend: DebtorPhotoData type and two methods
+  (setDebtorPhoto, readDebtorPhoto). DebtorProfilePage
+  gains photoUrl state, photoUrlRef for URL revocation,
+  loadPhoto (revokes the previous blob URL before
+  replacing), handleChangePhoto (dialog plugin filtered
+  to images, then setDebtorPhoto, then loadPhoto), and an
+  unmount cleanup. Header card becomes two columns: photo
+  block left, existing info grid right.
+
+  DebtorProfilePage.css: header wrapper, photo block,
+  photo (96x96, pill radius, object-fit cover),
+  photo-change link.
+
+DESIGN CHOICES
+  Placeholder is the existing Avatar primitive (circular,
+  accent background, initials). Photo size 96x96.
+
+  Change-photo uses the dialog plugin, not a hidden
+  file input. The dialog returns a path, which is what
+  set_debtor_photo needs.
+
+  No delete-photo control. Spec 11.6 mentions only
+  "change photo".
+
+  No role badge in the header card. Role display was
+  deferred to D.4b-2b at the time this slice was planned.
+
+VERIFICATION (cloud, September 30, 2026)
+  Rust compiled on cloud: cargo build -p gorka-agent
+  PASS (2 warnings unchanged), gorka-client PASS
+  (3 warnings unchanged), shared tests 14/14 PASS.
+  npm run build PASS.
+  Behavioral tests, all PASS:
+    Placeholder Avatar with initials rendered on the
+    header card.
+    Change photo opened the filtered dialog.
+    Selected image rendered as a 96x96 circle.
+    Quit, relaunch: photo persisted.
+
+EXPLICIT NON-CHANGES
+  No schema change. No new dependency.
+  No tauri.conf.json change. No CSP change.
+  No Client binary change. Client retains only
+  get_debtor_photo; read_debtor_photo is Agent-only.
+  No change to App.tsx, primitives, or design-tokens.
+
+DEVIATIONS
+  One. The D.4b-2a plan originally intended two cloud
+  trips (one for the Rust half, one for the frontend).
+  Founder authorised combining into one trip that also
+  verified D.4b-2b's Rust. Recorded.
+
+================================================================
+STAGE D.4b-2b - RELATIONS CARD
+================================================================
+
+Date: September 30, 2026.
+Commit: 68440de
+
+PURPOSE
+  The Relations card on the debtor profile. Add guarantors
+  and pledgers, with collateral for pledgers. No Client
+  reference existed: the Client Dashboard does not render
+  relations. Designed from spec 11.6.
+
+ZERO RUST, ZERO SCHEMA
+  Reconnaissance discovered the role badge can read from
+  debtor_relations.relation_type, which the Stage B.3
+  functions already populate. The debtors.role column is
+  not needed. All needed commands were already registered.
+  No Rust change in this slice.
+
+FILES CHANGED (5)
+  agent-dashboard/src/services/local.db.ts              MODIFIED
+  agent-dashboard/src/components/RelationEditModal.tsx + .css  NEW
+  agent-dashboard/src/pages/DebtorProfilePage.tsx       MODIFIED
+  agent-dashboard/src/pages/DebtorProfilePage.css       MODIFIED
+
+WHAT WAS BUILT
+  local.db.ts: DebtorRelation and DebtorRelationInput
+  types plus three methods (getDebtorRelations,
+  insertDebtorRelation, deleteDebtorRelation).
+
+  RelationEditModal: two-mode modal.
+    - Create new: name, surname, email, phone. If role is
+      PLEDGER, two extra fields (collateral type,
+      collateral description).
+    - Link existing: search_debtors, pick a person. If
+      PLEDGER, collateral fields pre-filled from the picked
+      person's data.collateral.
+  Modal title is role-specific: "Add Guarantor" or
+  "Add Pledger". Modal opened by one of two header buttons.
+  closeOnOverlayClick = false.
+
+  DebtorProfilePage: Relations card positioned between
+  Debts and Communications. Heading reads "Relations (N)"
+  when N > 0, "Relations" when zero. Two header buttons.
+  Row shows relation_type badge (GUARANTOR purple, PLEDGER
+  info blue), related person's name as a navigation link,
+  collateral line for PLEDGER rows, and a delete icon.
+  loadRelations also fetches get_debtor per PLEDGER row to
+  read data.collateral (N+1 accepted for MVP).
+
+  DebtorProfilePage.css: card-header-actions (two buttons
+  side by side), relation-link (underlined navigation).
+
+DESIGN CHOICES
+  Collateral stored at related_person.data.collateral =
+  { type, description }. Per person, not per relation. The
+  same pledger pledging different collateral for two
+  different debtors cannot be expressed. Accepted MVP
+  limitation.
+
+  Link-existing does not change the picked person's role.
+  A plain debtor linked as a guarantor stays DEBTOR.
+
+  No edit-existing-relation. Delete and recreate.
+
+  No reverse-direction view. A guarantor's own profile
+  does not show "guarantor for X". This is the Stage B.3
+  deferral, unchanged.
+
+VERIFICATION (cloud, September 30, 2026)
+  npm run build PASS.
+  Behavioral tests, all PASS:
+    Relations card rendered empty with heading
+    "Relations".
+    Add Guarantor (create new). Row rendered with purple
+    GUARANTOR badge. Heading became "Relations (1)".
+    Add Pledger with collateral type "House" and
+    description "Two-story Manila". Row rendered with
+    blue PLEDGER badge and collateral line. Heading
+    "Relations (2)".
+    Click relation row navigated to that person's own
+    profile.
+    Delete one relation. Row disappeared. Heading count
+    updated.
+    Quit, relaunch: surviving relation and collateral
+    persisted.
+
+EXPLICIT NON-CHANGES
+  No Rust change in this slice.
+  No schema change.
+  No dependency.
+  No change to App.tsx, AppShell.tsx, Sidebar.tsx,
+    StubPage.tsx, TopHeader.tsx.
+  No change to design-tokens or primitives.
+  No change to how a guarantor or pledger is created at
+    the data layer (that is D.4b-2c).
+
+DEVIATIONS
+  None recorded. One observation logged as a known UX
+  gap: related persons appear in the debtors list without
+  a role badge. Spec 11.6 asks for the badge. Deferred to
+  D.4b-2c.
+
+================================================================
+STAGE D.4b-2c - ROLE COLUMN AND ORPHAN CLEANUP (RUST HALF)
+================================================================
+
+Date: October 1, 2026 (session continued from September 30).
+Commit: c73373d
+
+STATUS
+  Rust half only. Frontend half is not started. This slice
+  is not verified on cloud yet. Recorded here so that if
+  the session ends mid-slice, the extraction log matches
+  the repository state.
+
+PURPOSE
+  Prepare the Rust primitives the frontend needs to:
+    - Show a Role column and a Debt/Currency column in
+      the debtors list.
+    - Hide + Add Guarantor, + Add Pledger, and the Debts
+      card on a related person's profile.
+    - Delete the person row when a relation is deleted
+      and the person has no other relations, no debts, no
+      communications, no actions, no documents.
+    - Run a once-per-mount cleanup of orphaned related
+      debtors.
+
+  Also introduces the role write so future orphans are
+  distinguishable from plain debtors.
+
+FILES CHANGED (4)
+  shared/src/models.rs            MODIFIED
+  shared/src/debtors.rs           MODIFIED
+  shared/src/relations.rs         MODIFIED
+  src-tauri-agent/src/main.rs     MODIFIED
+
+WHAT WAS ADDED
+
+  shared/src/models.rs:
+    RelatedDebtorRole { debtor_id, relation_type }
+    DebtorDebtTotal { debtor_id, currency, total_amount }
+    Both Serialize only.
+
+  shared/src/debtors.rs:
+    get_related_debtor_roles(conn, org_id)
+      Single query: all rows in debtor_relations for the
+      org. No dedup. A person can appear twice if
+      guarantor for one debtor and pledger for another.
+
+    get_debtor_debt_totals(conn, org_id)
+      GROUP BY (debtor_id, currency). Excludes PAID and
+      CANCELLED. One row per (debtor, currency).
+
+    insert_related_debtor(conn, org_id, input, role)
+      Atomic INSERT with the role column. Validates role
+      in {GUARANTOR, PLEDGER}. This is the function the
+      relation modal's create-new path uses so that a
+      related person can be distinguished from a plain
+      debtor.
+
+    cleanup_orphaned_related_debtors(conn, storage, org_id)
+      Selects debtors WHERE role != 'DEBTOR'. For each,
+      runs the orphan check. Deletes qualifying rows and
+      their files folders. Returns the count.
+
+    is_orphaned_related_debtor (private helper)
+      Five-table check: relations (as debtor_id OR as
+      related_debtor_id), debts, communications, actions,
+      documents. Any non-zero count means not orphaned.
+
+  shared/src/relations.rs:
+    db import added.
+    delete_debtor_relation now takes storage. Flow:
+      read related_debtor_id,
+      delete the relation row,
+      if the related person's role != DEBTOR and the
+      five-table check confirms orphan status, delete
+      the person row and their files folder.
+      A plain debtor (role DEBTOR) is never touched.
+    is_orphaned_related_debtor (private helper copy)
+      Identical to the debtors.rs copy. Duplicated by
+      design: it is private, and a public shared helper
+      would expand the surface of debtors.rs.
+
+  src-tauri-agent/src/main.rs:
+    Four new commands registered:
+      get_related_debtor_roles
+      get_debtor_debt_totals
+      insert_related_debtor
+      cleanup_orphaned_related_debtors
+    delete_debtor_relation now takes storage and passes
+    it through.
+
+DESIGN CHOICES
+  Cleanup only targets rows with role != DEBTOR. Plain
+  debtors are never deleted. This is why insert_related_debtor
+  writes the role: without it, cleanup cannot tell
+  "former related person now orphaned" from "plain debtor
+  created and not yet used".
+
+  The five-table check prevents the schema's ON DELETE
+  CASCADE from silently deleting real debts,
+  communications, actions, or documents when a related
+  person is removed.
+
+  cleanup_orphaned_related_debtors runs once per Debtors
+  page mount, not as a background job. If the user is on
+  another page, cleanup waits.
+
+  Mixed currencies: get_debtor_debt_totals groups by
+  (debtor_id, currency). The frontend will show one line
+  per currency in the row and in the header total, not a
+  summed number.
+
+  Orphan cleanup is a destructive operation on page
+  mount. Named plainly: opening the Debtors page may
+  remove rows. The check is safe, but the behavior
+  changed.
+
+VERIFICATION
+  NOT YET DONE. Cloud was on when this slice was
+  committed. Founder paused to write this documentation
+  before compiling the Rust on cloud. The next cloud
+  action is:
+    cd /d C:\gorka-app && git pull
+    cargo build -p gorka-agent
+    cargo build -p gorka-client
+    cargo test -p gorka-shared
+  Expected: gorka-agent 2 warnings, gorka-client 3
+  warnings, shared 14/14.
+
+FRONTEND HALF - NOT STARTED
+  Planned but not written:
+    local.db.ts: RelatedDebtorRole and DebtorDebtTotal
+      types, getRelatedDebtorRoles and getDebtorDebtTotals
+      methods, insertRelatedDebtor and
+      cleanupOrphanedRelatedDebtors methods.
+    RelationEditModal.tsx: create-new path switches from
+      insertDebtor to insertRelatedDebtor.
+    DebtorsPage.tsx: Role column between Phone and
+      Actions, Debt and Currency columns, two-row sticky
+      header (header row + TOTAL row), cleanup on mount,
+      total reflects whole org (Option Y).
+    DebtorsPage.css: sticky thead, scrollable container,
+      role badge styling, right-aligned Debt/Currency
+      cells.
+    DebtorProfilePage.tsx: read get_related_debtor_roles,
+      compute isRelated, hide + Add Guarantor and
+      + Add Pledger, hide the Debts card on related
+      persons.
+
+EXPLICIT NON-CHANGES
+  No schema change.
+  No migration.
+  No dependency.
+  No Client binary change.
+  No change to debtors.role default. Plain debtors are
+    still inserted with role DEBTOR (the default).
+  No change to get_debtors, search_debtors,
+    get_debtor_count, or any existing command's behavior.
+  No change to the Debt / Communication / Action /
+    Document cards on a primary debtor's profile.
+
+DEVIATIONS
+  Two:
+    - Documentation was deferred to end-of-session for
+      D.4a, D.4b-1, D.4b-2a, D.4b-2b, and this slice.
+      Founder authorised.
+    - D.4b-2a and D.4b-2b were verified in one combined
+      cloud trip instead of two. Founder authorised.
+
+================================================================
+END OF D.4b-2c (RUST HALF) RECORD
+================================================================
 END OF DOCUMENT
 ================================================================
