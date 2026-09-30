@@ -6957,7 +6957,580 @@ HANDOFF.md for the status update.
 
 End of entry.
 
+## Recovery Session - September 30 and October 1, 2026 (Stage D.4a-0 through D.4b-2c)
+
+This entry records the HOW decisions from the session that
+built the Agent App's first data pages. Technical slice
+records are in PHASE-9.5-EXTRACTION-LOG.md. Status is in
+HANDOFF.md.
+
+The session covered:
+  - D.4a-0 - primitive gap-fill for data pages.
+  - D.4a   - debtor list and debtor profile (header, debt,
+              actions cards).
+  - D.4b-1 - communications card and documents card.
+  - D.4b-2a - debtor profile photo (Rust and frontend).
+  - D.4b-2b - relations card.
+  - D.4b-2c - role column and orphan cleanup (Rust half
+              only; frontend half is pending).
+
+Decisions below are the HOW decisions that were not
+obvious. Slice mechanics are not repeated here.
+
+================================================================
+D.4a-0 DECISIONS
+================================================================
+
+### DA0-1 - Token strategy is broad and evidence-based
+
+Decision: Extend design-tokens.css with the complete set of
+tokens evidenced by the Client's Collections.tsx and
+DebtorDetail.tsx. Reuse existing tokens wherever they
+already cover a value. Do not add speculative tokens for
+future pages.
+
+Reasoning: D.1's reconnaissance was scoped to the Client's
+shell and entry flow. It did not read the two data pages
+this slice models. Two promises therefore collided: "no
+hardcoded px in component CSS" and "no change to
+design-tokens.css in D.4a". Only one can bend. Extending
+the vocabulary is the choice that preserves the rule
+without falsifying the Client reference.
+
+A narrower alternative (add only what D.4a immediately
+uses, and add more mid-slice) was considered and rejected,
+because it would have split D.4a-0 across other slices.
+Broad once, closed once.
+
+Rejected: B (hardcode values in new component CSS), C
+(accept visual divergence from the Client).
+
+Impact: 24 new tokens across four existing groups. No
+existing token name or value changed.
+
+### DA0-2 - Modal gains closeOnOverlayClick
+
+Decision: Add `closeOnOverlayClick?: boolean` to the Modal
+primitive, default true. Form modals pass false.
+
+Reasoning: The primitive closes on overlay click. The
+Client's modals do not. Form modals with unsaved input
+should not discard input on an accidental outside click.
+Changing the default would alter the behavior of every
+future caller. A per-call opt-out is the smallest change
+that satisfies both.
+
+Rejected: M1 (keep as-is), M2 (design forms to tolerate
+it), M3 (change the primitive default).
+
+Impact: No existing call site is affected. Modal had no
+external call sites at the time of this decision.
+
+### DA0-3 - Button gains size and iconOnly, no more
+
+Decision: Add `size?: 'sm' | 'md'` (default md) and
+`iconOnly?: boolean` (default false) to the Button
+primitive. Color for icon-only buttons comes from the
+existing variant axis. No new variant value.
+
+Reasoning: The Client's data pages use compact
+card-header buttons and chromeless row-action icon
+buttons. Neither shape existed. Adding exactly those two
+shapes is additive and bounded. Rejected: a `lg` size, an
+icon positioning system, an icon registry, or
+`icon-accent`/`icon-danger` variants. Those would begin to
+make the primitive a design framework rather than a
+button.
+
+Impact: Existing call sites unchanged. Five Button call
+sites exist, all in the entry-flow pages, none using the
+new props.
+
+### DA0-4 - Add Select and Textarea primitives
+
+Decision: Add `Select.tsx`/`Select.css` and
+`Textarea.tsx`/`Textarea.css` as thin wrappers modelled on
+`Input.tsx`/`Input.css`. Export from the barrel.
+
+Reasoning: The three D.4a modals require both controls.
+The alternative -- using the Input primitive for normal
+fields and raw HTML for the other two -- would leave two
+styling paths for form fields. Adding both once is
+cleaner. Both wrappers are thin: no label, no error, no
+validation. Same discipline as Input.
+
+Rejected: S2 (add neither), S3 (add Textarea only).
+
+Impact: Ten primitives become twelve. No existing
+primitive changed.
+
+### DA0-5 - TopHeader gains one prefix rule
+
+Decision: Add a single prefix check to TopHeader's title
+lookup. Paths starting with `/debtors/` resolve to
+"Debtor Profile". Everything else follows the existing
+exact-match map.
+
+Reasoning: `/debtors/:id` fell through the exact-match map
+and rendered the fallback "GORKA". The profile route needs
+a title. Generalizing the map to prefix matching was
+considered and rejected as over-scoped. One `if` solves
+the actual problem.
+
+Rejected: T1 (leave it, shows "GORKA"), T3 (general prefix
+matching), T4 (defer the profile route).
+
+Impact: One D.3 file changed, deliberately. Named as a
+scope extension authorised by the founder.
+
+================================================================
+D.4a DECISIONS
+================================================================
+
+### DA-1 - Shell owns the page title; list page has no h1
+
+Decision: The debtors list page does not repeat the title
+in its body. TopHeader shows "Debtors". The page body
+starts with the subtitle on the left and the "+ Add
+Debtor" button on the right.
+
+Reasoning: The shell already owns the route title by
+design (spec 11.4). The Client's Collections.tsx repeats
+it, but that is drift, not one of spec 11.3's six named
+inconsistencies. Defaulting to the already-verified shell
+design is the smaller, more coherent, and more reversible
+choice.
+
+Reversibility: If H1 looks wrong at cloud verification,
+switching to H2 (repeated title) is a one-line edit in two
+files. The founder accepted the risk on this basis.
+
+Impact: One page designed with no body-level h1. The
+profile page has an h1 for the debtor's name, but that is
+content, not a duplicate of the shell title.
+
+### DA-2 - Error banner retry sits next to the banner
+
+Decision: The debtors list page places the retry action
+outside the ErrorBanner primitive, not inside it.
+
+Reasoning: The ErrorBanner primitive takes only a message.
+Adding an action slot would expand the primitive for one
+call site. The retry belongs to the page, not to the
+banner.
+
+Impact: No primitive change. Small page-level CSS.
+
+### DA-3 - Debtor deletion from the profile navigates back
+
+Decision: The profile page's Delete button deletes the
+debtor and navigates back to `/debtors`. Same as the
+Client's DebtorDetail.tsx behavior.
+
+Reasoning: A deleted debtor has no profile. Staying on the
+page would show a stale error. Navigating to the list is
+the natural recovery.
+
+Impact: None beyond the page logic.
+
+### DA-4 - "-" instead of em-dash for empty cells
+
+Decision: Empty email and phone cells render the ASCII
+hyphen "-", not the Client's em-dash.
+
+Reasoning: ASCII-safe. Avoids the terminal mojibake
+problem the recovery has already hit twice.
+
+Impact: Small visual difference from the Client. Named
+deliberately.
 
 
+================================================================
+D.4b-1 DECISIONS
+================================================================
 
+### DB1-1 - Card order matches the Client
 
+Decision: The Communications card is inserted between the
+Debts card and the Actions card. The Documents card is
+added after Actions. The Actions card moves from position
+3 to position 4. Final order: Info, Debts, Communications,
+Actions, Documents.
+
+Reasoning: The Client's DebtorDetail.tsx uses that order.
+D.4a placed Actions directly after Debts because
+Communications did not exist yet. Rather than preserve
+that divergence, D.4b-1 brings the Agent into alignment
+with the Client.
+
+Impact: The Actions card's JSX was relocated. Same JSX,
+same handlers, position only. Named in the commit message
+so the move is not buried under "added two cards".
+
+### DB1-2 - Communications are append-only
+
+Decision: The Communications card has no edit path.
+Corrections are delete-and-relog.
+
+Reasoning: The schema has no updated_at on
+communications, and the Client's CommunicationEditModal
+is create-only. The Agent mirrors the Client exactly.
+
+Impact: No "edit" button on communication rows. No
+update_communication command anywhere.
+
+### DB1-3 - File upload uses a label-wrapping-hidden-input
+
+Decision: The Documents card's "Choose file" control is a
+`<label>` styled as a ghost button, wrapping a hidden
+`<input type="file">`. Not the Button primitive with a ref.
+
+Reasoning: Mirrors the Client's pattern. Using the Button
+primitive with a ref would be cleaner React but would
+diverge from the Client on a point that is not one of the
+six named spec 11.3 inconsistencies.
+
+Impact: One small page-level CSS class. No primitive
+change.
+
+================================================================
+D.4b-2a DECISIONS
+================================================================
+
+### DB2a-1 - Photo display via blob URL from Rust bytes
+
+Decision: Add one Rust function `read_debtor_photo` that
+returns `{ bytes: Vec<u8>, mime: String }`. Frontend
+builds a `blob:` URL from the bytes and displays it in
+`<img>`. No config change, no new crate, no new npm
+package.
+
+Reasoning: The Agent's CSP is `img-src: 'self' data:
+blob:`. It does not include `asset:` or `file:`. So
+pointing `<img src="file://...">` at a stored path is
+blocked by the security policy. Three workarounds were
+considered:
+  A. Enable Tauri's asset protocol. Widens CSP.
+  B. Return a base64 data URI from Rust. Adds the base64
+     crate.
+  C. Use @tauri-apps/plugin-fs in the frontend. New npm
+     dependency, uncertain capability scope.
+
+The fourth path -- Rust bytes + blob URL -- uses what
+already exists. CSP already allows blob:. No new surface.
+
+Impact: One new function, one new struct, one new command
+registration. Agent binary only; Client untouched.
+
+### DB2a-2 - Placeholder is the existing Avatar primitive
+
+Decision: When no photo is set, the header card shows the
+existing `Avatar` primitive (circular, accent background,
+initials) at 96x96. No new placeholder type.
+
+Reasoning: The primitive already produces the right shape.
+Adding a distinct photo placeholder would duplicate it.
+
+Impact: None. Avatar primitive unchanged.
+
+### DB2a-3 - Change-photo uses the dialog plugin
+
+Decision: The "Change photo" control uses
+`@tauri-apps/plugin-dialog`'s `open()` with an image
+filter, not a hidden file input.
+
+Reasoning: `set_debtor_photo` takes a filesystem path. The
+dialog returns a path. A hidden file input would return a
+File object, requiring an extra read step. The dialog is
+also already installed and already used by EnrollPage.
+
+Impact: No new dependency. Small handler in the profile
+page.
+
+================================================================
+D.4b-2b DECISIONS
+================================================================
+
+### DB2b-1 - Zero Rust, zero schema for the relations card
+
+Decision: The Relations card uses only existing commands.
+No new Rust function, no new command, no migration.
+
+Reasoning: Initial reconnaissance believed a role-setting
+function was needed so the relations card could badge each
+row with GUARANTOR or PLEDGER. On re-reading
+relations.rs, the badge can read from
+`debtor_relations.relation_type`, which is already
+populated by `insert_debtor_relation`. The debtors.role
+column is not needed for this slice.
+
+Impact: The card is a pure frontend addition.
+
+### DB2b-2 - Collateral is per person, not per relation
+
+Decision: Collateral is stored at
+`related_person.data.collateral = { type, description }`.
+Not on the debtor_relations row. One collateral per
+related person, not per relation.
+
+Reasoning: The pragmatic path agreed with the founder. The
+debtor_relations table has no data column. Adding one
+would require a migration and a Rust change. Storing in
+the person's existing `data` JSON uses what exists.
+
+Known limitation: The same pledger pledging different
+collateral for two different debtors cannot be expressed.
+Accepted for MVP. The funded phase may add per-relation
+collateral if the business needs it.
+
+### DB2b-3 - Two header buttons, role-specific modal titles
+
+Decision: The Relations card has two header buttons,
+"+ Add Guarantor" and "+ Add Pledger". Each opens the same
+modal with the role preset. Modal title is role-specific:
+"Add Guarantor" or "Add Pledger".
+
+Reasoning: The founder chose this over a single button
+with a role selector inside the modal. Two buttons are
+simpler and make the two roles visible at a glance.
+
+Impact: One modal with a `role` prop.
+
+### DB2b-4 - Collateral fields visible only for PLEDGER
+
+Decision: The modal's create-new and link-existing modes
+show the two collateral fields only when the role is
+PLEDGER. Guarantor sees only the four name fields.
+
+Reasoning: A guarantor guarantees a debt; a pledger
+pledges an asset. Collateral is a pledger concept.
+
+Impact: One conditional in the modal.
+
+### DB2b-5 - No reverse-direction view
+
+Decision: A guarantor's own profile does not show "This
+person guarantees X". The relation is only visible on the
+primary debtor's profile.
+
+Reasoning: Stage B.3 declared reverse-direction views out
+of scope. Unchanged.
+
+Impact: None.
+
+================================================================
+D.4b-2c DECISIONS (Rust half)
+================================================================
+
+### DB2c-1 - Cleanup writes role, not a marker flag
+
+Decision: Write `role = 'GUARANTOR'` or `role = 'PLEDGER'`
+into `debtors.role` when a related person is created via
+the relation modal's create-new path. Use `role != 'DEBTOR'`
+as the marker for cleanup.
+
+Reasoning: Without a marker, startup cleanup cannot
+distinguish "former related person now orphaned" from
+"plain debtor created and not yet used". The latter would
+be incorrectly deleted by the safe check. Writing role
+once, at creation, resolves this.
+
+This overrides the earlier decision (D.4b-2b, and D.4b-2c
+planning) that the Agent would not write `debtors.role`.
+The founder authorised this on October 1, 2026.
+
+Rejected: leaving role unset and relying on the five-table
+check alone. That would delete every freshly-created plain
+debtor on the next Debtors page mount.
+
+Impact: `insert_related_debtor` writes the role. Nothing
+else writes `debtors.role`.
+
+### DB2c-2 - Cleanup on page mount, not a background job
+
+Decision: `cleanup_orphaned_related_debtors` runs once
+when the Debtors page mounts. It is not a background
+process, not a scheduled task, not a startup job.
+
+Reasoning: The Debtors page is the only place a user can
+see the effect. Running cleanup there means the user
+notices removal if it happens unexpectedly. A background
+job would remove rows silently.
+
+Impact: Cleanup does not run if the user never opens the
+Debtors page. This is acceptable for MVP.
+
+### DB2c-3 - Five-table orphan check, not relations-only
+
+Decision: The orphan check counts relations, debts,
+communications, actions, and documents. Any non-zero
+count means not orphaned.
+
+Reasoning: The schema uses `ON DELETE CASCADE` throughout.
+Deleting a person who happens to have debts of their own
+would silently delete those debts, their communications,
+their actions, their documents. The five-table check
+prevents that.
+
+Rejected: relations-only check. Fast but unsafe.
+
+### DB2c-4 - is_orphaned_related_debtor is duplicated
+
+Decision: The five-table orphan check exists twice:
+once as a private helper in `debtors.rs`, once as a
+private helper in `relations.rs`. They are identical.
+
+Reasoning: Rust privacy. The helper is private to
+`debtors.rs`. `relations.rs` cannot call it. Making the
+helper public would expand the public surface of
+`debtors.rs` for a function that is only used internally
+by two modules. Duplication of ~50 lines was chosen over
+exposing a public helper.
+
+Recorded as a deliberate duplication. If the helper ever
+grows or changes, both copies must be updated together.
+
+### DB2c-5 - Debt and Currency columns are separate
+
+Decision: The debtors list has a Debt column and a
+separate Currency column. Not one column with
+"1,234.56 USD" strings.
+
+Reasoning: Different debtors may have debts in different
+currencies. Separating the amount from the currency code
+allows sorting and comparison per column, and allows a
+debtor with debts in two currencies to show one line per
+currency without ambiguity.
+
+Impact: `get_debtor_debt_totals` groups by
+`(debtor_id, currency)`. The frontend sums within
+currency and renders one line per currency.
+
+### DB2c-6 - Total row reflects the whole organization
+
+Decision: The TOTAL row above the data row shows the
+summed debt of all debtors in the organization, grouped
+by currency. It does not change when the user searches.
+
+Reasoning: The total answers "how much debt does this
+company hold". That is a fixed number, not a filtered
+number. If the user searches "Bauman", the total still
+shows the whole organization's debt. Filtering changes
+what rows are visible, not the size of the company.
+
+Rejected: X (total reflects the filtered subset). That
+would make the total depend on the search box and would
+answer a different question.
+
+### DB2c-7 - Sticky two-row header
+
+Decision: The debtors table's header row and its TOTAL
+row stick to the top of the scroll region while the data
+rows scroll underneath.
+
+Reasoning: With thousands of debtors, scrolling loses
+the column labels and the total. The founder explicitly
+asked for a two-line sticky block.
+
+Impact: Two CSS rules. No behavior change.
+
+================================================================
+SEAMS FOR THE CLIENT DASHBOARD
+================================================================
+
+Recorded now, not actioned in Phase 9.5. These are
+forward-looking commitments the founder made during the
+session.
+
+### Seam-1 - Relations and photo will exist on the Client
+### Dashboard too
+
+Decision: When the Client Dashboard is revisited, it will
+gain the same relations card and profile photo that the
+Agent now has. The admin bulk-imports debtors and needs
+to attach guarantors and pledgers to them; the Client side
+cannot lag the Agent side indefinitely.
+
+Not in Phase 9.5. The Client Dashboard currently has no
+relations UI. Adding it is a separate slice.
+
+### Seam-2 - Nothing Agent-only in the relations or photo
+### layer
+
+Decision: The Agent's relations and photo UI must not
+encode Agent-only assumptions. Component names, props,
+and copy are neutral. `RelationEditModal` takes a
+`debtorId` and a `role`, not a user context. The photo
+component does not reference AGENT role.
+
+Reasoning: When the Client reuses these components, the
+only difference is which page they sit on. No refactor
+should be needed.
+
+Impact: The Rust commands, the local.db.ts wrappers, and
+the two components are already client-neutral. The
+Client will register the same commands in its
+generate_handler! and reuse the same services layer
+shape.
+
+### Seam-3 - The list-badge gap will be closed by D.4b-2c
+
+Decision: Spec 11.6 says related persons appear in the
+debtor list "distinguished by a role badge". D.4b-2b
+deferred the badge. D.4b-2c's Rust half now provides
+`get_related_debtor_roles`, which the frontend half will
+use to render the badge. The gap closes when the frontend
+half lands.
+
+Noted so the spec line is not silently left unmet.
+
+================================================================
+DEVIATIONS RECORDED FOR THIS SESSION
+================================================================
+
+Three deviations, all founder-authorised.
+
+### Dev-1 - Documentation deferred to end-of-session
+
+The working rules say "after every slice: build on cloud,
+run tests, update PHASE-9.5-EXTRACTION-LOG.md." For D.4a,
+D.4b-1, D.4b-2a, D.4b-2b, and D.4b-2c (Rust half), the
+extraction log entry was written in a single pass at the
+end of the session, not after each slice.
+
+Reason: The founder preferred to complete D.4b-2b before
+documenting, to keep the working context intact and to
+avoid interrupting the flow. The founder then preferred
+to complete documentation before the D.4b-2c cloud
+verification, to protect the session's work against an
+unexpected chat closure.
+
+Risk: Bounded. Git holds the ground truth of every slice.
+
+### Dev-2 - One cloud trip instead of two for D.4b-2a
+
+The D.4b-2a plan originally intended two cloud trips: one
+for the Rust half, one for the frontend. Combined into
+one trip that also verified D.4b-2b's Rust.
+
+Reason: Cloud sessions cost money. Rust compile is
+regression-only for the frontend half.
+
+### Dev-3 - D.4b-2c Rust half is committed but not yet
+### compiled on cloud
+
+Recorded in the extraction log and here. The Rust half
+was committed on October 1, then the session paused for
+documentation before the cloud compile. The compile will
+happen after this documentation pass.
+
+================================================================
+END OF SESSION ENTRY
+================================================================
+
+This entry records the D.4a through D.4b-2c slice decisions
+and the three deviations. It does not decide anything about
+D.4b-2c's frontend half; that follows after cloud compiles
+the Rust half.
+
+End of entry.
