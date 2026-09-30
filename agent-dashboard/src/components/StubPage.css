@@ -1,0 +1,19 @@
+.stub-page {
+  max-width: 720px;
+}
+
+.stub-page__title {
+  font-family: var(--font-family);
+  font-size: var(--font-size-page-title);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-strong);
+  margin: 0 0 8px 0;
+}
+
+.stub-page__subtitle {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}

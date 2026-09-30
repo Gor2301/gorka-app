@@ -1,5 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
-import { Button } from './primitives';
+import { Outlet } from 'react-router-dom';
+import Sidebar from './Sidebar';
+import TopHeader from './TopHeader';
 import './AppShell.css';
 
 interface AppShellProps {
@@ -7,26 +8,14 @@ interface AppShellProps {
 }
 
 export default function AppShell({ onLogout }: AppShellProps) {
-  const handleLogout = async () => {
-    try {
-      await invoke('logout');
-    } catch {
-      // Even if the backend call fails, drop the user back to Login
-      // so they are not stuck inside the shell.
-    }
-    onLogout();
-  };
-
   return (
-    <div className="app-shell-placeholder">
-      <div className="app-shell-placeholder__box">
-        <h1 className="app-shell-placeholder__title">Entry flow complete</h1>
-        <p className="app-shell-placeholder__text">
-          The main Agent shell is built in Stage D.3.
-        </p>
-        <Button variant="ghost" onClick={handleLogout}>
-          Log out
-        </Button>
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-shell__main">
+        <TopHeader onLogout={onLogout} />
+        <main className="app-shell__content">
+          <Outlet />
+        </main>
       </div>
     </div>
   );

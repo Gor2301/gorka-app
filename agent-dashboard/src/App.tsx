@@ -1,14 +1,18 @@
-// GORKA Agent Dashboard - Stage D.2 entry flow.
+// GORKA Agent Dashboard - Stage D.3 entry flow + main shell.
 //
-// State machine: loading -> login -> unlock -> enroll -> shell.
-// The bootstrap and each screen's success handler call advance(),
-// which re-reads the current session state and moves the machine
-// to wherever the user should be right now. This avoids manual
-// step-to-step wiring and keeps the flow self-correcting.
+// The entry flow is a state machine: loading -> login -> unlock
+// -> enroll -> shell. It is not a router, because the three
+// entry steps are sequential gates, not navigable destinations.
+//
+// Once the machine reaches the shell step, the shell is rendered
+// inside a HashRouter. All further navigation (sidebar links,
+// future debtor profile routes) lives inside that router.
 
 import { useCallback, useEffect, useState } from 'react';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import AppShell from '@/components/AppShell';
+import StubPage from '@/components/StubPage';
 import LoginPage from '@/pages/LoginPage';
 import UnlockPage from '@/pages/UnlockPage';
 import EnrollPage from '@/pages/EnrollPage';
@@ -78,5 +82,75 @@ export default function App() {
     return <EnrollPage onSuccess={advance} />;
   }
 
-  return <AppShell onLogout={advance} />;
+  return (
+    <HashRouter>
+      <Routes>
+        <Route element={<AppShell onLogout={advance} />}>
+          <Route
+            path="/"
+            element={
+              <StubPage
+                title="Today"
+                subtitle="The plan view (calendar) arrives in D.5."
+              />
+            }
+          />
+          <Route
+            path="/debtors"
+            element={
+              <StubPage
+                title="Debtors"
+                subtitle="The debtor list and profile arrive in D.4."
+              />
+            }
+          />
+          <Route
+            path="/communication-tools"
+            element={
+              <StubPage
+                title="Communication Tools"
+                subtitle="Your administrator has not enabled any communication tools yet."
+              />
+            }
+          />
+          <Route
+            path="/actions"
+            element={
+              <StubPage
+                title="Actions"
+                subtitle="Cross-debtor actions arrive in D.6. For now, actions are reached from the debtor profile."
+              />
+            }
+          />
+          <Route
+            path="/documents"
+            element={
+              <StubPage
+                title="Documents"
+                subtitle="Cross-debtor documents arrive in D.6. For now, documents are reached from the debtor profile."
+              />
+            }
+          />
+          <Route
+            path="/copilot"
+            element={
+              <StubPage
+                title="Copilot"
+                subtitle="The AI Copilot arrives in a later phase."
+              />
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <StubPage
+                title="Settings"
+                subtitle="Local password change arrives in a later phase."
+              />
+            }
+          />
+        </Route>
+      </Routes>
+    </HashRouter>
+  );
 }
