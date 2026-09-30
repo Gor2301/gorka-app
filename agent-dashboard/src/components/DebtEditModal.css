@@ -1,0 +1,21 @@
+.debt-edit-modal__error {
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.debt-edit-modal__fields {
+  display: grid;
+  gap: var(--space-grid-gap-sm);
+}
+
+.debt-edit-modal__row {
+  display: grid;
+  gap: var(--space-gap-sm);
+}
+
+.debt-edit-modal__row--amount {
+  grid-template-columns: 2fr 1fr;
+}
+
+.debt-edit-modal__row--status {
+  grid-template-columns: 1fr 1fr;
+}

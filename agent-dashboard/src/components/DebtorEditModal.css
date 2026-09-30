@@ -1,0 +1,8 @@
+.debtor-edit-modal__error {
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.debtor-edit-modal__fields {
+  display: grid;
+  gap: var(--space-grid-gap-sm);
+}

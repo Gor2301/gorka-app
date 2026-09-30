@@ -16,6 +16,8 @@ import StubPage from '@/components/StubPage';
 import LoginPage from '@/pages/LoginPage';
 import UnlockPage from '@/pages/UnlockPage';
 import EnrollPage from '@/pages/EnrollPage';
+import DebtorsPage from '@/pages/DebtorsPage';
+import DebtorProfilePage from '@/pages/DebtorProfilePage';
 import { EntryCard, Spinner } from '@/components/primitives';
 
 type EntryStep = 'loading' | 'login' | 'unlock' | 'enroll' | 'shell';
@@ -95,15 +97,8 @@ export default function App() {
               />
             }
           />
-          <Route
-            path="/debtors"
-            element={
-              <StubPage
-                title="Debtors"
-                subtitle="The debtor list and profile arrive in D.4."
-              />
-            }
-          />
+          <Route path="/debtors" element={<DebtorsPage />} />
+          <Route path="/debtors/:id" element={<DebtorProfilePage />} />
           <Route
             path="/communication-tools"
             element={
