@@ -215,6 +215,53 @@ fn get_debtor_count(
 }
 
 #[command]
+fn get_related_debtor_roles(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<RelatedDebtorRole>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::get_related_debtor_roles(conn, &organization_id)
+}
+
+#[command]
+fn get_debtor_debt_totals(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<DebtorDebtTotal>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::get_debtor_debt_totals(conn, &organization_id)
+}
+
+#[command]
+fn insert_related_debtor(
+    input: DebtorInput,
+    role: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Debtor, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::insert_related_debtor(conn, &organization_id, input, &role)
+}
+
+#[command]
+fn cleanup_orphaned_related_debtors(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
+) -> Result<u32, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::cleanup_orphaned_related_debtors(conn, &storage, &organization_id)
+}
+
+#[command]
 fn get_debts(
     debtor_id: String,
     app: tauri::AppHandle,
@@ -527,11 +574,12 @@ fn delete_debtor_relation(
     id: String,
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-    relations::delete_debtor_relation(conn, &organization_id, &id)
+    relations::delete_debtor_relation(conn, &storage, &organization_id, &id)
 }
 
 // ---------------------------------------------------------------------
@@ -643,6 +691,10 @@ fn main() {
             delete_debtor,
             search_debtors,
             get_debtor_count,
+            get_related_debtor_roles,
+            get_debtor_debt_totals,
+            insert_related_debtor,
+            cleanup_orphaned_related_debtors,
             get_debts,
             insert_debt,
             update_debt,

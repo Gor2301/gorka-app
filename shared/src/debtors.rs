@@ -18,7 +18,7 @@ use chrono::Utc;
 
 use crate::db;
 use crate::storage::AppStorage;
-use crate::models::{Debtor, DebtorInput, DebtorPhotoData};
+use crate::models::{Debtor, DebtorInput, DebtorPhotoData, RelatedDebtorRole, DebtorDebtTotal};
 
 pub fn get_debtors(
     conn: &Connection,
@@ -412,4 +412,211 @@ fn mime_from_extension(path: &str) -> &'static str {
         "bmp" => "image/bmp",
         _ => "application/octet-stream",
     }
+}
+
+pub fn get_related_debtor_roles(
+    conn: &Connection,
+    organization_id: &str,
+) -> Result<Vec<RelatedDebtorRole>, String> {
+    let mut stmt = conn.prepare(
+        "SELECT related_debtor_id, relation_type
+         FROM debtor_relations
+         WHERE organization_id = ?1"
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map([organization_id], |row| {
+        Ok(RelatedDebtorRole {
+            debtor_id: row.get(0)?,
+            relation_type: row.get(1)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut roles = Vec::new();
+    for row in rows {
+        roles.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(roles)
+}
+
+pub fn get_debtor_debt_totals(
+    conn: &Connection,
+    organization_id: &str,
+) -> Result<Vec<DebtorDebtTotal>, String> {
+    let mut stmt = conn.prepare(
+        "SELECT d.debtor_id, d.currency, COALESCE(SUM(d.amount), 0) AS total
+         FROM debts d
+         INNER JOIN debtors b ON b.id = d.debtor_id
+         WHERE b.organization_id = ?1
+           AND d.status NOT IN ('PAID', 'CANCELLED')
+         GROUP BY d.debtor_id, d.currency
+         ORDER BY d.debtor_id, d.currency"
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map([organization_id], |row| {
+        Ok(DebtorDebtTotal {
+            debtor_id: row.get(0)?,
+            currency: row.get(1)?,
+            total_amount: row.get(2)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut totals = Vec::new();
+    for row in rows {
+        totals.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(totals)
+}
+
+pub fn insert_related_debtor(
+    conn: &Connection,
+    organization_id: &str,
+    input: DebtorInput,
+    role: &str,
+) -> Result<Debtor, String> {
+    match role {
+        "GUARANTOR" | "PLEDGER" => {}
+        _ => return Err("Invalid role".to_string()),
+    }
+
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, role, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            &id,
+            organization_id,
+            &input.name,
+            &input.surname,
+            &input.email,
+            &input.phone,
+            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+            role,
+            &now,
+            &now,
+        ],
+    ).map_err(|e| e.to_string())?;
+
+    db::log_audit(conn, "INSERT_RELATED_DEBTOR", Some(&id), 1, "Inserted related debtor")?;
+
+    Ok(Debtor {
+        id,
+        organization_id: organization_id.to_string(),
+        name: input.name,
+        surname: input.surname,
+        email: input.email,
+        phone: input.phone,
+        data: input.data,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+fn is_orphaned_related_debtor(
+    conn: &Connection,
+    organization_id: &str,
+    debtor_id: &str,
+) -> Result<bool, String> {
+    let relations: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM debtor_relations
+         WHERE organization_id = ?1
+           AND (debtor_id = ?2 OR related_debtor_id = ?2)",
+        params![organization_id, debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if relations > 0 {
+        return Ok(false);
+    }
+
+    let debts: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM debts WHERE debtor_id = ?1",
+        params![debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if debts > 0 {
+        return Ok(false);
+    }
+
+    let comms: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM communications WHERE debtor_id = ?1",
+        params![debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if comms > 0 {
+        return Ok(false);
+    }
+
+    let acts: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM actions WHERE debtor_id = ?1",
+        params![debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if acts > 0 {
+        return Ok(false);
+    }
+
+    let docs: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM documents WHERE entity_id = ?1",
+        params![debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if docs > 0 {
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+pub fn cleanup_orphaned_related_debtors(
+    conn: &Connection,
+    storage: &AppStorage,
+    organization_id: &str,
+) -> Result<u32, String> {
+    let ids: Vec<String> = {
+        let mut stmt = conn.prepare(
+            "SELECT id FROM debtors
+             WHERE organization_id = ?1 AND role != 'DEBTOR'"
+        ).map_err(|e| e.to_string())?;
+
+        let rows = stmt.query_map([organization_id], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+
+        let mut collected: Vec<String> = Vec::new();
+        for row in rows {
+            collected.push(row.map_err(|e| e.to_string())?);
+        }
+        collected
+    };
+
+    let mut removed: u32 = 0;
+    for id in ids {
+        if is_orphaned_related_debtor(conn, organization_id, &id)? {
+            conn.execute(
+                "DELETE FROM debtors WHERE id = ?1 AND organization_id = ?2",
+                params![&id, organization_id],
+            ).map_err(|e| e.to_string())?;
+
+            if let Ok(dir) = db::get_debtor_files_dir(storage, &id) {
+                if dir.exists() {
+                    let _ = std::fs::remove_dir_all(&dir);
+                }
+            }
+            removed += 1;
+        }
+    }
+
+    if removed > 0 {
+        db::log_audit(
+            conn,
+            "CLEANUP_ORPHANS",
+            None,
+            removed as i64,
+            "Cleaned orphaned related debtors",
+        )?;
+    }
+
+    Ok(removed)
 }

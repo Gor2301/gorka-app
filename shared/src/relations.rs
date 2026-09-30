@@ -26,7 +26,9 @@ use rusqlite::{Connection, params};
 use uuid::Uuid;
 use chrono::Utc;
 
+use crate::db;
 use crate::models::{DebtorRelation, DebtorRelationInput};
+use crate::storage::AppStorage;
 
 pub fn get_debtor_relations(
     conn: &Connection,
@@ -151,13 +153,119 @@ pub fn insert_debtor_relation(
 
 pub fn delete_debtor_relation(
     conn: &Connection,
+    storage: &AppStorage,
     organization_id: &str,
     id: &str,
 ) -> Result<bool, String> {
+    // Read the related person before we delete the relation row.
+    let related: Option<String> = conn
+        .query_row(
+            "SELECT related_debtor_id FROM debtor_relations
+             WHERE id = ?1 AND organization_id = ?2",
+            params![id, organization_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let related_id = match related {
+        Some(r) => r,
+        None => return Ok(false),
+    };
+
     let affected = conn.execute(
         "DELETE FROM debtor_relations WHERE id = ?1 AND organization_id = ?2",
         params![id, organization_id],
     ).map_err(|e| e.to_string())?;
 
-    Ok(affected > 0)
+    if affected == 0 {
+        return Ok(false);
+    }
+
+    // If the related person was a marker-role related debtor and
+    // now has nothing else (no other relations, no debts, no
+    // communications, no actions, no documents), remove the
+    // person row and their files folder. A plain debtor (role
+    // DEBTOR) is never touched.
+    let role: Option<String> = conn
+        .query_row(
+            "SELECT role FROM debtors WHERE id = ?1 AND organization_id = ?2",
+            params![&related_id, organization_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if let Some(r) = role {
+        if r != "DEBTOR" {
+            let orphaned = is_orphaned_related_debtor(conn, organization_id, &related_id)?;
+            if orphaned {
+                conn.execute(
+                    "DELETE FROM debtors WHERE id = ?1 AND organization_id = ?2",
+                    params![&related_id, organization_id],
+                ).map_err(|e| e.to_string())?;
+
+                if let Ok(dir) = db::get_debtor_files_dir(storage, &related_id) {
+                    if dir.exists() {
+                        let _ = std::fs::remove_dir_all(&dir);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(true)
+}
+
+fn is_orphaned_related_debtor(
+    conn: &Connection,
+    organization_id: &str,
+    debtor_id: &str,
+) -> Result<bool, String> {
+    let relations: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM debtor_relations
+         WHERE organization_id = ?1
+           AND (debtor_id = ?2 OR related_debtor_id = ?2)",
+        params![organization_id, debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if relations > 0 {
+        return Ok(false);
+    }
+
+    let debts: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM debts WHERE debtor_id = ?1",
+        params![debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if debts > 0 {
+        return Ok(false);
+    }
+
+    let comms: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM communications WHERE debtor_id = ?1",
+        params![debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if comms > 0 {
+        return Ok(false);
+    }
+
+    let acts: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM actions WHERE debtor_id = ?1",
+        params![debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if acts > 0 {
+        return Ok(false);
+    }
+
+    let docs: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM documents WHERE entity_id = ?1",
+        params![debtor_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if docs > 0 {
+        return Ok(false);
+    }
+
+    Ok(true)
 }
