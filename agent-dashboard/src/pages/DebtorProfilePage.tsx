@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { open } from '@tauri-apps/plugin-dialog';
 import { ArrowLeft, Pencil, Trash2, FileText, Upload } from 'lucide-react';
 import {
+  Avatar,
   Button,
   Card,
   ErrorBanner,
@@ -42,6 +44,9 @@ export default function DebtorProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const photoUrlRef = useRef<string | null>(null);
+
   const [debts, setDebts] = useState<Debt[]>([]);
   const [debtsLoading, setDebtsLoading] = useState(true);
   const [debtsError, setDebtsError] = useState('');
@@ -80,6 +85,29 @@ export default function DebtorProfilePage() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPhoto = async (debtorId: string) => {
+    try {
+      const data = await localDB.readDebtorPhoto(debtorId);
+      if (photoUrlRef.current) {
+        URL.revokeObjectURL(photoUrlRef.current);
+        photoUrlRef.current = null;
+      }
+      if (data) {
+        const blob = new Blob(
+          [new Uint8Array(data.bytes)],
+          { type: data.mime },
+        );
+        const url = URL.createObjectURL(blob);
+        photoUrlRef.current = url;
+        setPhotoUrl(url);
+      } else {
+        setPhotoUrl(null);
+      }
+    } catch {
+      setPhotoUrl(null);
     }
   };
 
@@ -141,12 +169,42 @@ export default function DebtorProfilePage() {
 
   useEffect(() => {
     loadDebtor();
+    if (id) loadPhoto(id);
     loadDebts();
     loadCommunications();
     loadActions();
     loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    return () => {
+      if (photoUrlRef.current) {
+        URL.revokeObjectURL(photoUrlRef.current);
+        photoUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleChangePhoto = async () => {
+    if (!debtor) return;
+    const selected = await open({
+      multiple: false,
+      filters: [
+        {
+          name: 'Images',
+          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'],
+        },
+      ],
+    });
+    if (!selected || typeof selected !== 'string') return;
+    try {
+      await localDB.setDebtorPhoto(debtor.id, selected);
+      await loadPhoto(debtor.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   const openAddDebt = () => {
     setEditingDebtId(null);
@@ -360,33 +418,59 @@ export default function DebtorProfilePage() {
       </p>
 
       <Card>
-        <div className="debtor-profile__grid">
-          <div>
-            <span className="debtor-profile__label">Name</span>
-            <div className="debtor-profile__value">{debtor.name}</div>
+        <div className="debtor-profile__header">
+          <div className="debtor-profile__photo-block">
+            {photoUrl ? (
+              <img
+                className="debtor-profile__photo"
+                src={photoUrl}
+                alt="Debtor profile"
+              />
+            ) : (
+              <div className="debtor-profile__photo">
+                <Avatar
+                  name={`${debtor.name} ${debtor.surname}`}
+                  size={96}
+                />
+              </div>
+            )}
+            <button
+              type="button"
+              className="debtor-profile__photo-change"
+              onClick={handleChangePhoto}
+            >
+              Change photo
+            </button>
           </div>
-          <div>
-            <span className="debtor-profile__label">Surname</span>
-            <div className="debtor-profile__value">{debtor.surname}</div>
-          </div>
-          <div>
-            <span className="debtor-profile__label">Email</span>
-            <div className="debtor-profile__value">{debtor.email || '-'}</div>
-          </div>
-          <div>
-            <span className="debtor-profile__label">Phone</span>
-            <div className="debtor-profile__value">{debtor.phone || '-'}</div>
-          </div>
-          <div>
-            <span className="debtor-profile__label">Created</span>
-            <div className="debtor-profile__value">
-              {new Date(debtor.created_at).toLocaleString()}
+
+          <div className="debtor-profile__grid">
+            <div>
+              <span className="debtor-profile__label">Name</span>
+              <div className="debtor-profile__value">{debtor.name}</div>
             </div>
-          </div>
-          <div>
-            <span className="debtor-profile__label">Updated</span>
-            <div className="debtor-profile__value">
-              {new Date(debtor.updated_at).toLocaleString()}
+            <div>
+              <span className="debtor-profile__label">Surname</span>
+              <div className="debtor-profile__value">{debtor.surname}</div>
+            </div>
+            <div>
+              <span className="debtor-profile__label">Email</span>
+              <div className="debtor-profile__value">{debtor.email || '-'}</div>
+            </div>
+            <div>
+              <span className="debtor-profile__label">Phone</span>
+              <div className="debtor-profile__value">{debtor.phone || '-'}</div>
+            </div>
+            <div>
+              <span className="debtor-profile__label">Created</span>
+              <div className="debtor-profile__value">
+                {new Date(debtor.created_at).toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <span className="debtor-profile__label">Updated</span>
+              <div className="debtor-profile__value">
+                {new Date(debtor.updated_at).toLocaleString()}
+              </div>
             </div>
           </div>
         </div>

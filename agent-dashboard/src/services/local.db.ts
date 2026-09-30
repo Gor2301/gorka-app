@@ -154,6 +154,11 @@ export interface DocumentInput {
   is_primary?: boolean;
 }
 
+export interface DebtorPhotoData {
+  bytes: number[];
+  mime: string;
+}
+
 // --- Local DB -------------------------------------------------
 
 export const localDB = {
@@ -313,5 +318,23 @@ export const localDB = {
 
   async deleteDocument(id: string): Promise<boolean> {
     return await invoke<boolean>('delete_document', { id });
+  },
+
+  async setDebtorPhoto(
+    debtorId: string,
+    sourceFilePath: string,
+  ): Promise<void> {
+    await invoke('set_debtor_photo', {
+      debtorId,
+      sourceFilePath,
+    });
+  },
+
+  async readDebtorPhoto(
+    debtorId: string,
+  ): Promise<DebtorPhotoData | null> {
+    return await invoke<DebtorPhotoData | null>('read_debtor_photo', {
+      debtorId,
+    });
   },
 };

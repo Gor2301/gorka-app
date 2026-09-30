@@ -243,3 +243,45 @@
 .debtor-profile__upload-input {
   display: none;
 }
+
+/* Photo block (D.4b-2a). Two-column header: photo left, info grid right. */
+.debtor-profile__header {
+  display: flex;
+  gap: var(--space-grid-gap);
+  align-items: flex-start;
+}
+
+.debtor-profile__photo-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-gap-sm);
+  flex-shrink: 0;
+}
+
+.debtor-profile__photo {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-main);
+  object-fit: cover;
+}
+
+.debtor-profile__photo-change {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body-sm);
+  padding: 0;
+  text-decoration: underline;
+}
+
+.debtor-profile__photo-change:hover {
+  color: var(--color-text-strong);
+}
