@@ -1325,4 +1325,66 @@ See DECISIONS.md (September 30 entry), HANDOFF.md,
 SESSION-LOG.md, and PHASE-9.5-EXTRACTION-LOG.md for full
 details.
 
+================================================================
+Update - October 1, 2026 (Stage D.4a-0 through D.4b-2c Rust half)
+================================================================
 
+Continued Phase 9.5. Built the Agent App's first data pages:
+debtor list, debtor profile, communications, documents,
+photo, relations. Six slice commits, four documentation
+commits. No production touched. No cloud schema change.
+The invariant held.
+
+The sequence executed on October 1:
+
+  D.4a-0    primitive gap-fill             DONE (7f122e1)
+  D.4a      debtor list and profile        DONE (32f1475)
+  D.4b-1    comms and docs cards           DONE (c5e2d6e)
+  D.4b-2a   debtor profile photo           DONE (8ddb6ef, 3688d9f)
+  D.4b-2b   relations card                 DONE (68440de)
+  D.4b-2c   role column + orphan cleanup   RUST HALF DONE (c73373d)
+  Documentation batch                      DONE (d0eb175, 829dcea,
+                                                  b184408, this)
+
+What exists now:
+
+  - The Agent has real data pages: list with search and
+    CRUD, profile with header card (photo + info grid),
+    Debts card, Relations card, Communications card,
+    Actions card, Documents card.
+  - Photo displays via blob URL from Rust bytes. No CSP
+    change, no new crate, no new npm package.
+  - Relations supports Add Guarantor and Add Pledger,
+    with collateral fields for pledgers only.
+  - The Rust half of D.4b-2c provides the role lookup,
+    the debt totals lookup, and safe orphan cleanup. The
+    frontend half is not written yet.
+
+What is verified on cloud:
+
+  D.4a, D.4b-1, D.4b-2a, D.4b-2b. All behavioral tests
+  passed, including persistence across process restart.
+
+What is committed but NOT yet compiled on cloud:
+
+  c73373d - D.4b-2c Rust half. Next cloud action:
+    cd /d C:\gorka-app && git pull
+    cargo build -p gorka-agent
+    cargo build -p gorka-client
+    cargo test -p gorka-shared
+
+State at end of session:
+
+  Main machine:  (this commit)
+  Cloud machine: c5e2d6e, behind.
+  GitHub:        (this commit)
+
+Next work:
+
+  D.4b-2c frontend half. Then D.5 (plan view / calendar),
+  D.6 (remaining screens). Then Agent end-to-end
+  regression.
+
+See DECISIONS.md (October 1 entry), HANDOFF.md,
+SESSION-LOG.md, and PHASE-9.5-EXTRACTION-LOG.md for full
+details.

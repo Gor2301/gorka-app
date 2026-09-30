@@ -3318,6 +3318,148 @@ September 30 entry.
 End of entry.
 
 
+Session Extension - October 1, 2026 (Stage D.4a-0 through D.4b-2c Rust half)
 
+WHAT THIS SESSION DID
 
+Continued Phase 9.5. Built the Agent App's first data
+pages. Six slice commits and four documentation commits
+landed in this session extension. No production touched.
+No cloud schema change. The invariant held.
 
+This is the chronological record. Technical details of
+each slice are in PHASE-9.5-EXTRACTION-LOG.md. The HOW
+decisions are in DECISIONS.md (October 1 entry). Status
+is in HANDOFF.md.
+
+THE SESSION IN ORDER
+
+D.4a-0 - Primitive gap-fill.
+
+Commit 7f122e1. Discovered during D.4a reconnaissance.
+D.1's reconnaissance read the Client's shell and entry
+flow, not Collections.tsx or DebtorDetail.tsx. Five gaps
+fell out of that scope boundary. All additive.
+
+Files: design-tokens.css gains 24 tokens. Modal gains
+closeOnOverlayClick. Button gains size and iconOnly. New
+Select and Textarea primitives. TopHeader gains one
+prefix rule.
+
+Verified on main: npm run build PASS.
+
+D.4a - Debtor list and debtor profile.
+
+Commit 32f1475. The Agent's first data-page slice.
+Frontend only. New: local.db.ts (thin transport adapter),
+DebtorEditModal, DebtEditModal, ActionEditModal,
+DebtorsPage, DebtorProfilePage. App.tsx gains two routes.
+
+Verified on cloud: entry flow (Login, Set password,
+Enroll), list, search, add, edit, delete debtor. Profile
+renders header card, debts card, actions card. Debt CRUD
+and Action CRUD. Persistence across restart.
+
+D.4b-1 - Communications and documents cards.
+
+Commit c5e2d6e. Communications card inserted between
+Debts and Actions so the card order matches the Client.
+Documents card added at position 5. Actions card moved
+from position 3 to position 4 (same JSX, position only).
+New CommunicationEditModal (create-only, duration
+CALL-only).
+
+Verified on cloud: comm CRUD, docs upload with category
+binding, delete, persistence.
+
+D.4b-2a - Debtor profile photo.
+
+Commits 8ddb6ef (Rust) and 3688d9f (frontend). The CSP
+does not include asset: or file:, so a stored path cannot
+be displayed. Chosen path: Rust returns bytes plus MIME;
+frontend builds a blob: URL. CSP already allows blob:.
+
+Rust: DebtorPhotoData struct, read_debtor_photo function,
+mime_from_extension helper. One command, one registration.
+
+Frontend: photoUrl state, photoUrlRef for URL revocation,
+loadPhoto, handleChangePhoto (dialog plugin), unmount
+cleanup, two-column header card.
+
+Verified on cloud: placeholder Avatar, change photo,
+image renders, persists across restart.
+
+D.4b-2b - Relations card.
+
+Commit 68440de. Zero Rust, zero schema. Reconnaissance
+found that the role badge can read from
+debtor_relations.relation_type, which already exists. The
+debtors.role column was not needed for this slice.
+
+Files: local.db.ts gains DebtorRelation types and three
+methods. RelationEditModal (two modes: create new, link
+existing; collateral fields PLEDGER only). Profile page
+gains Relations card between Debts and Communications,
+with count in the heading and two header buttons.
+
+Verified on cloud: add guarantor, add pledger with
+collateral, navigate to related person, delete relation,
+persistence.
+
+Observation (not a defect): related persons appear in the
+debtors list without a role badge. Spec 11.6 asks for the
+badge. Deferred to D.4b-2c.
+
+D.4b-2c (Rust half) - Role column and orphan cleanup.
+
+Commit c73373d. Four new Rust commands, one modified, all
+registered:
+  get_related_debtor_roles
+  get_debtor_debt_totals
+  insert_related_debtor
+  cleanup_orphaned_related_debtors
+  delete_debtor_relation (now takes storage)
+
+Design: `debtors.role` is written by `insert_related_debtor`
+so that cleanup can distinguish "former related person now
+orphaned" from "plain debtor created and not yet used".
+Cleanup runs once on Debtors page mount. Orphan check
+covers five tables to prevent cascade-delete of real data.
+
+NOT YET COMPILED ON CLOUD. The founder paused to write
+documentation before the compile.
+
+DOCUMENTATION
+
+Four commits in this batch:
+  d0eb175  extraction log entries
+  829dcea  DECISIONS entries
+  b184408  HANDOFF status update
+  (this)   SESSION-LOG, START-HERE, PHASE-PLAN
+
+STATE AT END OF SESSION
+
+  Main machine:  (pushed at end of this documentation batch)
+  Cloud machine: c5e2d6e, behind by three commits.
+                 Needs git pull before any Rust build.
+  GitHub:        (pushed)
+
+NEXT WORK
+
+  1. Cloud pull, cargo build -p gorka-agent,
+     cargo build -p gorka-client, cargo test -p gorka-shared.
+  2. D.4b-2c frontend half (five files).
+  3. D.5 - plan view / calendar.
+  4. D.6 - remaining screens.
+  5. Agent end-to-end regression.
+
+RULE COMPLIANCE
+
+  No production touched.
+  No cloud schema change.
+  No CI/CD touched (release.yml unchanged).
+  Invariant held.
+  No frozen document amended beyond the September 27
+  amendments already recorded.
+
+End of entry.
