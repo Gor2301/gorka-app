@@ -7,4 +7,6 @@ export { default as GorkaLogo } from './GorkaLogo';
 export { default as Input } from './Input';
 export { default as Label } from './Label';
 export { default as Modal } from './Modal';
+export { default as Select } from './Select';
 export { default as Spinner } from './Spinner';
+export { default as Textarea } from './Textarea';

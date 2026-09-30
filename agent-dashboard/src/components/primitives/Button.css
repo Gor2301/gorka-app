@@ -46,3 +46,34 @@
   padding: 12px 20px;
   font-size: 16px;
 }
+
+/* Compact size (D.4a-0). Matches the Client's card-header and
+   row-action buttons. Existing call sites do not pass size, so
+   they continue to use the base .btn sizing. */
+.btn--size-sm {
+  padding: 6px 12px;
+  font-size: var(--font-size-body-sm);
+}
+
+/* Icon-only shape (D.4a-0). Chromeless button for pencil,
+   trash, and similar row actions. Color comes from the
+   existing variant axis; no new variant is introduced.
+   Padding matches the Modal primitive's close button. */
+.btn--icon-only {
+  background: none;
+  border-color: transparent;
+  padding: 4px;
+  gap: 0;
+}
+
+.btn--icon-only.btn--primary {
+  color: var(--color-accent);
+}
+
+.btn--icon-only.btn--danger {
+  color: var(--color-danger);
+}
+
+.btn--icon-only.btn--ghost {
+  color: var(--color-text-normal);
+}

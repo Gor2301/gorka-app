@@ -19,7 +19,9 @@ interface TopHeaderProps {
 
 export default function TopHeader({ onLogout }: TopHeaderProps) {
   const location = useLocation();
-  const title = TITLES[location.pathname] ?? 'GORKA';
+  const title =
+    TITLES[location.pathname] ??
+    (location.pathname.startsWith('/debtors/') ? 'Debtor Profile' : 'GORKA');
 
   return (
     <header className="top-header">

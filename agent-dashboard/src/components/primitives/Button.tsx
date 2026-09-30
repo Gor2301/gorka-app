@@ -2,9 +2,12 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import './Button.css';
 
 type ButtonVariant = 'primary' | 'ghost' | 'danger';
+type ButtonSize = 'sm' | 'md';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
+  size?: ButtonSize;
+  iconOnly?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
   children: ReactNode;
@@ -12,6 +15,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export default function Button({
   variant = 'primary',
+  size = 'md',
+  iconOnly = false,
   loading = false,
   fullWidth = false,
   disabled,
@@ -23,6 +28,8 @@ export default function Button({
   const classes = [
     'btn',
     `btn--${variant}`,
+    size === 'sm' ? 'btn--size-sm' : '',
+    iconOnly ? 'btn--icon-only' : '',
     fullWidth ? 'btn--full' : '',
     className ?? '',
   ]

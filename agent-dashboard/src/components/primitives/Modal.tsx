@@ -8,13 +8,24 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   footer?: ReactNode;
+  closeOnOverlayClick?: boolean;
 }
 
-export default function Modal({ open, onClose, title, children, footer }: ModalProps) {
+export default function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  closeOnOverlayClick = true,
+}: ModalProps) {
   if (!open) return null;
 
   return (
-    <div className="modal__overlay" onClick={onClose}>
+    <div
+      className="modal__overlay"
+      onClick={closeOnOverlayClick ? onClose : undefined}
+    >
       <div className="modal__box" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"

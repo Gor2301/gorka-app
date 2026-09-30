@@ -61,6 +61,18 @@
   --color-overlay: rgba(0, 0, 0, 0.4);
   --color-overlay-entry: rgba(0, 0, 0, 0.5);
 
+  /* Badge colors (list/profile pages, D.4a-0) */
+  --color-badge-success-bg: #D1FAE5;
+  --color-badge-success-text: #065F46;
+  --color-badge-danger-bg: #FEE2E2;
+  --color-badge-danger-text: #991B1B;
+  --color-badge-neutral-bg: #F3F4F6;
+  --color-badge-neutral-text: #4B5563;
+  --color-badge-info-bg: #DBEAFE;
+  --color-badge-info-text: #1E40AF;
+  --color-badge-warning-bg: #FEF3C7;
+  --color-badge-warning-text: #92400E;
+
   /* -- Typography ----------------------------------------------- */
 
   --font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -74,6 +86,13 @@
   --font-size-card-value: 24px;
   --font-size-section-heading: 18px;
   --font-size-logo: 26px;
+
+  /* Data-page sizes (D.4a-0) */
+  --font-size-badge: 11px;
+  --font-size-label-sm: 12px;
+  --font-size-value: 15px;
+  --font-size-card-heading: 16px;
+  --font-size-profile-title: 26px;
 
   --font-weight-regular: 400;
   --font-weight-medium: 500;
@@ -89,6 +108,16 @@
   --space-grid-gap-sm: 12px;
   --space-field-spacing: 12px;
 
+  /* Data-page spacing (D.4a-0) */
+  --space-hairline: 2px;
+  --space-gap-2xs: 4px;
+  --space-gap-xs: 6px;
+  --space-gap-sm: 8px;
+  --space-gap-md: 10px;
+  --space-value-margin: 14px;
+  --space-list-row-padding-y: 10px;
+  --space-list-row-padding-x: 12px;
+
   /* -- Shape ---------------------------------------------------- */
 
   --radius-card: 12px;
@@ -96,6 +125,9 @@
   --radius-input: 8px;
   --radius-nav-item: 6px;
   --radius-icon-container: 12px;
+
+  /* Pill radius for badges (D.4a-0) */
+  --radius-pill: 12px;
 
   --sidebar-width: 240px;
   --header-height: 73px;
