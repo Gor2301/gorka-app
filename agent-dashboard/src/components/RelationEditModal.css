@@ -1,0 +1,79 @@
+.relation-edit-modal__error {
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.relation-edit-modal__mode {
+  display: flex;
+  gap: var(--space-grid-gap);
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.relation-edit-modal__mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-gap-xs);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--color-text-normal);
+  cursor: pointer;
+}
+
+.relation-edit-modal__fields {
+  display: grid;
+  gap: var(--space-grid-gap-sm);
+}
+
+.relation-edit-modal__link {
+  display: grid;
+  gap: var(--space-gap-sm);
+}
+
+.relation-edit-modal__searching {
+  display: flex;
+  justify-content: center;
+}
+
+.relation-edit-modal__results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+}
+
+.relation-edit-modal__result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-hairline);
+  width: 100%;
+  padding: var(--space-list-row-padding-y) var(--space-list-row-padding-x);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-strong);
+}
+
+.relation-edit-modal__result:hover {
+  background: var(--color-bg-main);
+}
+
+.relation-edit-modal__result-name {
+  font-weight: var(--font-weight-medium);
+}
+
+.relation-edit-modal__result-meta {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-badge);
+}
+
+.relation-edit-modal__picked {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-normal);
+}

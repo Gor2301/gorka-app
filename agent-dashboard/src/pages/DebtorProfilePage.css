@@ -285,3 +285,27 @@
 .debtor-profile__photo-change:hover {
   color: var(--color-text-strong);
 }
+
+/* Relations card header action group (D.4b-2b). Two small buttons side by side. */
+.debtor-profile__card-header-actions {
+  display: flex;
+  gap: var(--space-gap-sm);
+}
+
+/* Relations row: name as a link-style button that navigates to the related person profile (D.4b-2b). */
+.debtor-profile__relation-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text-strong);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+  font-size: inherit;
+  text-align: left;
+}
+
+.debtor-profile__relation-link:hover {
+  color: var(--color-accent);
+}

@@ -17,11 +17,13 @@ import {
   Action,
   Communication,
   Document,
+  DebtorRelation,
 } from '@/services/local.db';
 import DebtorEditModal from '@/components/DebtorEditModal';
 import DebtEditModal from '@/components/DebtEditModal';
 import ActionEditModal from '@/components/ActionEditModal';
 import CommunicationEditModal from '@/components/CommunicationEditModal';
+import RelationEditModal, { RelationRole } from '@/components/RelationEditModal';
 import './DebtorProfilePage.css';
 
 const DOCUMENT_CATEGORIES: { value: string; label: string }[] = [
@@ -53,6 +55,14 @@ export default function DebtorProfilePage() {
   const [showDebtForm, setShowDebtForm] = useState(false);
   const [editingDebtId, setEditingDebtId] = useState<string | null>(null);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
+
+  const [relations, setRelations] = useState<DebtorRelation[]>([]);
+  const [relationsLoading, setRelationsLoading] = useState(true);
+  const [relationsError, setRelationsError] = useState('');
+  const [relationModalRole, setRelationModalRole] = useState<RelationRole | null>(null);
+  const [collateralMap, setCollateralMap] = useState<
+    Record<string, { type?: string; description?: string }>
+  >({});
 
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [communicationsLoading, setCommunicationsLoading] = useState(true);
@@ -125,6 +135,50 @@ export default function DebtorProfilePage() {
     }
   };
 
+  const loadRelations = async () => {
+    if (!id) return;
+    try {
+      setRelationsLoading(true);
+      setRelationsError('');
+      const rows = await localDB.getDebtorRelations(id);
+      setRelations(rows);
+
+      // Fetch collateral for PLEDGER relations. The relation row
+      // does not carry the related person's data JSON, so one
+      // get_debtor per PLEDGER is needed. Acceptable N+1 for MVP.
+      const pledges = rows.filter((r) => r.relation_type === 'PLEDGER');
+      if (pledges.length > 0) {
+        const map: Record<string, { type?: string; description?: string }> = {};
+        await Promise.all(
+          pledges.map(async (r) => {
+            try {
+              const d = await localDB.getDebtor(r.related_debtor_id);
+              const c = d.data && typeof d.data === 'object' ? d.data.collateral : null;
+              if (c && typeof c === 'object') {
+                map[r.related_debtor_id] = {
+                  type: typeof c.type === 'string' ? c.type : undefined,
+                  description:
+                    typeof c.description === 'string'
+                      ? c.description
+                      : undefined,
+                };
+              }
+            } catch {
+              // Collateral fetch failure is not fatal. Row shows without it.
+            }
+          }),
+        );
+        setCollateralMap(map);
+      } else {
+        setCollateralMap({});
+      }
+    } catch (err) {
+      setRelationsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRelationsLoading(false);
+    }
+  };
+
   const loadCommunications = async () => {
     if (!id) return;
     try {
@@ -171,6 +225,7 @@ export default function DebtorProfilePage() {
     loadDebtor();
     if (id) loadPhoto(id);
     loadDebts();
+    loadRelations();
     loadCommunications();
     loadActions();
     loadDocuments();
@@ -237,6 +292,29 @@ export default function DebtorProfilePage() {
     } catch (err) {
       setDebtsError(err instanceof Error ? err.message : String(err));
     }
+  };
+
+  const openAddRelation = (role: RelationRole) => setRelationModalRole(role);
+  const closeRelationForm = () => setRelationModalRole(null);
+
+  const handleRelationSaved = async () => {
+    closeRelationForm();
+    await loadRelations();
+  };
+
+  const handleDeleteRelation = async (r: DebtorRelation) => {
+    const label = `${r.related_name} ${r.related_surname}`.trim();
+    if (!window.confirm(`Remove relation with "${label}"?`)) return;
+    try {
+      await localDB.deleteDebtorRelation(r.id);
+      await loadRelations();
+    } catch (err) {
+      setRelationsError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const openRelationProfile = (r: DebtorRelation) => {
+    navigate(`/debtors/${r.related_debtor_id}`);
   };
 
   const openCommunicationForm = () => setShowCommunicationForm(true);
@@ -353,6 +431,11 @@ export default function DebtorProfilePage() {
     if (status === 'CANCELLED') return 'debtor-profile__badge--neutral';
     if (status === 'IN_PROGRESS') return 'debtor-profile__badge--info';
     return 'debtor-profile__badge--warning';
+  };
+
+  const relationBadgeClass = (relationType: string): string => {
+    if (relationType === 'PLEDGER') return 'debtor-profile__badge--info';
+    return 'debtor-profile__badge--accent';
   };
 
   const formatBytes = (n: number): string => {
@@ -524,6 +607,78 @@ export default function DebtorProfilePage() {
                 </Button>
               </li>
             ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card>
+        <div className="debtor-profile__card-header">
+          <h2 className="debtor-profile__card-heading">
+            {relations.length > 0
+              ? `Relations (${relations.length})`
+              : 'Relations'}
+          </h2>
+          <div className="debtor-profile__card-header-actions">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => openAddRelation('GUARANTOR')}
+            >
+              + Add Guarantor
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => openAddRelation('PLEDGER')}
+            >
+              + Add Pledger
+            </Button>
+          </div>
+        </div>
+
+        {relationsError && <ErrorBanner message={relationsError} />}
+
+        {relationsLoading ? (
+          <p className="debtor-profile__muted">Loading relations...</p>
+        ) : relations.length === 0 ? (
+          <p className="debtor-profile__muted">No relations recorded yet.</p>
+        ) : (
+          <ul className="debtor-profile__list">
+            {relations.map((r) => {
+              const collateral = collateralMap[r.related_debtor_id];
+              const collateralText =
+                collateral && (collateral.type || collateral.description)
+                  ? `Collateral: ${[collateral.type, collateral.description]
+                      .filter(Boolean)
+                      .join(' - ')}`
+                  : null;
+              return (
+                <li key={r.id} className="debtor-profile__row">
+                  <span className={`debtor-profile__badge ${relationBadgeClass(r.relation_type)}`}>
+                    {r.relation_type}
+                  </span>
+                  <button
+                    type="button"
+                    className="debtor-profile__relation-link"
+                    onClick={() => openRelationProfile(r)}
+                  >
+                    {r.related_surname}, {r.related_name}
+                  </button>
+                  <span className="debtor-profile__row-text">
+                    {collateralText || '-'}
+                  </span>
+                  <Button
+                    variant="danger"
+                    iconOnly
+                    onClick={() => handleDeleteRelation(r)}
+                    title="Delete relation"
+                    aria-label="Delete relation"
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
@@ -717,6 +872,15 @@ export default function DebtorProfilePage() {
           initial={editingDebt}
           onSaved={handleDebtSaved}
           onClose={closeDebtForm}
+        />
+      )}
+
+      {relationModalRole && id && (
+        <RelationEditModal
+          debtorId={id}
+          role={relationModalRole}
+          onSaved={handleRelationSaved}
+          onClose={closeRelationForm}
         />
       )}
 

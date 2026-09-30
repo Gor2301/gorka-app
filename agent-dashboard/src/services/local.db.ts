@@ -159,6 +159,26 @@ export interface DebtorPhotoData {
   mime: string;
 }
 
+export interface DebtorRelation {
+  id: string;
+  organization_id: string;
+  debtor_id: string;
+  related_debtor_id: string;
+  relation_type: string;
+  created_at: string;
+  related_name: string;
+  related_surname: string;
+  related_email: string | null;
+  related_phone: string | null;
+  related_role: string;
+}
+
+export interface DebtorRelationInput {
+  debtor_id: string;
+  related_debtor_id: string;
+  relation_type: string;
+}
+
 // --- Local DB -------------------------------------------------
 
 export const localDB = {
@@ -336,5 +356,17 @@ export const localDB = {
     return await invoke<DebtorPhotoData | null>('read_debtor_photo', {
       debtorId,
     });
+  },
+
+  async getDebtorRelations(debtorId: string): Promise<DebtorRelation[]> {
+    return await invoke<DebtorRelation[]>('get_debtor_relations', { debtorId });
+  },
+
+  async insertDebtorRelation(input: DebtorRelationInput): Promise<DebtorRelation> {
+    return await invoke<DebtorRelation>('insert_debtor_relation', { input });
+  },
+
+  async deleteDebtorRelation(id: string): Promise<boolean> {
+    return await invoke<boolean>('delete_debtor_relation', { id });
   },
 };
