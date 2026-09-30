@@ -6798,6 +6798,166 @@ HANDOFF.md for the status update.
 
 End of entry.
 
+## Recovery Session - September 30, 2026 (Stage C.5 + Stage D.0-D.2)
+
+This entry records the HOW decisions from the September 30
+session. Technical slice records are in
+PHASE-9.5-EXTRACTION-LOG.md. Status is in HANDOFF.md.
+
+The session covered:
+  - C.5 - is_enrolled backend command (query, not operation).
+  - Stage D.0 - Agent frontend prerequisites.
+  - Stage D.1 - design tokens and ten shared primitives.
+  - Stage D.2 - the entry flow (Login, Unlock, Enroll).
+
+Five HOW decisions were made that were not obvious.
+
+### D1 - Design source is the Client's real design, not spec-11.2-verbatim
+
+Decision: The Agent's visual design matches the Client
+Dashboard's real on-disk design, not the literal values
+written into AGENT-APP-SPEC.md v1.2 section 11.2.
+
+Reasoning: Section 11.2 states its own intent as "the Agent
+App uses the same vocabulary [as the Client]. Do not
+re-invent." When the Client's actual files were read during
+D.1 reconnaissance, the Client turned out to be layered: an
+orphaned design-tokens.css, orphaned Vite template CSS
+index.css/App.css, and the real visual design expressed as
+inline styles in the components (AppShell.tsx, TopHeader.tsx,
+Login.tsx). The spec's 11.2 values were extracted from the
+component layer, not the token file. Following the literal
+token file would have produced a different visual than
+following the component layer; following the spec-11.2
+values matches the component layer.
+
+Impact: design-tokens.css in the Agent holds every value the
+spec 11.2 lists, plus entry-flow tokens drawn from the
+Client's pre-Tauri Login page. Components consume tokens via
+var(--token). The Agent does not carry Tailwind, does not
+carry the Vite template CSS, and does not carry the Client's
+dead design-tokens.css.
+
+### D2 - Spec 11.3's six inconsistencies are corrected, not carried
+
+Decision: Where the Client still exhibits one of the six
+inconsistencies AGENT-APP-SPEC.md section 11.3 names, the
+Agent applies the spec's resolved value, not the Client's
+inconsistent one.
+
+Specifically:
+  - Primary buttons: purple #7C3AED (spec 11.1), not the
+    Client's blue #2563eb in UnlockScreen, not the Client's
+    red #DC2626 in Login.
+  - Error banner: #fef2f2 / #fecaca / #dc2626 (spec 11.2),
+    not the Client's #fee / #fcc / #c00.
+  - Input border: #e5e7eb (spec 11.2), not #d1d5db.
+  - Modal padding: 24px (spec 11.2), not 32px.
+  - Radius: 8px (spec 11.3), not the mixed 6px/8px.
+  - Red is reserved for the GORKA wordmark and for danger
+    indicators. Not primary actions.
+
+Reasoning: Section 11.3 explicitly names these six and states
+they are not to be carried forward. They are the spec's
+authority over the Client's drift.
+
+Impact: Agent visually matches the Client everywhere the
+Client already matches the spec, and diverges from the
+Client only on the six named points. The Client's entry
+pages (Tauri heritage) will be redesigned later to match the
+Agent's design. Red in the Client's Login page will become
+purple at that time. That redesign is not part of Phase 9.5.
+
+### D3 - Entry flow visual reference is the Client's pre-Tauri Login page
+
+Decision: The Agent's Login, Unlock, and Enroll pages use the
+design of the Client's pre-Tauri Login page, with the primary
+button changed from red #DC2626 to purple #7C3AED.
+
+Reasoning: The Client's UnlockScreen and other Tauri-era
+entry screens are known to be visual drift from the intended
+design. The Client's Login.tsx predates Tauri and reflects
+the intended card layout (centered white card, 40px padding,
+12px radius, soft shadow, 400px max width, red wordmark top).
+Using it as the reference produces a consistent visual with
+a single color correction.
+
+Impact: Agent's entry flow is visually a purple-button version
+of the Client's Login page. Later, when the Client's entry
+pages are redesigned, they will match the Agent's.
+
+### D4 - is_enrolled replaces the spec's literal "refusal as signal"
+
+Decision: A new backend query, is_enrolled, determines
+whether the device is enrolled. The Agent entry flow calls
+it after Unlock. If false, Enroll is shown. If true, the
+shell is entered directly.
+
+Reasoning: AGENT-APP-SPEC.md section 4.4 describes the
+"already enrolled" signal as the refusal of
+import_enrollment_package. That mechanism requires the user
+to select a package file before the app will tell them they
+are already enrolled. On every launch. This is not usable.
+The spec's description was written when no better option
+existed. A query is the correct abstraction boundary.
+
+The refusal message from import_enrollment_package remains
+in place and unchanged. It is still the correct error for an
+actual import attempt against an already-enrolled device. It
+is simply no longer the mechanism by which the UI discovers
+enrollment state.
+
+Impact: see PHASE-9.5-EXTRACTION-LOG.md Stage C.5 slice.
+
+### D5 - The Agent icon is deferred past Phase 9.5
+
+Decision: The Agent binary keeps its Tauri-default icon
+(two semicircles) for Phase 9.5. A custom GORKA Agent icon
+is out of scope.
+
+Reasoning: The Client Dashboard also carries a Tauri-default
+icon. Both will be replaced with proper GORKA branding in a
+later phase. Icon design is not an implementation concern
+and is not part of the Phase 9.5 scope contract (spec 2.8).
+
+Impact: None in code. Recorded so a future session does not
+mistake the icon for a defect.
+
+### Session notes
+
+Standard workflow resumed.
+
+All C.5 and D.0-D.2 edits were made on main and committed on
+main. Cloud was used only for verification (build + tests +
+visual render of the Agent Login page).
+
+Cloud-side writes: none this session. No lockfile change on
+cloud. No deviations recorded in the extraction log for C.5
+or D.0-D.2.
+
+Warning baselines confirmed on cloud (2026-09-30):
+
+  gorka-agent (bin): 2 warnings, unchanged.
+  gorka-client (bin): 3 warnings, unchanged.
+  gorka-shared (lib): 6 warnings, unchanged.
+
+State at end of session.
+
+  Main machine:  2eb97b9, clean.
+  Cloud machine: 2eb97b9, clean except the two known
+                 untracked files (check-columns.ts,
+                 test-package.gorka).
+  GitHub:        2eb97b9.
+
+Next work: Stage D.3 - the main Agent shell (sidebar, header,
+routing). Then D.4-D.6.
+
+See PHASE-9.5-EXTRACTION-LOG.md for the slice records and
+HANDOFF.md for the status update.
+
+End of entry.
+
+
 
 
 

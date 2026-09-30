@@ -28,8 +28,8 @@ SEQUENCE
   Item 2 auth boundary          DONE (499e7f5, 10df6f5)
   Item 3 Stage A migrations     DONE (6e83a29)
   Stage B shared functions      DONE (2268a30, 292a3a8, 884c637)
-  Stage C Agent commands        DONE (C.1 5ab35ae/67b984a/c69d21e; C.2 b4b448f; C.3 b598a97; C.4 6e0c135; lock f8f3f4d)
-  Stage D Agent frontend        NOT STARTED
+  Stage C Agent commands        DONE (C.1 5ab35ae/67b984a/c69d21e; C.2 b4b448f; C.3 b598a97; C.4 6e0c135; C.5 a085b8d; lock f8f3f4d)
+  Stage D Agent frontend        IN PROGRESS (D.0 71948ab; D.1 38ae126; D.2 2eb97b9)
   Agent end-to-end regression   NOT STARTED
 
 Repository layout: Cargo workspace at the repository root.
@@ -1176,6 +1176,95 @@ DEVIATIONS
   change was committed from cloud (c69d21e), then pulled to
   main. Same pattern used for Cargo.lock regeneration. No
   behavior impact.
+
+================================================================
+STAGE C.5 - IS_ENROLLED BACKEND COMMAND
+================================================================
+
+Date: September 30, 2026.
+Commit: a085b8d
+
+Files changed:
+  shared/src/db.rs            MODIFIED (added is_enrolled)
+  src-tauri-agent/src/main.rs MODIFIED (adapter + registration)
+
+What was added:
+  shared::db::is_enrolled(conn) -> Result<bool, String>
+  Queries organization_keys. Ok(true) if a row is present,
+  Ok(false) if absent, Err if the query fails.
+
+Reason:
+  The Agent's entry flow needs to know whether the device is
+  already enrolled. Before this commit, the only way to learn
+  that was to attempt import_enrollment_package and interpret
+  its refusal. That forced the user to select a package file on
+  every launch. is_enrolled is a query, not an operation.
+
+Scope discipline:
+  Client untouched. Schema untouched. Enrollment package format
+  and import behavior unchanged. organization-key semantics
+  unchanged. Query only, no side effect.
+
+Verification (cloud, 2026-09-30):
+  cargo build -p gorka-agent    PASS (2 warnings)
+  cargo build -p gorka-client   PASS (3 warnings)
+  cargo test -p gorka-shared    14/14 PASS
+  Cargo.lock unchanged.
+
+DEVIATIONS: None.
+
+================================================================
+STAGE D - AGENT FRONTEND, SUB-SLICES D.0 THROUGH D.2
+================================================================
+
+Date: September 30, 2026.
+Status: IN PROGRESS. D.0, D.1, D.2 complete. D.3-D.6 remain.
+
+D.0 - PREREQUISITES (71948ab)
+  Agent dashboard dependencies installed: react-router-dom,
+  lucide-react, FullCalendar v6 (react, daygrid, interaction,
+  list, timegrid), @tauri-apps/plugin-dialog. Versions match
+  the Client.
+  tsconfig.json added: strict, @/* path alias, vite/client
+  types, no baseUrl (TS 6.0 deprecation).
+  Build script: tsc -p tsconfig.json && vite build.
+
+D.1 - DESIGN TOKENS AND PRIMITIVES (38ae126)
+  design-tokens.css: values from AGENT-APP-SPEC.md v1.2
+  section 11.2, plus entry-flow tokens sourced from the
+  Client's pre-Tauri Login page. Single source of truth for
+  every visual value.
+  index.css: minimal reset, no Tailwind, no Vite template.
+  Ten primitives added (Button, Input, Label, ErrorBanner,
+  Spinner, EntryCard, GorkaLogo, Card, Avatar, Modal), each
+  .tsx + .css. Barrel export in primitives/index.ts.
+  postcss.config.js added with empty plugins so the Agent
+  does not inherit the repo-root Tailwind pipeline.
+
+D.2 - ENTRY FLOW (2eb97b9)
+  App.tsx is a state machine: loading -> login -> unlock ->
+  enroll -> shell. Each screen's success handler re-runs the
+  bootstrap; the machine self-corrects.
+  LoginPage: invoke('login').
+  UnlockPage: reads database_exists for set/enter mode;
+    invoke('unlock_database').
+  EnrollPage: dialog.open() filtered to .gorka;
+    invoke('import_enrollment_package').
+  AppShell: placeholder for D.3.
+
+VERIFICATION (cloud, 2026-09-30):
+  cargo build -p gorka-agent    PASS (2 warnings, unchanged)
+  cargo build -p gorka-client   PASS (3 warnings, unchanged)
+  cargo test -p gorka-shared    14/14 PASS
+  npm install on cloud          OK, 0 vulnerabilities
+  npm run build on cloud        PASS (227.44 kB JS, 7.43 kB CSS)
+  Visual: agent binary renders Login page correctly
+    (red wordmark, purple Sign In button). Confirmed.
+
+DEVIATIONS: None.
+
+NEXT: D.3 shell, D.4 debtor profile, D.5 plan view, D.6
+remaining screens. Then Agent end-to-end regression.
 
 ================================================================
 END OF DOCUMENT
