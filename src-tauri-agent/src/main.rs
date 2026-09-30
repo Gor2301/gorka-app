@@ -413,6 +413,16 @@ fn get_debtor_photo(
 }
 
 #[command]
+fn read_debtor_photo(
+    debtor_id: String,
+    state: tauri::State<AppState>,
+) -> Result<Option<DebtorPhotoData>, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::read_debtor_photo(conn, &debtor_id)
+}
+
+#[command]
 fn get_calendar_events(
     start_date: String,
     end_date: String,
@@ -649,6 +659,7 @@ fn main() {
             delete_document,
             set_debtor_photo,
             get_debtor_photo,
+            read_debtor_photo,
             get_calendar_events,
             insert_calendar_event,
             update_calendar_event,

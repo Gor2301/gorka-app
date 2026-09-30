@@ -34,6 +34,12 @@ pub struct DebtorInput {
     pub data: JsonValue,
 }
 
+#[derive(Debug, Serialize)]
+pub struct DebtorPhotoData {
+    pub bytes: Vec<u8>,
+    pub mime: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Document {
     pub id: String,

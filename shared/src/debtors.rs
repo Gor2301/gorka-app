@@ -18,7 +18,7 @@ use chrono::Utc;
 
 use crate::db;
 use crate::storage::AppStorage;
-use crate::models::{Debtor, DebtorInput};
+use crate::models::{Debtor, DebtorInput, DebtorPhotoData};
 
 pub fn get_debtors(
     conn: &Connection,
@@ -357,4 +357,59 @@ pub fn get_debtor_photo(
         .flatten();
 
     Ok(photo_path)
+}
+
+/// Read the debtor's profile photo from disk and return its bytes
+/// together with the inferred MIME type.
+///
+/// Returns Ok(None) if the debtor has no photo_path, or if the
+/// file recorded in photo_path no longer exists on disk. Returns
+/// Err only for I/O failures that are not "file not found".
+///
+/// No organization scoping. Matches set_debtor_photo and
+/// get_debtor_photo, which also do not scope.
+pub fn read_debtor_photo(
+    conn: &Connection,
+    debtor_id: &str,
+) -> Result<Option<DebtorPhotoData>, String> {
+    let photo_path: Option<String> = conn
+        .query_row(
+            "SELECT photo_path FROM debtors WHERE id = ?1",
+            params![debtor_id],
+            |row| row.get(0),
+        )
+        .ok()
+        .flatten();
+
+    let path = match photo_path {
+        Some(p) if !p.is_empty() => p,
+        _ => return Ok(None),
+    };
+
+    let bytes = match std::fs::read(&path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("Failed to read photo: {}", e)),
+    };
+
+    let mime = mime_from_extension(&path).to_string();
+
+    Ok(Some(DebtorPhotoData { bytes, mime }))
+}
+
+fn mime_from_extension(path: &str) -> &'static str {
+    let ext = path
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        _ => "application/octet-stream",
+    }
 }
