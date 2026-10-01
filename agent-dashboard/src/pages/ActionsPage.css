@@ -1,0 +1,205 @@
+/* ActionsPage layout.
+ *
+ * Same hardcoded-padding convention as DebtorsPage.css. The
+ * status chips are a new shape for the Agent App; all other
+ * classes reuse the token vocabulary established in D.4a-0.
+ */
+
+.actions-page {
+  padding: var(--space-content-padding);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.actions-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-grid-gap);
+}
+
+.actions-page__subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+  margin: 0;
+}
+
+/* Status filter chips. Client-side only. */
+.actions-page__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-gap-sm);
+  margin-bottom: var(--space-grid-gap);
+}
+
+.actions-page__chip {
+  padding: 6px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-card);
+  color: var(--color-text-normal);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.actions-page__chip:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.actions-page__chip--active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-text-on-accent);
+}
+
+.actions-page__chip--active:hover {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+}
+
+.actions-page__error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-gap-sm);
+  margin-bottom: var(--space-grid-gap);
+}
+
+.actions-page__error > :first-child {
+  flex: 1;
+}
+
+.actions-page__retry {
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: 0;
+}
+
+.actions-page__container {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.actions-page__state {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.actions-page__state-text {
+  margin-top: var(--space-grid-gap-sm);
+  margin-bottom: 0;
+}
+
+.actions-page__empty-icon {
+  color: var(--color-border);
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.actions-page__empty-text {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
+}
+
+.actions-page__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+}
+
+.actions-page__table thead tr {
+  background: var(--color-bg-main);
+}
+
+.actions-page__table thead th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.actions-page__table tbody tr {
+  border-bottom: 1px solid var(--color-bg-main);
+}
+
+.actions-page__table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.actions-page__table td {
+  padding: 12px 16px;
+  vertical-align: middle;
+}
+
+.actions-page__cell--muted {
+  color: var(--color-text-normal);
+}
+
+.actions-page__name-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text-strong);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.actions-page__name-link:hover {
+  color: var(--color-accent);
+}
+
+/* Badges. Same color vocabulary as the profile card, local
+   class names to keep the file self-contained. */
+.actions-page__badge {
+  display: inline-block;
+  padding: var(--space-hairline) var(--space-gap-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-badge);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.actions-page__badge--accent {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+}
+
+.actions-page__badge--success {
+  background: var(--color-badge-success-bg);
+  color: var(--color-badge-success-text);
+}
+
+.actions-page__badge--danger {
+  background: var(--color-badge-danger-bg);
+  color: var(--color-badge-danger-text);
+}
+
+.actions-page__badge--neutral {
+  background: var(--color-badge-neutral-bg);
+  color: var(--color-badge-neutral-text);
+}
+
+.actions-page__badge--info {
+  background: var(--color-badge-info-bg);
+  color: var(--color-badge-info-text);
+}
+
+.actions-page__badge--warning {
+  background: var(--color-badge-warning-bg);
+  color: var(--color-badge-warning-text);
+}

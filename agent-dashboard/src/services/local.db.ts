@@ -106,6 +106,21 @@ export interface ActionInput {
   data?: any;
 }
 
+export interface ActionWithDebtor {
+  id: string;
+  debtor_id: string;
+  debtor_name: string;
+  debtor_surname: string;
+  type: string;
+  status: string;
+  assigned_to: string | null;
+  due_date: string | null;
+  description: string | null;
+  data: any;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Communication {
   id: string;
   debtor_id: string;
@@ -328,6 +343,10 @@ export const localDB = {
 
   async getActions(debtorId: string): Promise<Action[]> {
     return await invoke<Action[]>('get_actions', { debtorId });
+  },
+
+  async getAllActions(): Promise<ActionWithDebtor[]> {
+    return await invoke<ActionWithDebtor[]>('get_all_actions');
   },
 
   async insertAction(input: ActionInput): Promise<Action> {

@@ -43,16 +43,35 @@ export default function DebtorProfilePage() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Back target resolution order:
+  //   1. From a Relations card: return to that debtor's profile.
+  //   2. From ActionsPage (or any caller passing fromPath):
+  //      return to that path.
+  //   3. Otherwise: return to the debtors list.
   const backState =
     (location.state as
-      | { fromDebtorId?: string; fromDebtorLabel?: string }
+      | {
+          fromDebtorId?: string;
+          fromDebtorLabel?: string;
+          fromPath?: string;
+          fromLabel?: string;
+        }
       | null) ?? null;
-  const backLabel = backState?.fromDebtorLabel
-    ? `Back to ${backState.fromDebtorLabel}`
-    : 'Back to Debtors';
-  const backTarget = backState?.fromDebtorId
-    ? `/debtors/${backState.fromDebtorId}`
-    : '/debtors';
+
+  let backLabel = 'Back to Debtors';
+  let backTarget = '/debtors';
+
+  if (backState?.fromDebtorId) {
+    backLabel = backState.fromDebtorLabel
+      ? `Back to ${backState.fromDebtorLabel}`
+      : 'Back to Debtors';
+    backTarget = `/debtors/${backState.fromDebtorId}`;
+  } else if (backState?.fromPath) {
+    backLabel = backState.fromLabel
+      ? `Back to ${backState.fromLabel}`
+      : 'Back to Debtors';
+    backTarget = backState.fromPath;
+  }
 
   const [debtor, setDebtor] = useState<Debtor | null>(null);
   const [loading, setLoading] = useState(true);

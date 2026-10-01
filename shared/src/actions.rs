@@ -16,7 +16,7 @@ use uuid::Uuid;
 use chrono::Utc;
 
 use crate::db;
-use crate::models::{Action, ActionInput};
+use crate::models::{Action, ActionInput, ActionWithDebtor};
 
 pub fn get_actions(
     conn: &Connection,
@@ -184,4 +184,46 @@ pub fn delete_action(
     } else {
         Ok(false)
     }
+}
+
+
+pub fn get_all_actions(
+    conn: &Connection,
+    organization_id: &str,
+) -> Result<Vec<ActionWithDebtor>, String> {
+    let mut stmt = conn.prepare(
+        "SELECT a.id, a.debtor_id, b.name, b.surname,
+                a.type, a.status, a.assigned_to,
+                a.due_date, a.description, a.data,
+                a.created_at, a.updated_at
+         FROM actions a
+         INNER JOIN debtors b ON b.id = a.debtor_id
+         WHERE b.organization_id = ?1
+         ORDER BY (a.due_date IS NULL), a.due_date ASC, a.created_at DESC"
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map(params![organization_id], |row| {
+        let data_json: String = row.get(9)?;
+        Ok(ActionWithDebtor {
+            id: row.get(0)?,
+            debtor_id: row.get(1)?,
+            debtor_name: row.get(2)?,
+            debtor_surname: row.get(3)?,
+            r#type: row.get(4)?,
+            status: row.get(5)?,
+            assigned_to: row.get(6)?,
+            due_date: row.get(7)?,
+            description: row.get(8)?,
+            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut actions = Vec::new();
+    for row in rows {
+        actions.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(actions)
 }

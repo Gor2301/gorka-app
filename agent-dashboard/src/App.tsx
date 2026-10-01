@@ -19,6 +19,7 @@ import EnrollPage from '@/pages/EnrollPage';
 import DebtorsPage from '@/pages/DebtorsPage';
 import DebtorProfilePage from '@/pages/DebtorProfilePage';
 import PlanPage from '@/pages/PlanPage';
+import ActionsPage from '@/pages/ActionsPage';
 import CommunicationToolsPage from '@/pages/CommunicationToolsPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { EntryCard, Spinner } from '@/components/primitives';
@@ -106,15 +107,7 @@ export default function App() {
             path="/communication-tools"
             element={<CommunicationToolsPage />}
           />
-          <Route
-            path="/actions"
-            element={
-              <StubPage
-                title="Actions"
-                subtitle="Cross-debtor actions arrive in D.6. For now, actions are reached from the debtor profile."
-              />
-            }
-          />
+          <Route path="/actions" element={<ActionsPage />} />
           <Route
             path="/documents"
             element={

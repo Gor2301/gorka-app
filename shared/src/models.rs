@@ -142,6 +142,22 @@ pub struct ActionInput {
     pub data: Option<JsonValue>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ActionWithDebtor {
+    pub id: String,
+    pub debtor_id: String,
+    pub debtor_name: String,
+    pub debtor_surname: String,
+    pub r#type: String,
+    pub status: String,
+    pub assigned_to: Option<String>,
+    pub due_date: Option<String>,
+    pub description: Option<String>,
+    pub data: JsonValue,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CalendarEvent {
     pub id: String,

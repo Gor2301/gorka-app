@@ -392,6 +392,17 @@ fn get_actions(
 }
 
 #[command]
+fn get_all_actions(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<ActionWithDebtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    actions::get_all_actions(conn, &organization_id)
+}
+
+#[command]
 fn insert_action(
     input: ActionInput,
     app: tauri::AppHandle,
@@ -739,6 +750,7 @@ fn main() {
             insert_communication,
             delete_communication,
             get_actions,
+            get_all_actions,
             insert_action,
             update_action,
             delete_action,
