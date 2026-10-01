@@ -18,7 +18,7 @@ use chrono::Utc;
 
 use crate::db;
 use crate::storage::AppStorage;
-use crate::models::{Debtor, DebtorInput, DebtorPhotoData, RelatedDebtorRole, DebtorDebtTotal};
+use crate::models::{Debtor, DebtorInput, DebtorPhotoData, RelatedDebtorRole, DebtorDebtTotal, PrimaryDebtorRelation};
 
 pub fn get_debtors(
     conn: &Connection,
@@ -619,4 +619,106 @@ pub fn cleanup_orphaned_related_debtors(
     }
 
     Ok(removed)
+}
+
+
+pub fn get_primary_debtors(
+    conn: &Connection,
+    organization_id: &str,
+) -> Result<Vec<Debtor>, String> {
+    let mut stmt = conn.prepare(
+        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at
+         FROM debtors
+         WHERE organization_id = ?1 AND role = 'DEBTOR'
+         ORDER BY surname, name"
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map([organization_id], |row| {
+        let data_json: String = row.get(6)?;
+        Ok(Debtor {
+            id: row.get(0)?,
+            organization_id: row.get(1)?,
+            name: row.get(2)?,
+            surname: row.get(3)?,
+            email: row.get(4)?,
+            phone: row.get(5)?,
+            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut debtors = Vec::new();
+    for row in rows {
+        debtors.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(debtors)
+}
+
+pub fn search_primary_debtors(
+    conn: &Connection,
+    organization_id: &str,
+    query: &str,
+) -> Result<Vec<Debtor>, String> {
+    let search_pattern = format!("%{}%", query);
+
+    let mut stmt = conn.prepare(
+        "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at
+         FROM debtors
+         WHERE organization_id = ?1
+         AND role = 'DEBTOR'
+         AND (name LIKE ?2 OR surname LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2
+         OR json_extract(data, '$.contacts.phone1') LIKE ?2
+         OR json_extract(data, '$.contacts.email1') LIKE ?2
+         OR json_extract(data, '$.guarantor.name') LIKE ?2)
+         ORDER BY surname, name"
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map([organization_id, &search_pattern], |row| {
+        let data_json: String = row.get(6)?;
+        Ok(Debtor {
+            id: row.get(0)?,
+            organization_id: row.get(1)?,
+            name: row.get(2)?,
+            surname: row.get(3)?,
+            email: row.get(4)?,
+            phone: row.get(5)?,
+            data: serde_json::from_str(&data_json).unwrap_or(JsonValue::Null),
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut debtors = Vec::new();
+    for row in rows {
+        debtors.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(debtors)
+}
+
+pub fn get_primary_debtor_relations(
+    conn: &Connection,
+    organization_id: &str,
+) -> Result<Vec<PrimaryDebtorRelation>, String> {
+    let mut stmt = conn.prepare(
+        "SELECT debtor_id, relation_type
+         FROM debtor_relations
+         WHERE organization_id = ?1"
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map([organization_id], |row| {
+        Ok(PrimaryDebtorRelation {
+            debtor_id: row.get(0)?,
+            relation_type: row.get(1)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut relations = Vec::new();
+    for row in rows {
+        relations.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(relations)
 }

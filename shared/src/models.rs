@@ -228,6 +228,12 @@ pub struct DebtorDebtTotal {
 }
 
 #[derive(Debug, Serialize)]
+pub struct PrimaryDebtorRelation {
+    pub debtor_id: String,
+    pub relation_type: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct DashboardStats {
     pub total_debtors: i64,
     pub total_debt: f64,

@@ -260,6 +260,39 @@ fn cleanup_orphaned_related_debtors(
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
     debtors::cleanup_orphaned_related_debtors(conn, &storage, &organization_id)
 }
+#[command]
+fn get_primary_debtors(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::get_primary_debtors(conn, &organization_id)
+}
+
+#[command]
+fn search_primary_debtors(
+    query: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Debtor>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::search_primary_debtors(conn, &organization_id, &query)
+}
+
+#[command]
+fn get_primary_debtor_relations(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<PrimaryDebtorRelation>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    debtors::get_primary_debtor_relations(conn, &organization_id)
+}
 
 #[command]
 fn get_debts(
@@ -695,6 +728,9 @@ fn main() {
             get_debtor_debt_totals,
             insert_related_debtor,
             cleanup_orphaned_related_debtors,
+            get_primary_debtors,
+            search_primary_debtors,
+            get_primary_debtor_relations,
             get_debts,
             insert_debt,
             update_debt,
