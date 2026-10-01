@@ -1,0 +1,126 @@
+/* CalendarEventEditModal layout.
+ *
+ * Same conventions as RelationEditModal.css and the other
+ * D.4a modals: hardcoded values where the token set does not
+ * yet cover them. Tokenization deferred.
+ */
+
+.calendar-event-modal__error {
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.calendar-event-modal__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-grid-gap-sm);
+}
+
+.calendar-event-modal__fields > div > .input,
+.calendar-event-modal__fields > div > .label {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.calendar-event-modal__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-gap-sm);
+}
+
+.calendar-event-modal__textarea {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--color-text-strong);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.calendar-event-modal__textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.calendar-event-modal__checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-gap-xs);
+  font-size: var(--font-size-body);
+  color: var(--color-text-normal);
+}
+
+.calendar-event-modal__picker {
+  position: relative;
+}
+
+.calendar-event-modal__searching {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-gap-xs) 0;
+}
+
+.calendar-event-modal__results {
+  list-style: none;
+  margin: var(--space-gap-xs) 0 0 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--color-bg-card);
+}
+
+.calendar-event-modal__result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: var(--space-gap-xs) var(--space-gap-sm);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-strong);
+}
+
+.calendar-event-modal__result:hover {
+  background: var(--color-bg-main);
+}
+
+.calendar-event-modal__result-name {
+  display: block;
+}
+
+.calendar-event-modal__result-meta {
+  display: block;
+  color: var(--color-text-dim);
+  font-size: var(--font-size-badge);
+}
+
+.calendar-event-modal__picked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-gap-xs) var(--space-gap-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-bg-main);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-strong);
+}
+
+.calendar-event-modal__clear {
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  text-decoration: underline;
+  padding: 0;
+}

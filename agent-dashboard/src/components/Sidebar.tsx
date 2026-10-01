@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   Calendar,
+  CalendarDays,
   Users,
   MessageSquare,
   ClipboardList,
@@ -21,6 +22,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Today', icon: Calendar, end: true },
+  { to: '/plan', label: 'Plan', icon: CalendarDays },
   { to: '/debtors', label: 'Debtors', icon: Users },
   { to: '/communication-tools', label: 'Communication Tools', icon: MessageSquare },
   { to: '/actions', label: 'Actions', icon: ClipboardList },

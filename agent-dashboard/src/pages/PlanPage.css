@@ -1,0 +1,221 @@
+/* PlanPage layout.
+ *
+ * Same hardcoded-value conventions as the other Agent pages.
+ * Tokenization deferred.
+ */
+
+.plan-page {
+  padding: var(--space-content-padding);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.plan-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-content-padding);
+}
+
+.plan-page__subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+  margin: 0;
+}
+
+.plan-page__toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-gap-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.plan-page__views {
+  display: flex;
+  gap: var(--space-gap-xs);
+}
+
+.plan-page__view-btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text-normal);
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  cursor: pointer;
+}
+
+.plan-page__view-btn--active {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  border-color: var(--color-accent);
+}
+
+.plan-page__nav {
+  display: flex;
+  gap: var(--space-gap-xs);
+}
+
+.plan-page__nav-btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text-normal);
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  cursor: pointer;
+}
+
+.plan-page__nav-btn:hover {
+  background: var(--color-bg-main);
+}
+
+.plan-page__calendar-wrap {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-card-padding);
+  margin-bottom: var(--space-grid-gap);
+}
+
+/* FullCalendar event color classes. */
+.plan-page__calendar-wrap .fc-event.plan-page__fc-event--manual {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.plan-page__calendar-wrap .fc-event.plan-page__fc-event--payment {
+  background-color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.plan-page__calendar-wrap .fc-event.plan-page__fc-event--followup {
+  background-color: var(--color-badge-warning-text);
+  border-color: var(--color-badge-warning-text);
+}
+
+.plan-page__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-grid-gap);
+}
+
+@media (max-width: 900px) {
+  .plan-page__cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.plan-page__card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-gap-sm);
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.plan-page__card-heading {
+  font-size: var(--font-size-card-heading);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-strong);
+  margin: 0;
+}
+
+.plan-page__card-subtitle {
+  font-size: var(--font-size-badge);
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.plan-page__muted {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.plan-page__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.plan-page__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-gap-sm);
+  padding: var(--space-list-row-padding-y) var(--space-list-row-padding-x);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  margin-bottom: var(--space-gap-xs);
+  font-size: var(--font-size-body-sm);
+}
+
+.plan-page__row-link {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text-strong);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.plan-page__amount {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-strong);
+  white-space: nowrap;
+}
+
+.plan-page__date {
+  color: var(--color-text-dim);
+  font-size: var(--font-size-badge);
+  white-space: nowrap;
+}
+
+.plan-page__badge {
+  display: inline-block;
+  padding: var(--space-hairline) var(--space-gap-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-badge);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.plan-page__badge--accent {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+}
+
+.plan-page__badge--success {
+  background: var(--color-badge-success-bg);
+  color: var(--color-badge-success-text);
+}
+
+.plan-page__badge--danger {
+  background: var(--color-badge-danger-bg);
+  color: var(--color-badge-danger-text);
+}
+
+.plan-page__badge--info {
+  background: var(--color-badge-info-bg);
+  color: var(--color-badge-info-text);
+}
+
+.plan-page__badge--warning {
+  background: var(--color-badge-warning-bg);
+  color: var(--color-badge-warning-text);
+}
+
+.plan-page__badge--neutral {
+  background: var(--color-badge-neutral-bg);
+  color: var(--color-badge-neutral-text);
+}

@@ -195,6 +195,52 @@ export interface PrimaryDebtorRelation {
   relation_type: string;
 }
 
+export interface CalendarEvent {
+  id: string;
+  organization_id: string;
+  title: string;
+  description: string | null;
+  start_date: string;
+  end_date: string;
+  all_day: boolean;
+  event_type: string;
+  debtor_id: string | null;
+  data: any;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalendarEventInput {
+  title: string;
+  description?: string | null;
+  start_date: string;
+  end_date: string;
+  all_day?: boolean;
+  debtor_id?: string | null;
+  data?: any;
+}
+
+export interface UpcomingPayment {
+  debt_id: string;
+  debtor_id: string;
+  debtor_name: string;
+  debtor_surname: string;
+  amount: number;
+  currency: string;
+  status: string;
+  due_date: string;
+}
+
+export interface UpcomingFollowup {
+  action_id: string;
+  debtor_id: string;
+  debtor_name: string;
+  debtor_surname: string;
+  type: string;
+  status: string;
+  due_date: string;
+}
+
 // --- Local DB ---
 
 export const localDB = {
@@ -424,5 +470,73 @@ export const localDB = {
 
   async getPrimaryDebtorRelations(): Promise<PrimaryDebtorRelation[]> {
     return await invoke<PrimaryDebtorRelation[]>('get_primary_debtor_relations');
+  },
+
+  async getCalendarEvents(
+    startDate: string,
+    endDate: string,
+  ): Promise<CalendarEvent[]> {
+    return await invoke<CalendarEvent[]>('get_calendar_events', {
+      startDate,
+      endDate,
+    });
+  },
+
+  async insertCalendarEvent(
+    input: CalendarEventInput,
+  ): Promise<CalendarEvent> {
+    return await invoke<CalendarEvent>('insert_calendar_event', {
+      input: {
+        title: input.title,
+        description: input.description ?? null,
+        start_date: input.start_date,
+        end_date: input.end_date,
+        all_day: input.all_day ?? null,
+        debtor_id: input.debtor_id ?? null,
+        data: input.data ?? null,
+      },
+    });
+  },
+
+  async updateCalendarEvent(
+    id: string,
+    input: CalendarEventInput,
+  ): Promise<CalendarEvent> {
+    return await invoke<CalendarEvent>('update_calendar_event', {
+      id,
+      input: {
+        title: input.title,
+        description: input.description ?? null,
+        start_date: input.start_date,
+        end_date: input.end_date,
+        all_day: input.all_day ?? null,
+        debtor_id: input.debtor_id ?? null,
+        data: input.data ?? null,
+      },
+    });
+  },
+
+  async deleteCalendarEvent(id: string): Promise<boolean> {
+    return await invoke<boolean>('delete_calendar_event', { id });
+  },
+
+  async getUpcomingPayments(
+    startDate: string,
+    endDate: string,
+  ): Promise<UpcomingPayment[]> {
+    return await invoke<UpcomingPayment[]>('get_upcoming_payments', {
+      startDate,
+      endDate,
+    });
+  },
+
+  async getUpcomingFollowups(
+    startDate: string,
+    endDate: string,
+  ): Promise<UpcomingFollowup[]> {
+    return await invoke<UpcomingFollowup[]>('get_upcoming_followups', {
+      startDate,
+      endDate,
+    });
   },
 };

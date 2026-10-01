@@ -5,6 +5,7 @@ import './TopHeader.css';
 
 const TITLES: Record<string, string> = {
   '/': 'Today',
+  '/plan': 'Plan',
   '/debtors': 'Debtors',
   '/communication-tools': 'Communication Tools',
   '/actions': 'Actions',

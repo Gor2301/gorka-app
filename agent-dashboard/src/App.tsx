@@ -18,8 +18,8 @@ import UnlockPage from '@/pages/UnlockPage';
 import EnrollPage from '@/pages/EnrollPage';
 import DebtorsPage from '@/pages/DebtorsPage';
 import DebtorProfilePage from '@/pages/DebtorProfilePage';
+import PlanPage from '@/pages/PlanPage';
 import { EntryCard, Spinner } from '@/components/primitives';
-
 type EntryStep = 'loading' | 'login' | 'unlock' | 'enroll' | 'shell';
 
 export default function App() {
@@ -97,6 +97,7 @@ export default function App() {
               />
             }
           />
+          <Route path="/plan" element={<PlanPage />} />
           <Route path="/debtors" element={<DebtorsPage />} />
           <Route path="/debtors/:id" element={<DebtorProfilePage />} />
           <Route
