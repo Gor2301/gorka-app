@@ -3463,3 +3463,110 @@ RULE COMPLIANCE
   amendments already recorded.
 
 End of entry.
+
+
+================================================================
+SESSION - October 2, 2026 (D.6.1 and D.6.2)
+================================================================
+
+WHAT THIS SESSION DID
+
+Continued Phase 9.5. Closed the last two remaining
+frontend slices before the Agent end-to-end regression:
+D.6.1 (Communication Tools placeholder + Settings
+About-only) and D.6.2 (cross-debtor Actions browser).
+
+Two implementation commits and one documentation batch.
+
+COMMITS
+
+  3b578f3  D.6.1 Communication Tools placeholder and
+           Settings About-only (5 files)
+  88ef81c  D.6.2 cross-debtor Actions browser (8 files)
+  (this)   documentation batch: extraction log,
+           DECISIONS, HANDOFF, START-HERE, SESSION-LOG,
+           PHASE-PLAN
+
+WHAT WAS BUILT
+
+D.6.1 - five files, no Rust, no schema.
+  - CommunicationToolsPage.tsx / .css. Card wrapper,
+    MessageSquare icon, the exact spec 11.8 sentence.
+    Reads nothing. No local_connectors table.
+  - SettingsPage.tsx / .css. Four cards: About, Data,
+    Sync, Security. Version hardcoded 0.0.0.
+  - App.tsx: two Route swaps.
+
+D.6.2 - eight files. One new Rust command.
+  - models.rs: ActionWithDebtor struct (joined row).
+  - actions.rs: get_all_actions(conn, org_id). Sort
+    is (due_date IS NULL), due_date ASC, created_at
+    DESC.
+  - src-tauri-agent/src/main.rs: register the command.
+    Client binary untouched.
+  - local.db.ts: ActionWithDebtor type,
+    getAllActions() wrapper.
+  - ActionsPage.tsx / .css: read-only table, five
+    status filter chips, debtor-name navigation.
+  - App.tsx: /actions route swap.
+  - DebtorProfilePage.tsx: back-target logic extended
+    to accept fromPath / fromLabel.
+
+WHAT IS VERIFIED ON CLOUD
+
+Both slices. Full behavioral smoke tests passed.
+Rust regression unchanged:
+  gorka-agent 2 warnings, gorka-client 3 warnings,
+  gorka-shared 14/14.
+Frontend hashes matched main for both slices.
+
+DEFERRED
+
+  From D.6.2:
+    - Type filter on ActionsPage.
+    - Text search on ActionsPage.
+  From D.5 (unchanged):
+    - Day panel.
+    - Period summary.
+    - Bulk-select within a day panel.
+
+PROCESS NOTES
+
+Read-before-edit discipline broke once during D.6.1
+(App.tsx edited from memory). Caught by the founder.
+Corrective readback performed. Restored from D.6.1
+file 2 onward. No code impact.
+
+D.6.1 file count corrected from 6 to 5 in the plan
+(TopHeader.tsx already had both title entries from
+D.3).
+
+D.6.2 file count corrected from 6 to 8 in the plan
+(DebtorProfilePage back-target extension and
+local.db.ts wrapper were not counted). Founder
+approved the correction.
+
+STATE AT END OF SESSION
+
+  Main machine:  88ef81c, clean, pushed.
+  Cloud machine: 88ef81c, clean.
+  GitHub:        88ef81c.
+
+NEXT WORK
+
+  1. Agent end-to-end regression. Final Phase 9.5
+     pass.
+  2. Close Phase 9.5.
+  3. Phase 9.6 begins with reading
+     SYNC-ARCHITECTURE.md v1.3 and LOCAL-TABLES.md
+     v1.3. No code on day one.
+
+RULE COMPLIANCE
+
+  No production touched.
+  No cloud schema change.
+  No CI/CD touched (release.yml unchanged).
+  Invariant held.
+  No frozen document amended.
+
+End of entry.

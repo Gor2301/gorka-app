@@ -2360,8 +2360,187 @@ DEVIATIONS
           through today + 30 calendar days", same for
           both cards.
 
+
 ================================================================
-END OF D.5 RECORD
+STAGE D.6.1 - COMMUNICATION TOOLS PLACEHOLDER AND SETTINGS ABOUT-ONLY
+================================================================
+
+Date: October 2, 2026.
+Commit: 3b578f3
+
+PURPOSE
+  Ship the Communication Tools placeholder page (spec 11.8)
+  and the Settings About-only page (D.6 scope Q4). Both
+  replace earlier StubPage placeholders. Pure frontend.
+
+ZERO RUST, ZERO SCHEMA
+  No Rust edit. No schema change. No migration. No new
+  dependency. The Communication Tools page reads nothing;
+  no local_connectors table is created.
+
+FILES CHANGED (5)
+  agent-dashboard/src/pages/CommunicationToolsPage.tsx   NEW
+  agent-dashboard/src/pages/CommunicationToolsPage.css   NEW
+  agent-dashboard/src/pages/SettingsPage.tsx             NEW
+  agent-dashboard/src/pages/SettingsPage.css             NEW
+  agent-dashboard/src/App.tsx                            MODIFIED
+
+WHAT WAS BUILT
+  CommunicationToolsPage: Card wrapper, MessageSquare
+  icon, the exact spec 11.8 sentence. No table read, no
+  fetch.
+
+  SettingsPage: four cards (About, Data, Sync, Security).
+  About: App name, Version (hardcoded 0.0.0), Bundle id,
+  Product name. Data: database filename and app data
+  path. Sync: static placeholder text. Security: single
+  line deferring local password change.
+
+  App.tsx: two Route swaps. The /communication-tools and
+  /settings routes replaced their StubPage elements.
+
+SPEC 11.8 SENTENCE PRESERVED EXACTLY
+  Your administrator has not enabled any communication
+  tools yet. Contact your administrator to enable a
+  channel.
+  Preserved as written in the spec. Not paraphrased, not
+  expanded. Per the D.6.1 answer.
+
+VERIFICATION (main, October 2, 2026)
+  npm run build PASS. tsc clean, vite clean.
+  Bundle: index-ZwChvOlC.js 594.64 kB,
+          index-B2mzciSd.css 30.51 kB.
+
+VERIFICATION (cloud, October 2, 2026)
+  git pull fast-forward 2d6ed00..3b578f3, 5 files.
+  cargo build -p gorka-agent PASS, 2 warnings.
+  cargo build -p gorka-client PASS, 3 warnings.
+  cargo test -p gorka-shared PASS, 14/14.
+  npm run build PASS, hashes matched main.
+  Behavioral tests: both pages rendered correctly.
+  Communication Tools: icon plus the spec 11.8 sentence.
+  Settings: four cards with all fields.
+
+EXPLICIT NON-CHANGES
+  No Rust change.
+  No schema change.
+  No migration.
+  No new dependency.
+  No TopHeader.tsx change. Both title entries
+  (/communication-tools, /settings) already existed from
+  D.3. The D.6 plan listed TopHeader as modified; the
+  on-disk read showed it did not need to be. Recorded as
+  a plan correction, not a deviation.
+
+DEVIATIONS
+  None.
+
+================================================================
+END OF D.6.1 RECORD
+================================================================
+
+================================================================
+STAGE D.6.2 - CROSS-DEBTOR ACTIONS BROWSER
+================================================================
+
+Date: October 2, 2026.
+Commit: 88ef81c
+
+PURPOSE
+  The cross-debtor Actions browser. Read-only list of all
+  actions in the organization, with status filter chips
+  and debtor-name navigation. Add, edit, and delete stay
+  on the debtor profile.
+
+WHAT WAS BUILT
+  Rust side: one new shared function and one new struct.
+  - shared/src/models.rs: ActionWithDebtor. Joined row
+    with debtor_name and debtor_surname. Same pattern as
+    UpcomingPayment and UpcomingFollowup.
+  - shared/src/actions.rs: get_all_actions(conn, org_id).
+    Joins actions to debtors, orders by
+    (due_date IS NULL), due_date ASC, created_at DESC.
+  - src-tauri-agent/src/main.rs: get_all_actions command
+    registered. Client binary untouched.
+
+  Frontend: one new page plus one small extension.
+  - local.db.ts: ActionWithDebtor type and getAllActions
+    wrapper.
+  - ActionsPage.tsx: table with six columns (Debtor,
+    Type, Status, Assigned To, Due Date, Description).
+    Read-only. Status filter chips (All, Pending, In
+    Progress, Completed, Cancelled). Client-side filter.
+    Debtor name click navigates to the profile with
+    location state fromPath /actions and fromLabel
+    Actions.
+  - ActionsPage.css: chips, table, badges, name link.
+  - App.tsx: /actions route swapped from StubPage.
+  - DebtorProfilePage.tsx: back-target logic extended
+    to accept fromPath and fromLabel. Resolution order:
+    fromDebtorId, then fromPath, then default.
+
+FILES CHANGED (8)
+  shared/src/models.rs                                 MODIFIED
+  shared/src/actions.rs                                MODIFIED
+  src-tauri-agent/src/main.rs                          MODIFIED
+  agent-dashboard/src/services/local.db.ts             MODIFIED
+  agent-dashboard/src/pages/ActionsPage.tsx            NEW
+  agent-dashboard/src/pages/ActionsPage.css            NEW
+  agent-dashboard/src/App.tsx                          MODIFIED
+  agent-dashboard/src/pages/DebtorProfilePage.tsx      MODIFIED
+
+DEVIATION FROM PLAN
+  The D.6 plan listed 6 files for D.6.2. On-disk
+  reconnaissance showed 8, because DebtorProfilePage
+  needs the back-target extension and local.db.ts needs
+  the wrapper. The founder approved the corrected count.
+
+READ-BEFORE-EDIT DISCIPLINE BREAK
+  During D.6.1, App.tsx was edited from memory instead
+  of from a fresh disk read. The founder caught this.
+  The edit turned out correct, but the discipline was
+  not followed. Restored from D.6.1 file 2 onward. No
+  code impact; a process finding only.
+
+VERIFICATION (main, October 2, 2026)
+  npm run build PASS. tsc clean, vite clean.
+  Bundle: index-DSINv0Nh.js 597.88 kB,
+          index-DRwKh1IG.css 34.12 kB.
+  Rust build on main not attempted (cargo blocked per
+  environment).
+
+VERIFICATION (cloud, October 2, 2026)
+  git pull fast-forward 3b578f3..88ef81c, 8 files.
+  cargo build -p gorka-agent PASS, 2 warnings.
+  cargo build -p gorka-client PASS, 3 warnings.
+  cargo test -p gorka-shared PASS, 14/14.
+  npm run build PASS, hashes matched main.
+  Behavioral tests:
+    Actions page rendered with two rows.
+    Chips rendered (All active).
+    Status filter works.
+    Debtor link navigates to profile.
+    Back button reads "Back to Actions".
+    Back returns to /actions.
+
+DEFERRED (recorded so not forgotten)
+  - Type filter on ActionsPage.
+  - Text search on ActionsPage.
+  Both are natural follow-ups, not D.6 scope.
+
+EXPLICIT NON-CHANGES
+  No schema change.
+  No migration.
+  No new dependency.
+  No Client binary change. The Client generate_handler
+  list is unchanged.
+  No change to existing get_actions behavior.
+
+DEVIATIONS
+  None beyond the 6-to-8 file count correction above.
+
+================================================================
+END OF D.6.2 RECORD
 ================================================================
 END OF DOCUMENT
 ================================================================

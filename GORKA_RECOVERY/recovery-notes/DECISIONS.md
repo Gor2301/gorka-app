@@ -8140,3 +8140,259 @@ amendment in this session; section 11.7 was already
 written and matches what D.5 implemented.
 
 End of entry.
+
+
+## Recovery Session - October 2, 2026 (Stage D.6.1 and D.6.2)
+
+This entry records the HOW decisions from the session that
+closed the last two Agent frontend slices, D.6.1 and D.6.2.
+Technical slice records are in PHASE-9.5-EXTRACTION-LOG.md.
+Status is in HANDOFF.md.
+
+The session covered:
+  - D.6.1 - Communication Tools placeholder and Settings
+            About-only.
+  - D.6.2 - cross-debtor Actions browser.
+
+Decisions below are the HOW decisions that were not
+obvious. Slice mechanics are not repeated here.
+
+================================================================
+D.6.1 DECISIONS
+================================================================
+
+### D61-1 - The Communication Tools page reads nothing
+
+Decision: CommunicationToolsPage.tsx renders a hardcoded
+empty state. It does not read local_connectors, does not
+create the table, does not trigger a migration.
+
+Reasoning: The D.6 scope decision (Q1) settled this. The
+table belongs to Phase 9.6, where its schema is frozen
+against real connector requirements. In Phase 9.5 the
+table does not exist. A page that tries to read a table
+that does not exist would fail. The correct move is the
+empty state, exactly as spec 11.8 states.
+
+Impact: The page has no data dependency. It compiles
+clean, runs clean, and cannot fail from a missing table.
+
+### D61-2 - The spec 11.8 sentence is preserved verbatim
+
+Decision: The empty state reads exactly: "Your
+administrator has not enabled any communication tools
+yet. Contact your administrator to enable a channel."
+
+Reasoning: The spec text is the authority. Paraphrasing
+or shortening would drift. The D.6.1 answer confirmed
+that the full sentence is required, not the truncated
+version that was in the D.3 StubPage placeholder.
+
+Impact: The spec sentence appears in one place in the
+code. Copy changes to spec 11.8 change this string.
+
+### D61-3 - The version string is hardcoded
+
+Decision: SettingsPage.tsx holds a single constant,
+APP_VERSION = '0.0.0', with a one-line comment noting
+that a Rust command will replace it later.
+
+Reasoning: D.6.2 was authorized for exactly one new Rust
+command (get_all_actions). Adding a second command for a
+static version string would break the "one new command"
+discipline and add surface for no behavior change. When
+the app starts shipping releases, the version becomes
+real, and that is when a Rust command is justified.
+
+Impact: When package.json's version changes, the
+constant must be updated in the same commit. Recorded
+inline above the constant.
+
+### D61-4 - TopHeader.tsx was not modified
+
+Decision: The D.6 plan listed TopHeader.tsx as a
+D.6.1 file with "two title entries". On-disk
+reconnaissance showed both entries (/communication-tools,
+/settings) already exist, added during D.3 when the stub
+routes were created. TopHeader.tsx was not touched.
+
+Reasoning: The plan predated D.3's TopHeader work. The
+correct action is not to add duplicate entries; it is to
+recognize that the file already does what the plan
+called for. The D.6.1 file count is 5, not 6.
+
+Impact: One fewer file in D.6.1. Recorded in the
+extraction log as a plan correction.
+
+================================================================
+D.6.2 DECISIONS
+================================================================
+
+### D62-1 - ActionWithDebtor is a joined struct, not N+1
+
+Decision: get_all_actions returns Vec<ActionWithDebtor>,
+a struct that carries debtor_name and debtor_surname
+alongside the action fields. The query joins actions to
+debtors. No per-row get_debtor call on the frontend.
+
+Reasoning: The existing N+1 in loadRelations is
+acceptable for 1-3 relations per debtor. It is not
+acceptable for a cross-debtor list that can have
+hundreds of rows. UpcomingPayment, UpcomingFollowup, and
+DebtorRelation already use this pattern in the same
+codebase. Follow the precedent.
+
+Impact: One round-trip for the whole list. The struct
+is Serialize-only, matching the other joined structs.
+
+### D62-2 - Sort is due_date ASC nulls last, created_at DESC
+
+Decision: The SQL orders by
+(due_date IS NULL), due_date ASC, created_at DESC.
+
+Reasoning: The page answers "what should I do next".
+Overdue and soonest-due rise to the top. Rows with no
+due date fall to the bottom. created_at DESC is the
+tiebreaker for rows sharing a due date. Fixed sort,
+no clickable headers.
+
+Impact: The frontend does not sort. It renders what the
+Rust side returns.
+
+### D62-3 - The page is read-only
+
+Decision: ActionsPage has no add, edit, or delete
+controls. No row-level action buttons. Navigation by
+clicking the debtor name only.
+
+Reasoning: The D.6 plan the founder approved states
+this plainly: "This page is a browser. Add, edit, and
+delete live on the debtor profile." The scope is a
+read-only browser for the agent to see what is pending
+across the book.
+
+Impact: The existing ActionEditModal is not imported by
+ActionsPage. Row-level CRUD continues to live only on
+the debtor profile.
+
+### D62-4 - Status filter is client-side, five chips
+
+Decision: Five chips: All | Pending | In Progress |
+Completed | Cancelled. The filter is applied in the
+component after the full list loads. No server round-trip
+per filter change.
+
+Reasoning: The list is bounded by the agent's own
+organization. Filtering client-side means no loading
+flicker per chip and no new Rust function. If the list
+ever grows past a few thousand rows, a server-side
+filter becomes justified; that is a funded-phase
+concern.
+
+Impact: A single getAllActions call on mount. Chip
+clicks re-filter in memory.
+
+### D62-5 - No Type filter, no text search in D.6.2
+
+Decision: Recorded as deferred, not implemented.
+
+Reasoning: The founder's answer named them as natural
+follow-ups. Adding them now would be scope creep on a
+slice the founder already described as "a browser". They
+are named in the extraction log so they are not
+forgotten.
+
+Impact: None in D.6.2. Two follow-ups on the funded
+list.
+
+### D62-6 - The empty state matches the profile card
+
+Decision: ActionsPage's empty state reads "No actions
+recorded yet." Same sentence the debtor profile's
+Actions card uses when empty. No explanatory second
+sentence. No "click here to add".
+
+Reasoning: Consistency with the existing pattern. The
+page is a browser, not a tutorial. If the agent needs to
+know where actions come from, the profile is one click
+away via the sidebar.
+
+Impact: One string, one place. Matches the profile
+card's wording.
+
+### D62-7 - Back-target logic is generalized
+
+Decision: DebtorProfilePage's back-target computation
+now accepts three shapes, in resolution order:
+  1. location.state.fromDebtorId + fromDebtorLabel
+     (existing; used by the Relations card).
+  2. location.state.fromPath + fromLabel (new; used by
+     ActionsPage).
+  3. No state: fall back to /debtors.
+
+Reasoning: The founder explicitly fixed the back button
+in D.4b-2c-fix to go where the user came from.
+Landing on the debtors list from the Actions page would
+undo that fix's spirit. The generalization is a small
+edit to one block, no new state, no new props.
+
+Impact: Any future cross-debtor page that navigates to
+a profile can pass fromPath / fromLabel and the back
+button will work correctly. The extension is
+general-purpose.
+
+================================================================
+SESSION PROCESS NOTES
+================================================================
+
+### Read-before-edit discipline break and restoration
+
+During D.6.1 file 5 (App.tsx), edits were proposed from
+memory instead of from a fresh disk read. The founder
+caught this and required a corrective readback before
+the file was accepted. The edit turned out correct. The
+discipline was not followed. Restored from D.6.1 file 2
+onward: every modified file was read on disk immediately
+before the edit was proposed. No code impact. Recorded
+here so the discipline stays explicit.
+
+### Cloud trip discipline
+
+D.6.1 and D.6.2 were each verified in a single cloud
+trip: one pull, one Rust regression, one frontend build,
+one smoke test. Two cloud trips total for two slices.
+This is the working rule.
+
+### Commit plan correction
+
+The initial understanding was one commit for both D.6.1
+and D.6.2. Corrected by the founder: two implementation
+commits (3b578f3, 88ef81c), one documentation commit
+(this session's batch). Matches the working rule "one
+commit per slice, documentation after implementation in
+one batch."
+
+================================================================
+SEAMS AND FOLLOW-UPS
+================================================================
+
+Nothing new added to the seam list.
+
+Two follow-ups recorded for the Actions browser:
+  - Type filter chip.
+  - Text search.
+
+Two follow-ups recorded at the D.5 closure remain open:
+  - Day panel.
+  - Period summary.
+  - Bulk-select within a day panel.
+
+================================================================
+END OF SESSION ENTRY
+================================================================
+
+This entry records the D.6.1 and D.6.2 HOW decisions and
+the two session process notes. No spec amendment in this
+session. No frozen document amended.
+
+End of entry.

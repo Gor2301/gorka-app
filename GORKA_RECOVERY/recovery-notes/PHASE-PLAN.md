@@ -94,7 +94,8 @@ Status: PARTIAL (September 14, 2026) — debtor CRUD, debtor-attached document u
 
 PHASE 9.5 - AGENT APP AND CLIENT DASHBOARD, LOCAL ONLY
 
-Status: IN PROGRESS (October 1, 2026). Adapter cleanup and final Client regression complete. Stage B shared functions complete. Stage C Agent backend complete (C.1 auth, C.2 CRUD adapters, C.3 Stage B adapters, C.4 enrollment import, C.5 is_enrolled). Stage D Agent frontend in progress: D.0 prerequisites, D.1 tokens and primitives, D.2 entry flow, D.3 main shell, D.4a-0 primitive gap-fill, D.4a debtor list and profile, D.4b-1 comms and docs cards, D.4b-2a debtor profile photo, D.4b-2b relations card. D.4b-2c Rust half committed (c73373d), not yet compiled on cloud; frontend half not started. D.5 and D.6 remain, then Agent end-to-end regression. See HANDOFF.md, START-HERE.md, and PHASE-9.5-EXTRACTION-LOG.md.
+Status: IN PROGRESS (October 2, 2026). Adapter cleanup and final Client regression complete. Stage B shared functions complete. Stage C Agent backend complete (C.1 auth, C.2 CRUD adapters, C.3 Stage B adapters, C.4 enrollment import, C.5 is\_enrolled). Stage D Agent frontend complete through D.6.2: D.0 prerequisites, D.1 tokens and primitives, D.2 entry flow, D.3 main shell, D.4a-0 primitive gap-fill, D.4a debtor list and profile, D.4b-1 comms and docs cards, D.4b-2a debtor profile photo, D.4b-2b relations card, D.4b-2c role column and orphan cleanup (8689289 + c73373d), D.4b-2c-fix primary-debtor filter and path-aware back button (f0552aa, 060987c, 7a5c01f), D.5 plan view / calendar (1923666), D.6.1 Communication Tools placeholder and Settings About-only (3b578f3), D.6.2 cross-debtor Actions browser (88ef81c). All cloud-verified. Remaining: Agent end-to-end regression. See HANDOFF.md, START-HERE.md, and PHASE-9.5-EXTRACTION-LOG.md.
+
 
 
 
@@ -512,11 +513,12 @@ SUMMARY TABLE
 9     Tauri Local Database Verification  PARTIAL
 
 
-9.5   Agent App and Client Dashboard     IN PROGRESS (D.4b-2c
-                                          Rust half committed;
-                                          frontend half pending)
 
-&#x20;     (local only)
+9.5   Agent App and Client Dashboard     IN PROGRESS (D.6.2 done;
+
+&#x20;                                         end-to-end regression
+
+&#x20;                                         remains)      (local only)
 
 9.6   Sync Engine (MVP scope)            NOT STARTED
 

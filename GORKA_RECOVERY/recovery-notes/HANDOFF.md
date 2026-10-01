@@ -3254,3 +3254,138 @@ See PHASE-9.5-EXTRACTION-LOG.md for the slice records
 and DECISIONS.md for the HOW decisions.
 
 End of entry.
+
+
+## STATUS UPDATE - October 2, 2026 (Stage D.6.1 and D.6.2)
+
+### What this session did
+
+Continued Phase 9.5. Closed the last two remaining
+slices of the Agent frontend before the end-to-end
+regression. Two implementation commits and one
+documentation commit (this batch).
+
+Two slices, both cloud-verified:
+
+  D.6.1 - Communication Tools placeholder and Settings
+          About-only. Five files. Frontend only.
+  D.6.2 - cross-debtor Actions browser. Eight files.
+          One new Rust command, one new shared function,
+          one new shared struct.
+
+### The commits
+
+  D.6.1  3b578f3  Communication Tools placeholder +
+                  Settings About-only (5 files)
+  D.6.2  88ef81c  cross-debtor Actions browser (8 files)
+  docs   (this)   extraction log, DECISIONS, HANDOFF,
+                  START-HERE, SESSION-LOG, PHASE-PLAN
+
+### What is now working on the Agent
+
+Communication Tools page:
+  - Card wrapper with a MessageSquare icon.
+  - The exact spec 11.8 empty state sentence.
+  - Reads nothing. No local_connectors table.
+  - No migration triggered.
+
+Settings page:
+  - Four cards: About, Data, Sync, Security.
+  - About: App name, Version 0.0.0 (hardcoded),
+    Bundle id, Product name.
+  - Data: gorka-agent.db and the app data path.
+  - Sync: static placeholder text.
+  - Security: single deferral line.
+  - No password-change control.
+
+Actions page (cross-debtor):
+  - Table: Debtor, Type, Status, Assigned To, Due
+    Date, Description.
+  - Five status filter chips (All, Pending, In
+    Progress, Completed, Cancelled). Client-side.
+  - Sort: due_date ASC nulls last, then created_at
+    DESC.
+  - Debtor name click navigates to the profile.
+  - Back button on the profile reads "Back to
+    Actions" when reached from this page.
+  - Read-only: no add, edit, or delete.
+
+DebtorProfilePage:
+  - Back-target computation extended to accept
+    fromPath / fromLabel, generalizing the
+    Relations-card case.
+
+### What is verified on cloud
+
+All behavioral tests passed for both slices:
+
+  D.6.1: Communication Tools renders with the exact
+    spec sentence. Settings renders all four cards
+    with all fields. No console errors.
+
+  D.6.2: Actions page renders. Chips work. Status
+    filter works. Debtor link navigates. Back button
+    reads "Back to Actions". Back returns to
+    /actions.
+
+Rust regression unchanged:
+  gorka-agent 2 warnings, gorka-client 3 warnings,
+  gorka-shared 14/14.
+
+Frontend hashes matched main for both slices.
+
+### What is NOT started
+
+  - Agent end-to-end regression. This is the final
+    Phase 9.5 pass.
+  - Phase 9.6 (sync engine).
+
+### Deferred (recorded so not forgotten)
+
+  From D.6.2:
+    - Type filter on ActionsPage.
+    - Text search on ActionsPage.
+
+  From D.5 (unchanged):
+    - Day panel.
+    - Period summary.
+    - Bulk-select within a day panel.
+
+### Process notes
+
+Read-before-edit discipline broke once during D.6.1
+(App.tsx was edited from memory). The founder caught
+it. Corrective readback was performed. The edit
+turned out correct, but the discipline was not
+followed. Restored from D.6.1 file 2 onward. No code
+impact.
+
+D.6.1 file count corrected from 6 to 5 in the plan.
+TopHeader.tsx already had both title entries from
+D.3; no change was needed there.
+
+D.6.2 file count corrected from 6 to 8 in the plan.
+DebtorProfilePage's back-target extension and
+local.db.ts's wrapper were not in the original
+count. Founder approved.
+
+### State at end of session
+
+  Main machine:  88ef81c, clean, pushed.
+  Cloud machine: 88ef81c, clean.
+  GitHub:        88ef81c.
+
+### Next work
+
+  1. Agent end-to-end regression. Final Phase 9.5
+     pass. All pages, all flows, on a fresh cloud
+     session.
+  2. Close Phase 9.5.
+  3. Phase 9.6 begins with reading
+     SYNC-ARCHITECTURE.md v1.3 and LOCAL-TABLES.md
+     v1.3. No code on day one.
+
+See PHASE-9.5-EXTRACTION-LOG.md for the two slice
+records and DECISIONS.md for the HOW decisions.
+
+End of entry.

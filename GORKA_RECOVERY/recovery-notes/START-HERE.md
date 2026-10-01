@@ -1388,3 +1388,73 @@ Next work:
 See DECISIONS.md (October 1 entry), HANDOFF.md,
 SESSION-LOG.md, and PHASE-9.5-EXTRACTION-LOG.md for full
 details.
+
+
+================================================================
+Update - October 2, 2026 (D.4b-2c-fix, D.5, D.6.1, D.6.2)
+================================================================
+
+This entry brings START-HERE current through October 2. The
+previous entry here was for D.4a-0 through D.4b-2c Rust
+half, dated October 1. Three subsequent work batches
+shipped without a START-HERE update (D.4b-2c-fix, D.5,
+D.6.1+D.6.2). They are recorded here so the file matches
+the repository state.
+
+Sequence since the previous START-HERE entry:
+
+  D.4b-2c frontend half    DONE (8689289)
+  D.4b-2c-fix              DONE (f0552aa, 060987c, 7a5c01f)
+  D.5 plan view / calendar DONE (1923666)
+  D.6.1 Communication Tools placeholder + Settings
+                           DONE (3b578f3)
+  D.6.2 cross-debtor Actions
+                           DONE (88ef81c)
+  Documentation batches    DONE (several, ending with this)
+
+What is now working on the Agent:
+
+  - Entry flow: Login, Unlock, Enroll. State machine.
+  - Debtors list: primary debtors only, search, CRUD,
+    Role column with static badges, Debt and Currency
+    columns, two-row sticky header, orphan cleanup on
+    mount.
+  - Debtor profile: header card with photo, Debts card,
+    Relations card, Communications card, Actions card,
+    Documents card. Related persons hide Debts and the
+    relation add buttons. Back button is path-aware.
+  - Plan view (calendar): FullCalendar with four views,
+    three overlaid sources (manual blue, payments red,
+    follow-ups amber), two cards below. Manual events
+    stored, derived events live queries.
+  - Communication Tools: read-only placeholder with the
+    exact spec 11.8 sentence. No local_connectors table.
+  - Settings: About-only. Four cards (About, Data, Sync,
+    Security). No password change.
+  - Actions (cross-debtor): read-only table, five status
+    filter chips, sorted by due date with nulls last,
+    debtor-name navigation to the profile.
+
+What is verified on cloud:
+
+  All of the above. D.4b-2c-fix, D.5, D.6.1, D.6.2 all
+  cloud-verified with behavioral tests. Rust regression
+  unchanged: gorka-agent 2 warnings, gorka-client 3
+  warnings, gorka-shared 14/14.
+
+State at end of session:
+
+  Main machine:  88ef81c, clean, pushed.
+  Cloud machine: 88ef81c, clean.
+  GitHub:        88ef81c.
+
+Next work:
+
+  1. Agent end-to-end regression. Final Phase 9.5 pass.
+  2. Close Phase 9.5.
+  3. Phase 9.6 begins with reading SYNC-ARCHITECTURE.md
+     v1.3 and LOCAL-TABLES.md v1.3. No code on day one.
+
+See DECISIONS.md (October 2 entry), HANDOFF.md,
+SESSION-LOG.md, and PHASE-9.5-EXTRACTION-LOG.md for full
+details.
