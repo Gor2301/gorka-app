@@ -190,7 +190,12 @@ export interface DebtorDebtTotal {
   total_amount: number;
 }
 
-// --- Local DB -------------------------------------------------
+export interface PrimaryDebtorRelation {
+  debtor_id: string;
+  relation_type: string;
+}
+
+// --- Local DB ---
 
 export const localDB = {
   async getDebtors(): Promise<Debtor[]> {
@@ -407,5 +412,17 @@ export const localDB = {
 
   async cleanupOrphanedRelatedDebtors(): Promise<number> {
     return await invoke<number>('cleanup_orphaned_related_debtors');
+  },
+
+  async getPrimaryDebtors(): Promise<Debtor[]> {
+    return await invoke<Debtor[]>('get_primary_debtors');
+  },
+
+  async searchPrimaryDebtors(query: string): Promise<Debtor[]> {
+    return await invoke<Debtor[]>('search_primary_debtors', { query });
+  },
+
+  async getPrimaryDebtorRelations(): Promise<PrimaryDebtorRelation[]> {
+    return await invoke<PrimaryDebtorRelation[]>('get_primary_debtor_relations');
   },
 };

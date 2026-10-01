@@ -30,7 +30,7 @@ export default function DebtorsPage() {
     try {
       setLoading(true);
       setError('');
-      const rows = await localDB.getDebtors();
+      const rows = await localDB.getPrimaryDebtors();
       setDebtors(rows);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -41,7 +41,7 @@ export default function DebtorsPage() {
 
   const loadRolesAndTotals = async () => {
     const [roles, totals] = await Promise.all([
-      localDB.getRelatedDebtorRoles(),
+      localDB.getPrimaryDebtorRelations(),
       localDB.getDebtorDebtTotals(),
     ]);
 
@@ -88,7 +88,7 @@ export default function DebtorsPage() {
     try {
       setLoading(true);
       setError('');
-      const rows = await localDB.searchDebtors(q);
+      const rows = await localDB.searchPrimaryDebtors(q);
       setDebtors(rows);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
