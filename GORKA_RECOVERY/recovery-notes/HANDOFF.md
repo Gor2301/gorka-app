@@ -3114,3 +3114,143 @@ See PHASE-9.5-EXTRACTION-LOG.md for the slice records
 and DECISIONS.md for the HOW decisions.
 
 End of entry.
+
+## STATUS UPDATE - October 1, 2026 (Stage D.5 - plan
+## view / calendar)
+
+### What this session did
+
+Continued Phase 9.5. Built the Agent's plan view.
+Frontend-only slice. Zero Rust. Zero schema. No new
+dependency. No new primitive. The invariant held.
+
+### The commit
+
+  D.5   1923666   plan view / calendar (8 files)
+
+### What is now working on the Agent
+
+Plan page (sidebar: Plan, between Today and Debtors):
+  - FullCalendar with four views: Month, Week, Day,
+    List. Prev / Today / Next navigation.
+  - Three event sources overlaid:
+      manual events (blue) - create, edit, delete
+      payments due (red) - click navigates to debtor
+      follow-ups due (amber) - click navigates to
+                                debtor
+  - Two cards below the calendar: Upcoming Payments
+    and Upcoming Follow-ups. Fixed window: today
+    through today + 30 calendar days.
+  - Click an empty day (Month view) or select a time
+    slot (Week / Day views) to open the create modal
+    with that date or range prefilled.
+  - Click a manual event to edit or delete it.
+  - Link a manual event to any debtor, including
+    related persons, via search-and-pick.
+
+### What is verified on cloud
+
+All behavioral tests passed:
+  - Plan nav entry present, header reads "Plan".
+  - Four views switch correctly.
+  - Manual event created, rendered blue, edited,
+    deleted, persisted across reload.
+  - Derived payment rendered red. Click navigated to
+    debtor profile. No edit modal.
+  - Derived follow-ups rendered amber. Card and
+    calendar entries matched.
+  - Card rows navigated to debtor profile.
+  - Bundles matched main (index-BARau3eA.js,
+    index-2hhgwo-j.css).
+  - Rust regression: gorka-agent PASS 2 warnings,
+    gorka-client PASS 3 warnings, gorka-shared
+    14/14.
+
+### Key design choices
+
+  - Stored events are MANUAL only. No event_type
+    dropdown. Spec 11.7.
+  - Derived events are display-only. Never passed to
+    update or delete. Never written to
+    calendar_events.
+  - Calendar and cards read from the same three
+    local.db.ts methods. Single source of truth.
+  - Link-to-debtor picker searches all debtors,
+    including related persons, per founder Position 2.
+  - No new primitive in D.5.
+
+### Known observations (not actioned)
+
+  - Bundle grows by ~280 kB because FullCalendar is
+    now imported. A 500 kB chunk warning appears.
+    Expected and acceptable for MVP.
+  - Cards use a fixed 30-day window. A payment beyond
+    30 days renders on the calendar but not in the
+    card. By design. Possible future UX improvement.
+
+### Third-party plan review
+
+The D.5 plan was reviewed before implementation.
+Two points adopted (picker scope, card window
+precision). Two rejected (a list of two calendar
+commands that do not exist, and a reconnaissance gate
+already satisfied). Recorded in DECISIONS.md.
+
+### What is NOT started
+
+  - D.6 - remaining screens (Communication Tools,
+    cross-debtor Actions, cross-debtor Documents,
+    Settings).
+  - Agent end-to-end regression.
+
+### Deferred from spec 11.7
+
+  Three features described in spec 11.7 were not
+  delivered in D.5:
+
+    - Day panel: clicking a day opens a list of that
+      day's manual events, payments, and follow-ups
+      below the calendar (or as a modal).
+    - Period summary: selecting a period shows counts
+      of payments, follow-ups, and manual events in
+      that period.
+    - Bulk-select within the day panel and a "Send
+      reminder to all selected" action.
+
+  All three are deferred. The bulk flow depends on
+  the D.6 Communication Tools surface, which does not
+  exist yet. The day panel and period summary are
+  independent and can land in a later Agent slice.
+
+  Section 11.7 of the spec is unchanged. It remains
+  the target. D.5 delivered the calendar core.
+
+### Deviations recorded for this session
+
+1. Documentation written after cloud verification,
+   in one batch. Recorded as Dev-6 in DECISIONS.md.
+
+### State at end of session
+
+  Main machine:  1923666, clean, pushed.
+  Cloud machine: 1923666, clean. Powered off by
+                 founder at end of session.
+  GitHub:        1923666.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched (release.yml unchanged).
+  - Invariant held. No debtor data crossed the
+    boundary.
+  - No frozen document amended. AGENT-APP-SPEC.md
+    section 11.7 was already written and matches what
+    D.5 implemented.
+  - Client binary unchanged. Client commands
+    (get_debtors, search_debtors) untouched.
+
+See PHASE-9.5-EXTRACTION-LOG.md for the slice records
+and DECISIONS.md for the HOW decisions.
+
+End of entry.

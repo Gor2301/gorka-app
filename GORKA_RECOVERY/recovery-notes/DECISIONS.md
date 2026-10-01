@@ -7849,3 +7849,294 @@ of AGENT-APP-SPEC.md section 3.7. It supersedes Seam-3
 from the previous entry.
 
 End of entry.
+
+## Recovery Session - October 1, 2026 (Stage D.5 - plan view / calendar)
+
+This entry records the HOW decisions from the session
+that built the Agent's plan view. Technical slice
+records are in PHASE-9.5-EXTRACTION-LOG.md. Status is in
+HANDOFF.md.
+
+The session covered:
+  - D.5 - plan view (calendar), frontend only.
+
+Decisions below are the HOW decisions that were not
+obvious. Slice mechanics are not repeated here.
+
+================================================================
+D.5 DECISIONS
+================================================================
+
+### D5-1 - Stored events are MANUAL only
+
+Decision: The Agent's Plan page creates calendar events
+with event_type = 'MANUAL' and does not expose an
+event_type dropdown. The Rust function
+insert_calendar_event already hardcodes this value.
+CalendarEventInput is not extended with an event_type
+field.
+
+Reasoning: Spec 11.7 is explicit: "The calendar_events
+table holds only MANUAL rows. This avoids the
+duplication problem the old cloud route had." Payments
+and follow-ups are live queries over debts and actions,
+not stored calendar rows. Adding an event_type dropdown
+would reopen the duplication problem the spec
+deliberately closed.
+
+The Client Dashboard's calendar offers three choices
+(Manual, Payment Due, Follow-up), but sends eventType
+in a payload that Rust silently ignores. The Client's
+event_type is always MANUAL in the database today. The
+Agent does not copy that behavior.
+
+Rejected: a dropdown with MANUAL / PAYMENT_DUE /
+FOLLOW_UP. Rejected: extending CalendarEventInput with
+event_type so the frontend could write arbitrary
+values.
+
+Impact: insert_calendar_event unchanged. No Rust
+change. No schema change.
+
+### D5-2 - Derived events are display-only
+
+Decision: Payment-due and follow-up-due entries are
+rendered on the calendar but are never passed to
+update_calendar_event or delete_calendar_event, and are
+never written into calendar_events.
+
+Reasoning: They are live queries. They have no
+calendar row. Editing or deleting them through the
+calendar would either create phantom stored rows or
+silently do nothing, depending on implementation.
+Neither is acceptable. The single source of truth for
+a payment is the debt row. For a follow-up, the action
+row. The calendar is a view.
+
+Interaction: clicking a derived event navigates to the
+debtor profile. No edit modal. No delete confirmation.
+
+Impact: The calendar's event click handler switches on
+an extendedProps.kind field ('manual', 'payment',
+'followup') to route the interaction. Payments and
+follow-ups never reach the CalendarEventEditModal.
+
+### D5-3 - Card window is fixed at 30 calendar days
+
+Decision: The Upcoming Payments and Upcoming
+Follow-ups cards both cover today through today + 30
+calendar days. Same window. Both cards. Fixed. Not
+rolling hours. Not calendar month.
+
+Reasoning: The founder wanted a near-term actionable
+view. A fixed calendar-day window is deterministic and
+easy to explain. Both cards use the same boundary so
+the two lists are comparable.
+
+Consequence (accepted): An event beyond 30 days
+renders on the calendar but not in either card. A
+payment due on Nov 7, seen on the calendar, does not
+appear in the Upcoming Payments card on Oct 1. This is
+by design. Recorded as a possible future UX
+improvement, not actioned in D.5.
+
+Rejected: card window tracks the visible calendar
+range. That would couple the cards to the calendar's
+current month, which the user navigates freely. The
+cards are a fixed-window snapshot.
+
+Impact: PlanPage.tsx computes the window once per
+mount. The calendar loads its own range via
+FullCalendar's datesSet callback, independent of the
+cards.
+
+### D5-4 - Single source of truth for derived data
+
+Decision: The calendar and the two cards both read
+from the same three local.db.ts methods:
+getCalendarEvents, getUpcomingPayments,
+getUpcomingFollowups.
+
+Reasoning: Duplicate filtering between the calendar
+and the cards would create a consistency bug where the
+red calendar entry and the payment card row could
+disagree. One query path per data kind eliminates that
+class of bug entirely.
+
+The PlanPage transforms the raw records into
+FullCalendar event objects (for the calendar) and list
+rows (for the cards). No business logic in the
+frontend. The Rust queries remain the authority on
+what qualifies as a payment due or a follow-up due.
+
+Impact: The calendar fetches its range on every
+FullCalendar datesSet callback. The cards fetch once
+on mount. When a manual event is created or edited,
+PlanPage re-fetches the visible range; the cards are
+not re-fetched unless the user reloads. This is
+acceptable because manual events do not affect card
+contents, which are derived from debts and actions
+only.
+
+### D5-5 - Link-to-debtor picker over all debtors
+
+Decision: The CalendarEventEditModal's
+link-to-debtor picker uses searchDebtors, not
+searchPrimaryDebtors. It searches the full debtors
+table, including related persons (GUARANTOR, PLEDGER).
+
+Reasoning: The founder's Position 2, stated during
+D.5 planning. A guarantor or pledger is a person the
+agency must contact until the debt is paid. Calling
+Putin about Bob's case is a legitimate agent action
+that should be linkable to Putin. Restricting the
+picker to primary debtors would prevent that.
+
+This is a deliberate divergence from D.4b-2c-fix's
+list filter, where only primary debtors appear. The
+list answers "who are our debtors". The picker
+answers "who is this reminder about". Different
+questions, different answers.
+
+Impact: CalendarEventEditModal imports searchDebtors.
+The Rust debtor-existence validation inside
+insert_calendar_event and update_calendar_event
+already accepts any debtors row, including related
+persons. No Rust change needed.
+
+### D5-6 - Path-aware navigation and the back button
+
+Decision: The Plan page does not change the
+DebtorProfilePage's back button behavior. From a
+derived payment or follow-up event, clicking navigates
+to the debtor profile with no location state. The
+profile's back button therefore reads "Back to
+Debtors", and that is correct in this case: the agent
+reached the profile from the calendar, not from another
+profile.
+
+Reasoning: The path-aware back button added in
+D.4b-2c-fix keys off location state from a specific
+origin (a primary debtor's Relations card). The Plan
+page does not pass that state. So the fallback applies.
+No change to the profile page.
+
+An alternative (state carrying "return to /plan") was
+considered and rejected. It would require the profile
+page to accept a second return destination, expanding
+its responsibility beyond the debtor-to-debtor case it
+was designed for.
+
+Impact: None. No file change beyond what D.5 already
+introduced.
+
+### D5-7 - Event colors via CSS classes, not inline
+
+Decision: Manual events render blue, payments red,
+follow-ups amber. Colors are defined in PlanPage.css
+via FullCalendar's className feature and named
+classes, plus design tokens. No inline colors in the
+TSX.
+
+Reasoning: Consistent with the Agent's design-token
+discipline from D.4a-0. If the palette ever changes,
+one CSS rule changes and every event of that kind
+follows.
+
+Impact: fcEvents in PlanPage.tsx carries
+className strings. PlanPage.css defines the color
+rules scoped under .plan-page__calendar-wrap.
+
+### D5-8 - No new primitive in D.5
+
+Decision: D.5 consumes existing primitives (Button,
+Card, Input, Label, Modal, ErrorBanner) and does not
+add or extend any primitive.
+
+Reasoning: D.4a-0 closed the primitive gap-fill for
+the data pages. The Plan page needs no shape the
+existing set does not provide. A new primitive would
+be scope creep.
+
+Impact: Zero changes to agent-dashboard/src/
+components/primitives/.
+
+================================================================
+THIRD-PARTY PLAN REVIEW
+================================================================
+
+Before implementation, the D.5 plan was reviewed by a
+third party. The review is recorded here because two
+of its points were adopted and two were rejected.
+
+### Adopted
+
+  (a) Q-A change: the link-to-debtor picker searches
+      all debtors, per founder Position 2. Recorded
+      in D5-5 above.
+
+  (b) Card window frozen precisely as "today through
+      today + 30 calendar days". Recorded in D5-3
+      above.
+
+### Rejected
+
+  (c) The review listed two calendar commands that do
+      not exist in the Agent binary:
+        get_calendar_event
+        get_upcoming_calendar_events
+      The actual six commands, confirmed by
+      reconnaissance before the plan was written, are:
+        get_calendar_events
+        insert_calendar_event
+        update_calendar_event
+        delete_calendar_event
+        get_upcoming_payments
+        get_upcoming_followups
+      The review's list would have had the frontend
+      call two nonexistent commands.
+
+  (d) The review proposed a "D.5-0 reconnaissance
+      gate" before touching local.db.ts. The
+      reconnaissance the review asked for was already
+      performed earlier in the session, before the
+      plan was written. The plan the review was
+      reviewing already reflected those findings.
+
+Recorded so that the review, if read later, is
+correctly interpreted. No action.
+
+================================================================
+DEVIATIONS RECORDED FOR THIS SESSION
+================================================================
+
+One deviation, founder-authorised.
+
+### Dev-6 - Documentation written after cloud verification
+
+The working rules say "after every slice: build on
+cloud, run tests, update PHASE-9.5-EXTRACTION-LOG.md."
+For D.5, the extraction log entry and this DECISIONS
+entry were written after the cloud verification, in
+one batch. Same pattern as Dev-4 and Dev-5 from the
+D.4b-2c-fix session.
+
+Reason: The founder preferred to see the working
+screen on cloud before writing down the HOW. If the
+first implementation had been wrong, docs written
+first would have described a rule the code did not
+follow.
+
+Risk: Bounded. Git holds the ground truth of the
+slice regardless of when the docs are written.
+
+================================================================
+END OF SESSION ENTRY
+================================================================
+
+This entry records the D.5 plan view decisions and
+records the third-party review outcome. No spec
+amendment in this session; section 11.7 was already
+written and matches what D.5 implemented.
+
+End of entry.

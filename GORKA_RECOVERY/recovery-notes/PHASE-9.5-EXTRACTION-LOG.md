@@ -2171,5 +2171,197 @@ DEVIATIONS
 ================================================================
 END OF D.4b-2c-FIX RECORD
 ================================================================
+
+================================================================
+STAGE D.5 - PLAN VIEW / CALENDAR
+================================================================
+
+Date: October 1, 2026 (same session).
+Commit: 1923666
+
+PURPOSE
+  The Agent's plan view. One FullCalendar with three
+  overlaid sources: stored manual events (blue), derived
+  payments due (red), derived follow-ups due (amber).
+  Two cards below the calendar: Upcoming Payments and
+  Upcoming Follow-ups, next 30 calendar days.
+
+  Per spec 11.7: the calendar_events table holds MANUAL
+  rows only. Payments and follow-ups are live queries,
+  never stored. No duplication problem.
+
+ZERO RUST
+  All six calendar commands already existed and were
+  registered by Stage B sub-slice 2 and Stage C.3:
+    get_calendar_events
+    insert_calendar_event
+    update_calendar_event
+    delete_calendar_event
+    get_upcoming_payments
+    get_upcoming_followups
+
+  No new command. No Rust change in this slice.
+
+FILES CHANGED (8)
+  agent-dashboard/src/services/local.db.ts               MODIFIED
+  agent-dashboard/src/components/Sidebar.tsx             MODIFIED
+  agent-dashboard/src/components/TopHeader.tsx           MODIFIED
+  agent-dashboard/src/App.tsx                            MODIFIED
+  agent-dashboard/src/components/CalendarEventEditModal.tsx  NEW
+  agent-dashboard/src/components/CalendarEventEditModal.css  NEW
+  agent-dashboard/src/pages/PlanPage.tsx                 NEW
+  agent-dashboard/src/pages/PlanPage.css                 NEW
+
+WHAT WAS BUILT
+
+  local.db.ts:
+    CalendarEvent, CalendarEventInput, UpcomingPayment,
+    UpcomingFollowup types.
+    Six methods: getCalendarEvents, insertCalendarEvent,
+    updateCalendarEvent, deleteCalendarEvent,
+    getUpcomingPayments, getUpcomingFollowups.
+
+  Sidebar.tsx:
+    CalendarDays imported. Plan nav item added between
+    Today and Debtors.
+
+  TopHeader.tsx:
+    One title entry: '/plan': 'Plan'.
+
+  App.tsx:
+    PlanPage imported. Route /plan added.
+
+  CalendarEventEditModal.tsx + .css:
+    Two modes: create and edit. Title (required),
+    description, start, end, all-day checkbox. Optional
+    link-to-debtor picker over search_debtors (all
+    debtors, including related persons, per founder
+    decision). Delete button on edit mode only.
+
+  PlanPage.tsx + .css:
+    FullCalendar (month/week/day/list), Prev / Today /
+    Next. Three event sources overlaid. Day click or
+    time-slot select opens the create modal with that
+    date or range prefilled. Event click: manual opens
+    edit modal, payment/followup navigate to the debtor
+    profile. Two cards below the calendar, 30 calendar
+    days from today, sourced from the same local.db.ts
+    calls as the calendar.
+
+DESIGN CHOICES
+  Stored events are always MANUAL. No event_type
+  dropdown. The event_type hardcoded in
+  insert_calendar_event ("MANUAL") is correct for this
+  slice. CalendarEventInput is not extended.
+
+  Derived events are display-only. They are never
+  passed to update_calendar_event or
+  delete_calendar_event, never written to
+  calendar_events.
+
+  Calendar and cards read from the same three
+  local.db.ts methods. No duplicate filtering in the
+  frontend. Single source of truth.
+
+  Card window is fixed: today through today + 30
+  calendar days. Same for both cards. The calendar
+  itself navigates freely; the cards are a near-term
+  snapshot. Consequence: an event beyond 30 days
+  renders on the calendar but not in either card. This
+  is by design, not a defect.
+
+  Event colors: manual blue, payment red, follow-up
+  amber. Defined in PlanPage.css via FullCalendar
+  event classes and design tokens. No inline colors in
+  the component.
+
+  Empty-day behavior: Month -> click a date cell,
+  create modal opens with that date. Week/day -> drag
+  or click a time slot, create modal opens with the
+  selected start/end. List -> no create-from-empty.
+
+  No new primitive. D.4a-0 already closed the
+  primitive gaps. D.5 consumes.
+
+  No new npm package. FullCalendar 6.1.21 was already
+  installed.
+
+VERIFICATION (main, October 1, 2026)
+  npm run build PASS.
+  First build failed: CalendarEventEditModal.css was
+  not on disk. File created. Second build PASS.
+  Bundle: index-BARau3eA.js, 592 kB. A 500 kB chunk
+  warning appears; expected because FullCalendar is
+  now bundled. Not an error.
+
+VERIFICATION (cloud, October 1, 2026)
+  git pull fast-forward 7a5c01f..1923666, 12 files.
+  cargo build -p gorka-agent PASS, 2 warnings.
+  cargo build -p gorka-client PASS, 3 warnings.
+  cargo test -p gorka-shared PASS, 14/14.
+  npm run build PASS, hashes matched main
+  (index-BARau3eA.js, index-2hhgwo-j.css).
+  Behavioral tests:
+    Sidebar shows Plan between Today and Debtors.
+    Header title reads "Plan".
+    Month view active. Week, Day, List present.
+    Prev / Today / Next present.
+    Manual event (Birthday) rendered blue.
+    Derived payment (Bauman, Bob) rendered red.
+    Derived follow-ups (CALL, EMAIL to Bauman, Bob)
+    rendered amber.
+    Upcoming Follow-ups card listed both follow-ups
+    with type and status badges. Matched the calendar
+    entries.
+    Clicking a card row navigated to the debtor
+    profile.
+    Clicking a red payment event navigated to the
+    debtor profile. No edit modal opened.
+    All persistence checks passed.
+
+OBSERVATION (not a defect, not actioned)
+  A payment due on Nov 7 (37 days out) renders on the
+  calendar but not in the Upcoming Payments card,
+  because the card window is fixed at 30 days.
+  Recorded as a possible future UX improvement: either
+  extend the card window, or label the card's window
+  more prominently. Deferred.
+
+EXPLICIT NON-CHANGES
+  No schema change.
+  No migration.
+  No dependency.
+  No Client binary change.
+  No Rust change.
+  No new primitive.
+  No change to any existing command's behavior.
+  No change to Today page (Q1: Today stays untouched).
+  No event type dropdown (spec 11.7: MANUAL only).
+  CalendarEventInput not extended.
+  Derived events not persisted.
+
+DEVIATIONS
+  One, founder-authorised:
+    - The plan was reviewed by a third party before
+      implementation. The review listed two commands
+      that do not exist (get_calendar_event,
+      get_upcoming_calendar_events) and proposed a
+      "D.5-0 reconnaissance gate" that was already
+      satisfied by the reconnaissance this session.
+      The two command-name errors were rejected. The
+      process advice was noted as already satisfied.
+      Two substantive review points were adopted:
+      (a) Q-A changed from "all debtors in the picker"
+          to "all debtors, per founder Position 2,
+          confirming that related persons are valid
+          link targets because they are contact
+          targets until the debt is paid";
+      (b) fixed window frozen precisely as "today
+          through today + 30 calendar days", same for
+          both cards.
+
+================================================================
+END OF D.5 RECORD
+================================================================
 END OF DOCUMENT
 ================================================================
