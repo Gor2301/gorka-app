@@ -2,11 +2,9 @@ GORKA AGENT APP BUILD SPEC
 
 Document: AGENT-APP-SPEC.md
 
-Version: 1.2 (draft for founder review)
-
-Date: September 27, 2026
-
-Status: DRAFT - awaiting founder review
+Version: 1.3
+Date: October 1, 2026
+Status: FROZEN. Amended October 1, 2026: Section 3.7 (debtor list rules for related persons). All other sections unchanged from v1.2.
 
 Authority: Subordinate to ARCHITECTURAL-LAW.md v1.3.
 
@@ -508,8 +506,7 @@ The relationship is expressed by a role column on debtors (DEBTOR, GUARANTOR, PL
 
 
 
-In the UI, a guarantor appears both inside the debtor profile they guarantee (Section 11.6) and as a row in the debtor list, distinguished by a role badge. The role is chosen from a dropdown when a person record is created or edited.
-
+In the UI, a guarantor appears only inside the debtor profile they guarantee (Section 11.6), as a row in the Relations card. Related persons (GUARANTOR or PLEDGER) do not appear as their own rows in the debtor list. The debtor list shows only primary debtors: rows where role = DEBTOR. The role is written when a related person is created via the Relations card's create-new path.
 
 
 Locality of relations in the MVP. The people sync; the relations do not. In Phase 9.5, debtor\_relations is a local table. Two replicas may hold the same person rows with different relationship graphs. This is deliberate, not a defect. Section 7.8 states the full rule and Section 12 names it as an open item for the funded phase.

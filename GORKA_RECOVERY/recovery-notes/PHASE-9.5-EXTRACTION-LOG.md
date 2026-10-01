@@ -1932,5 +1932,244 @@ DEVIATIONS
 ================================================================
 END OF D.4b-2c (RUST HALF) RECORD
 ================================================================
+
+================================================================
+STAGE D.4b-2c - FRONTEND HALF
+================================================================
+
+Date: October 1, 2026.
+Commit: 8689289
+
+PURPOSE
+  The frontend half of D.4b-2c. Consume the four commands
+  the Rust half registered, and produce the list view the
+  Rust half was designed for: Role column, Debt and
+  Currency columns, sticky two-row header, cleanup on
+  mount.
+
+FILES CHANGED (5)
+  agent-dashboard/src/services/local.db.ts              MODIFIED
+  agent-dashboard/src/components/RelationEditModal.tsx  MODIFIED
+  agent-dashboard/src/pages/DebtorsPage.tsx             MODIFIED
+  agent-dashboard/src/pages/DebtorsPage.css             MODIFIED
+  agent-dashboard/src/pages/DebtorProfilePage.tsx       MODIFIED
+
+WHAT WAS BUILT
+
+  local.db.ts:
+    RelatedDebtorRole and DebtorDebtTotal types.
+    getRelatedDebtorRoles, getDebtorDebtTotals,
+    insertRelatedDebtor, cleanupOrphanedRelatedDebtors
+    methods.
+
+  RelationEditModal.tsx:
+    Create-new path now calls insertRelatedDebtor
+    instead of insertDebtor. This is where debtors.role
+    gets written going forward (role = GUARANTOR or
+    PLEDGER, depending on the modal's mode).
+
+  DebtorsPage.tsx:
+    Role column between Phone and Actions. Debt and
+    Currency columns between Phone and Role. Two-row
+    sticky header: header row + TOTAL row. TOTAL reflects
+    the whole organization, not the search filter.
+    Cleanup runs on mount, before loading debtors. Role
+    badges per relation, mapped from
+    getRelatedDebtorRoles. Debt and Currency cells render
+    one line per currency, aligned.
+
+  DebtorsPage.css:
+    Scrollable container, sticky thead rows, role badge
+    styles, right-aligned Debt and Currency cells.
+
+  DebtorProfilePage.tsx:
+    Reads get_related_debtor_roles. Computes isRelated.
+    Hides + Add Guarantor, + Add Pledger, and the Debts
+    card when isRelated is true.
+
+VERIFICATION (main, October 1, 2026)
+  npm run build PASS.
+  One tsc iteration: RelatedDebtorRole imported but
+  unused. Removed from the import list. Second build
+  PASS.
+
+VERIFICATION (cloud, October 1, 2026)
+  git pull fast-forward 8f3f350..8689289, 5 files.
+  npm run build PASS.
+  Bundle hashes matched main exactly
+  (index-CzxQDPYS.css, index-BOHRWtoc.js).
+  Behavioral tests:
+    Role column rendered. Peter PLEDGER, others empty.
+    TOTAL row rendered below the header row.
+    Peter's profile: no Debts card, no relation
+    add-buttons.
+    Bob's profile: both relation add-buttons present.
+    Added a new guarantor. Appeared in the list with
+    GUARANTOR badge.
+    Deleted the new relation. Row removed. Heading count
+    updated.
+    Created a plain debtor. Stayed in the list after
+    reload. Cleanup did not touch it.
+    Persistence: quit and relaunch. State intact.
+    Debt/Currency cells and TOTAL row with two
+    currencies: correct.
+
+EXPLICIT NON-CHANGES
+  No Rust change in this half.
+  No schema change.
+  No dependency.
+  No Client binary change.
+  No CSS change to DebtorProfilePage.css.
+
+DEVIATIONS
+  None new for this half. The D.4b-2c Rust half's
+  deviations (Dev-1, Dev-2, Dev-3) already recorded.
+
+================================================================
+STAGE D.4b-2c-FIX
+================================================================
+
+Date: October 1, 2026 (same session).
+Commits: f0552aa (Rust), 060987c (frontend),
+         7a5c01f (back button)
+
+PURPOSE
+  Correct D.4b-2c. Verification on cloud showed that
+  D.4b-2c's filter (hide only "targets of an active
+  relation") did not match the founder's rule. The
+  founder's rule: the debtor list shows only primary
+  debtors. Related persons never appear as rows,
+  regardless of whether their relations are currently
+  active.
+
+  Also correct the back button on a related person's
+  profile so it returns to the primary debtor it was
+  reached from.
+
+FILES CHANGED (6)
+  shared/src/models.rs                     MODIFIED
+  shared/src/debtors.rs                    MODIFIED
+  src-tauri-agent/src/main.rs              MODIFIED
+  agent-dashboard/src/services/local.db.ts MODIFIED
+  agent-dashboard/src/pages/DebtorsPage.tsx MODIFIED
+  agent-dashboard/src/pages/DebtorProfilePage.tsx MODIFIED
+
+WHAT WAS BUILT
+
+  Rust:
+    shared/src/models.rs:
+      PrimaryDebtorRelation { debtor_id, relation_type }.
+
+    shared/src/debtors.rs:
+      get_primary_debtors(conn, org_id)
+        get_debtors plus "AND role = 'DEBTOR'".
+
+      search_primary_debtors(conn, org_id, query)
+        search_debtors plus "AND role = 'DEBTOR'".
+
+      get_primary_debtor_relations(conn, org_id)
+        SELECT debtor_id, relation_type FROM
+        debtor_relations WHERE organization_id = ?1.
+        debtor_id here is the primary debtor, not the
+        related person. That is why a separate model
+        struct is used.
+
+    src-tauri-agent/src/main.rs:
+      Three new commands registered:
+        get_primary_debtors
+        search_primary_debtors
+        get_primary_debtor_relations
+
+  Frontend:
+    local.db.ts:
+      PrimaryDebtorRelation type.
+      getPrimaryDebtors, searchPrimaryDebtors,
+      getPrimaryDebtorRelations methods.
+
+    DebtorsPage.tsx:
+      loadDebtors calls getPrimaryDebtors.
+      handleSearch calls searchPrimaryDebtors.
+      loadRolesAndTotals calls
+      getPrimaryDebtorRelations.
+
+    DebtorProfilePage.tsx:
+      useLocation added.
+      backState, backLabel, backTarget derived from
+      location.state. Fallback to /debtors.
+      openRelationProfile passes
+      { fromDebtorId, fromDebtorLabel }.
+      Both back buttons (error state and main) use
+      backTarget and backLabel.
+
+VERIFICATION (main, October 1, 2026)
+  Rust half: no build attempted on main (cargo is
+  blocked, per environment).
+  Frontend half: npm run build PASS.
+  One tsc iteration: PrimaryDebtorRelation imported
+  but unused. Removed from the import list. Second
+  build PASS.
+  Back button: npm run build PASS.
+
+VERIFICATION (cloud, October 1, 2026)
+  git pull fast-forward. f0552aa and 060987c applied.
+  cargo build -p gorka-agent PASS, 2 warnings.
+  cargo build -p gorka-client PASS, 3 warnings.
+  cargo test -p gorka-shared PASS, 14/14.
+  npm run build PASS, hash index-DD3ivasN.js.
+  Behavioral tests:
+    Debtors list showed only Bob Bauman.
+    Bob's Role cell showed [PLEDGER] and [GUARANTOR].
+    Peter and Putin hidden from the list.
+    Bob's Relations card listed both with clickable
+    names.
+    Peter's profile had no Debts card, no relation
+    add-buttons.
+    Putin's profile same.
+    Created a plain debtor. Appeared in the list.
+    Search "parker": zero rows. Search "bauman":
+    Bob only.
+    Deleted the plain debtor. Reload. Gone.
+    Multi-currency stacking confirmed.
+    Persistence across quit-relaunch confirmed.
+  Back button fix:
+    git pull fast-forward 060987c..7a5c01f.
+    npm run build PASS, hash index-skXRVsZs.js.
+    From Bob's profile, click Peter: back button reads
+    "Back to Bauman, Bob", returns to Bob.
+    From Bob's profile, click back: reads
+    "Back to Debtors", returns to the list.
+    All confirmed.
+
+RESIDUE CLEANUP
+  Two pre-fix residues removed manually on the cloud
+  test instance. No code change.
+    Trump Donald - deleted via the UI.
+    Peter Parker - relation deleted, row deleted,
+    re-created via + Add Pledger on Bob's profile so
+    the new role write fires.
+
+EXPLICIT NON-CHANGES
+  No schema change.
+  No migration.
+  No dependency.
+  No Client binary change.
+  No change to get_debtors, search_debtors, or any
+    existing command's behavior. The Client binary
+    continues to use them.
+  No change to the profile's Communications, Actions,
+    or Documents cards. Related persons keep all
+    case-file tools.
+  No CSS change in the back-button fix.
+
+DEVIATIONS
+  Two, both founder-authorised:
+    - Code first, documentation second (Dev-4 in
+      DECISIONS.md).
+    - Spec amended after cloud verification, not
+      before (Dev-5 in DECISIONS.md).
+
+================================================================
+END OF D.4b-2c-FIX RECORD
+================================================================
 END OF DOCUMENT
 ================================================================

@@ -7534,3 +7534,318 @@ D.4b-2c's frontend half; that follows after cloud compiles
 the Rust half.
 
 End of entry.
+
+
+## Recovery Session - October 1, 2026 (Stage D.4b-2c frontend half and D.4b-2c-fix)
+
+This entry records the HOW decisions from the session
+that completed D.4b-2c and then corrected it. Technical
+slice records are in PHASE-9.5-EXTRACTION-LOG.md. Status
+is in HANDOFF.md.
+
+The session covered:
+  - D.4b-2c frontend half - role column, debt and
+                           currency columns, sticky
+                           header, orphan cleanup on
+                           mount.
+  - D.4b-2c-fix        - primary-debtor list filter,
+                           role badges on the primary
+                           debtor's row only, path-aware
+                           back button.
+
+Decisions below are the HOW decisions that were not
+obvious. Slice mechanics are not repeated here.
+
+================================================================
+D.4b-2c FRONTEND HALF DECISIONS
+================================================================
+
+### DB2cF-1 - Role badges read from debtor_relations
+
+Decision: The Role column's badges are built from
+`get_primary_debtor_relations`, which reads
+`debtor_relations` directly. Not from `debtors.role`.
+
+Reasoning: A person can carry multiple relations
+(guarantor for one debtor, pledger for another). The
+relations table is the source of truth for what badges to
+display on each primary debtor's row. The role column on
+the person row is used only by the list filter, not by
+badge rendering.
+
+Impact: Badges are correct even if a person's role column
+is stale. This is how the Peter residue case was made
+visible without a Rust change.
+
+### DB2cF-2 - Cleanup runs on mount, before load
+
+Decision: The Debtors page runs
+`cleanup_orphaned_related_debtors` first, then loads
+debtors, then loads roles and totals. Order matters.
+
+Reasoning: Rows removed by cleanup must not appear in
+the same render. Running cleanup after loading would
+briefly show a row that is about to disappear.
+
+Impact: One async effect with three sequential awaits.
+
+### DB2cF-3 - Roles and totals are refreshed on every mutation
+
+Decision: After `handleSaved` or `handleDelete`,
+`refresh` re-runs both `handleSearch(query)` and
+`loadRolesAndTotals()`.
+
+Reasoning: Deleting a relation can remove a badge. Adding
+a relation can add a badge. Both lists must reflect the
+change immediately, even if the debtor list itself is
+unchanged.
+
+Impact: One small helper, `refresh`, replacing direct
+calls to `handleSearch`.
+
+================================================================
+D.4b-2c-FIX DECISIONS
+================================================================
+
+### DB2cFix-1 - The list filter is role = 'DEBTOR'
+
+Decision: The debtor list shows only rows where
+`debtors.role = 'DEBTOR'`. Related persons (GUARANTOR,
+PLEDGER) never appear as their own rows, regardless of
+whether their relations are currently active.
+
+Reasoning: The founder's rule, stated plainly: the
+debtor list shows only debtors. Not "debtors plus anyone
+without an active relation". Not "debtors plus related
+persons with no data". Only debtors.
+
+The alternative -- filter on "not the target of any
+active relation" -- was considered and rejected. It fails
+the moment a relation is deleted: the person reappears in
+the list. The founder explicitly rejected this behavior:
+"they don't have to appear in debtor list even if it a
+MVP stage."
+
+The role-column filter is stable across every scenario:
+relation added, relation deleted, data added to the
+related person, data removed, cleanup runs, cleanup does
+not run. In all cases, a related person stays hidden.
+
+Impact: Three new functions in gorka-shared:
+`get_primary_debtors`, `search_primary_debtors`,
+`get_primary_debtor_relations`. Three new Agent commands
+registered. Existing `get_debtors` and `search_debtors`
+are untouched; the Client binary still uses them.
+
+### DB2cFix-2 - Role badges are static, not clickable
+
+Decision: The Role column's badges are plain `<span>`
+elements. They are not clickable. They do not show the
+related person's name. They show only the role:
+`PLEDGER` or `GUARANTOR`.
+
+Reasoning: The founder's decision. Two reasons given:
+(a) names in the badge would be visually messy, especially
+with multiple relations per row; (b) the Relations card on
+the primary debtor's profile is the single navigation path
+to a related person's profile, so a second path from the
+badge is unnecessary and introduces ambiguity when there
+are multiple pledgers.
+
+Rejected: clickable badges, count badges
+(`PLEDGER x2`), badges with the related person's name.
+
+Impact: Badge rendering is one line of JSX per relation.
+No navigation logic. No tooltip.
+
+### DB2cFix-3 - The spec was wrong, not the code
+
+Decision: The spec sentence "In the UI, a guarantor
+appears both inside the debtor profile they guarantee
+(Section 11.6) and as a row in the debtor list,
+distinguished by a role badge" (Section 3.7) was
+incorrect. It was replaced in AGENT-APP-SPEC.md v1.3.
+
+Reasoning: The original spec assumed related persons
+should appear in the debtor list with a badge. The
+founder clarified that this was a miscommunication during
+spec authoring. The correct rule is: only primary debtors
+appear in the list. The spec was amended. The code was
+rebuilt to match.
+
+The handoff and previous decisions attributed this
+sentence to section 11.6. It was in fact in section 3.7.
+Section 11.6 describes the debtor profile page and is
+correct as-is.
+
+Impact: AGENT-APP-SPEC.md v1.3, one paragraph of section
+3.7 replaced. Header bumped to FROZEN. No other spec
+change.
+
+### DB2cFix-4 - Path-aware back button on the profile page
+
+Decision: When a related person's profile is reached via
+a primary debtor's Relations card, the back button reads
+`Back to <primary surname, name>` and returns to that
+primary debtor's profile. When the profile is reached
+from the list (normal case), the button reads
+`Back to Debtors` and returns to the list.
+
+Reasoning: Before D.4b-2c-fix, the back button had a
+fixed target of `/debtors`. That was correct while the
+only way into a profile was from the list. Now that
+Relations cards navigate between profiles, the fixed
+target is wrong: it drops the user at the list instead
+of where they came from.
+
+Implementation: React Router location state. When
+`openRelationProfile` is called, it passes
+`{ fromDebtorId, fromDebtorLabel }`. The receiving
+profile reads `location.state` and derives `backLabel`
+and `backTarget`. Falls back to `/debtors` when no state
+is present. No history dependency. Works even if the
+related person is linked to more than one primary debtor,
+because the navigation carries the specific origin.
+
+Impact: One file. Five edits. No Rust change. No CSS
+change.
+
+### DB2cFix-5 - Related persons keep all case-file tools
+
+Decision: A related person's profile keeps the
+Communications card with `+ Log Communication`, the
+Actions card with `+ Add Action`, and the Documents
+card's upload control. These are not hidden when
+`isRelated` is true.
+
+Reasoning: A guarantor or pledger is a person the agency
+must contact until the debt is paid. Calls, SMS, emails,
+legal notices all get logged against them. This is a
+business requirement. Hiding these tools would have
+crippled the collection workflow.
+
+An earlier proposal in this session recommended hiding
+them for technical hygiene. The founder rejected it on
+business grounds. Business wins.
+
+Rejected: hiding Communications, Actions, and Documents
+add-controls on related persons' profiles.
+
+Note: The `+ Add Debt` button and the `+ Add Guarantor`
+/ `+ Add Pledger` buttons ARE hidden when `isRelated` is
+true. A related person does not have their own debts in
+this MVP, and does not have their own relations.
+
+### DB2cFix-6 - The zombie case is accepted as MVP limitation
+
+Decision: If a related person accumulates their own
+data (communications, actions, documents) and then their
+relation to the primary debtor is deleted, they become
+a zombie: hidden from the list, unreachable from the UI,
+still in the database, not deleted by cleanup.
+
+Accepted as a known MVP limitation. Deferred to the
+funded phase.
+
+Reasoning: The list filter hides them (correct per
+DB2cFix-1). The five-table orphan check refuses to
+delete them (correct per DB2c-3, protects real data).
+The UI has no surface that points to them. They are
+invisible, not clutter. This does not violate the
+founder's "I do not want to see orphans" rule, because
+zombies are not visible.
+
+The proper fix is a "case closed" or "history" surface
+in the funded phase, where detach-related-persons with
+data are shown to the admin for manual handling. The
+founder floated this idea during the session and agreed
+to defer it.
+
+Rejected: automatic retention of orphans in the MVP.
+Requires a new column or table plus a migration plus a
+cleanup behavior change. Not MVP scope.
+
+### DB2cFix-7 - The two residue cases were cleaned manually
+
+Decision: Two pre-existing residue rows were cleaned
+manually on the cloud test instance. No code change.
+
+  - Trump Donald: created before `insert_related_debtor`
+    existed, role = DEBTOR, no relations, no data. Manual
+    delete via the UI.
+  - Peter Parker: created before `insert_related_debtor`
+    existed, role = DEBTOR, one active relation to Bob.
+    Deleted relation, deleted his row, re-created via
+    `+ Add Pledger` on Bob's profile so the new role write
+    fires.
+
+Reasoning: The new role-column filter cannot distinguish
+a pre-fix residue with role = DEBTOR from a genuine new
+debtor. There is no field on the row that records "this
+was once a related person". The role write added in
+D.4b-2c prevents new residues. Only these two pre-fix
+rows required manual cleanup.
+
+Impact: No code. Cloud test DB only. New residues are
+prevented going forward by the role write in
+`insert_related_debtor`.
+
+================================================================
+SEAM UPDATE
+================================================================
+
+### Seam-3 superseded
+
+Seam-3 (recorded in the September 30 / October 1 entry)
+stated that "Spec 11.6 says related persons appear in the
+debtor list 'distinguished by a role badge'" and that
+D.4b-2c would close the gap by rendering the badge.
+
+That statement is now superseded by DB2cFix-1 and
+DB2cFix-3. Related persons do not appear in the debtor
+list. The spec was wrong. Seam-3 is retained in the
+previous entry as historical record. No action.
+
+================================================================
+DEVIATIONS RECORDED FOR THIS SESSION
+================================================================
+
+Two deviations, both founder-authorised.
+
+### Dev-4 - Code first, documentation second
+
+The working rules say documentation follows every slice.
+For D.4b-2c-fix, the founder requested the opposite
+order: write the code, verify on cloud, and only then
+document. The reason: a documentation-first order risks
+freezing a rule that turns out wrong in practice, and
+unwinding it costs more than writing it late.
+
+The order was: Rust half, frontend half, back-button
+fix, cloud verification, then this DECISIONS entry and
+the spec amendment.
+
+Reason: Bounded risk. Git holds the ground truth of
+every slice regardless of when the docs are written.
+
+### Dev-5 - Spec amended after code verification, not before
+
+The spec 3.7 amendment was written after the cloud smoke
+test confirmed the new behavior. The old spec sentence
+was factually wrong; the new sentence describes what the
+code now does, verified on cloud. Amending before
+verification would have been a guess.
+
+Reason: Same as Dev-4. Code is the ground truth; docs
+describe it.
+
+================================================================
+END OF SESSION ENTRY
+================================================================
+
+This entry records the D.4b-2c frontend half decisions
+and the D.4b-2c-fix decisions, and records the amendment
+of AGENT-APP-SPEC.md section 3.7. It supersedes Seam-3
+from the previous entry.
+
+End of entry.

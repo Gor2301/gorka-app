@@ -2986,3 +2986,131 @@ See PHASE-9.5-EXTRACTION-LOG.md for the slice records and
 DECISIONS.md for the HOW decisions.
 
 End of entry.
+
+## STATUS UPDATE - October 1, 2026 (D.4b-2c frontend half
+## and D.4b-2c-fix)
+
+### What this session did
+
+Continued Phase 9.5. Closed D.4b-2c in two halves and
+then corrected it in a third commit. No production
+touched. No cloud schema change. The invariant held.
+
+### The commits
+
+  d4b-2c-fix   f0552aa  Rust half (3 files)
+  d4b-2c-fix   060987c  frontend half (2 files)
+  d4b-2c-fix   7a5c01f  path-aware back button (1 file)
+
+Earlier in the same session, d4b-2c frontend half
+landed as 8689289 (5 files).
+
+### What is now working on the Agent
+
+Debtors list:
+  - Shows only primary debtors (role = DEBTOR). Related
+    persons do not appear as their own rows, regardless
+    of active relations.
+  - Role column shows one static badge per active
+    relation on the primary debtor's row: PLEDGER,
+    GUARANTOR. Not clickable. No names.
+  - Debt and Currency columns, one line per currency.
+  - Two-row sticky header: header row + TOTAL row.
+    TOTAL reflects the whole organization, not the
+    current search filter.
+  - Orphan cleanup runs once per page mount, before
+    loading rows.
+
+Debtor profile:
+  - Related persons: no Debts card, no relation
+    add-buttons.
+  - Communications, Actions, and Documents cards stay
+    on every profile. Related persons keep all
+    case-file tools.
+  - Back button is path-aware. From a related person's
+    profile reached via a Relations card, it reads
+    "Back to <primary surname, name>" and returns to
+    that profile.
+
+### What is verified on cloud
+
+All behavioral tests passed, including:
+  - D.4b-2c frontend half (list filter, badges, sticky
+    header, cleanup, persistence).
+  - D.4b-2c-fix (only primary debtors in the list, Role
+    badges on the primary's row, search returns only
+    primaries, path-aware back button, persistence).
+
+### Spec change
+
+AGENT-APP-SPEC.md bumped to v1.3, FROZEN. One
+paragraph of section 3.7 rewritten. Related persons do
+not appear in the debtor list; the list shows only
+primary debtors. No other spec change.
+
+### Residue cleanup
+
+Two pre-fix residue rows on the cloud test instance
+were removed manually. Trump Donald (deleted via UI)
+and Peter Parker (relation deleted, row deleted,
+re-created via + Add Pledger on Bob's profile so the
+new role write fires). No code change. No migration.
+New residues are prevented going forward by the role
+write in insert_related_debtor.
+
+### Known MVP limitation
+
+A related person who accumulates their own
+communications, actions, or documents, and then has
+their relation to the primary debtor deleted, becomes
+a zombie: hidden from the list, unreachable from the
+UI, still in the database, not deleted by cleanup.
+
+Accepted for MVP. The proper fix is a "case closed"
+surface in the funded phase. Recorded in DECISIONS.md
+DB2cFix-6.
+
+### What is NOT started
+
+  - D.5 - plan view / calendar (FullCalendar).
+  - D.6 - remaining screens (Communication Tools,
+    cross-debtor Actions, cross-debtor Documents,
+    Settings).
+  - Agent end-to-end regression.
+
+### Deviations recorded for this session
+
+1. Code first, documentation second. Founder
+   requested this order for D.4b-2c-fix. Recorded as
+   Dev-4 in DECISIONS.md.
+
+2. Spec amended after cloud verification, not before.
+   Recorded as Dev-5 in DECISIONS.md.
+
+3. D.4b-2c-fix verified in one combined cloud trip
+   for Rust build, frontend build, and behavioral
+   smoke test. Founder-authorised.
+
+### State at end of session
+
+  Main machine:  7a5c01f, clean, pushed.
+  Cloud machine: 7a5c01f, clean. Powered off by
+                 founder at end of session.
+  GitHub:        7a5c01f.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched (release.yml unchanged).
+  - Invariant held. No debtor data crossed the boundary.
+  - No frozen document amended beyond the amendment
+    to AGENT-APP-SPEC.md 3.7 recorded in this session.
+  - Client binary unchanged. Existing commands used by
+    the Client (get_debtors, search_debtors) are
+    untouched.
+
+See PHASE-9.5-EXTRACTION-LOG.md for the slice records
+and DECISIONS.md for the HOW decisions.
+
+End of entry.
