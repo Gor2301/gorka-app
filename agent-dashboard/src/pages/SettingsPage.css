@@ -1,0 +1,62 @@
+/* SettingsPage layout.
+ *
+ * Reuses the label/value vocabulary from DebtorProfilePage.css
+ * (uppercase label, strong value). Cards stack with the same
+ * 16px gap as the profile page.
+ */
+
+.settings-page {
+  padding: var(--space-content-padding);
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.settings-page .card {
+  margin-bottom: var(--space-grid-gap);
+}
+
+.settings-page__list {
+  margin: 0;
+  padding: 0;
+}
+
+.settings-page__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-grid-gap);
+  padding: var(--space-list-row-padding-y) 0;
+  border-bottom: 1px solid var(--color-bg-main);
+}
+
+.settings-page__row:last-child {
+  border-bottom: none;
+}
+
+.settings-page__label {
+  flex: 0 0 160px;
+  font-size: var(--font-size-label-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.settings-page__value {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-value);
+  color: var(--color-text-strong);
+}
+
+.settings-page__note {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body-sm);
+}
+
+.settings-page__paragraph {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--color-text-normal);
+  line-height: 1.5;
+}

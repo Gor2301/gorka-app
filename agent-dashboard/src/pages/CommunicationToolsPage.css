@@ -1,0 +1,29 @@
+/* CommunicationToolsPage layout.
+ *
+ * Empty-state pattern matches DebtorsPage.css: centered card
+ * body, muted icon above the paragraph, muted paragraph text.
+ * The spec 11.8 sentence is the only copy on the page.
+ */
+
+.communication-tools-page {
+  padding: var(--space-content-padding);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.communication-tools-page__empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.communication-tools-page__empty-icon {
+  color: var(--color-border);
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.communication-tools-page__empty-text {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
+}

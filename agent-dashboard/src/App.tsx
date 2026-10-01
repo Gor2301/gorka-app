@@ -19,6 +19,8 @@ import EnrollPage from '@/pages/EnrollPage';
 import DebtorsPage from '@/pages/DebtorsPage';
 import DebtorProfilePage from '@/pages/DebtorProfilePage';
 import PlanPage from '@/pages/PlanPage';
+import CommunicationToolsPage from '@/pages/CommunicationToolsPage';
+import SettingsPage from '@/pages/SettingsPage';
 import { EntryCard, Spinner } from '@/components/primitives';
 type EntryStep = 'loading' | 'login' | 'unlock' | 'enroll' | 'shell';
 
@@ -102,12 +104,7 @@ export default function App() {
           <Route path="/debtors/:id" element={<DebtorProfilePage />} />
           <Route
             path="/communication-tools"
-            element={
-              <StubPage
-                title="Communication Tools"
-                subtitle="Your administrator has not enabled any communication tools yet."
-              />
-            }
+            element={<CommunicationToolsPage />}
           />
           <Route
             path="/actions"
@@ -136,15 +133,7 @@ export default function App() {
               />
             }
           />
-          <Route
-            path="/settings"
-            element={
-              <StubPage
-                title="Settings"
-                subtitle="Local password change arrives in a later phase."
-              />
-            }
-          />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </HashRouter>
