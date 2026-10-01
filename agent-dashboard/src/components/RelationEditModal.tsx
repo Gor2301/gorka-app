@@ -127,13 +127,16 @@ export default function RelationEditModal({
         const data: Record<string, unknown> = {};
         if (collateral) data.collateral = collateral;
 
-        const created = await localDB.insertDebtor({
-          name: name.trim(),
-          surname: surname.trim(),
-          email: email.trim() || null,
-          phone: phone.trim() || null,
-          data,
-        });
+        const created = await localDB.insertRelatedDebtor(
+          {
+            name: name.trim(),
+            surname: surname.trim(),
+            email: email.trim() || null,
+            phone: phone.trim() || null,
+            data,
+          },
+          role,
+        );
         relatedId = created.id;
       } else {
         const debtor = selectedDebtor!;

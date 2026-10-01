@@ -59,6 +59,7 @@ export default function DebtorProfilePage() {
   const [relations, setRelations] = useState<DebtorRelation[]>([]);
   const [relationsLoading, setRelationsLoading] = useState(true);
   const [relationsError, setRelationsError] = useState('');
+  const [relatedRoles, setRelatedRoles] = useState<string[]>([]);
   const [relationModalRole, setRelationModalRole] = useState<RelationRole | null>(null);
   const [collateralMap, setCollateralMap] = useState<
     Record<string, { type?: string; description?: string }>
@@ -179,6 +180,18 @@ export default function DebtorProfilePage() {
     }
   };
 
+  const loadRelatedRoles = async () => {
+    if (!id) return;
+    try {
+      const rows = await localDB.getRelatedDebtorRoles();
+      setRelatedRoles(
+        rows.filter((r) => r.debtor_id === id).map((r) => r.relation_type),
+      );
+    } catch {
+      setRelatedRoles([]);
+    }
+  };
+
   const loadCommunications = async () => {
     if (!id) return;
     try {
@@ -226,6 +239,7 @@ export default function DebtorProfilePage() {
     if (id) loadPhoto(id);
     loadDebts();
     loadRelations();
+    loadRelatedRoles();
     loadCommunications();
     loadActions();
     loadDocuments();
@@ -445,6 +459,8 @@ export default function DebtorProfilePage() {
     return `${(n / 1024 / 1024).toFixed(1)} MB`;
   };
 
+  const isRelated = relatedRoles.length > 0;
+
   if (loading) {
     return (
       <div className="debtor-profile__state">
@@ -559,57 +575,59 @@ export default function DebtorProfilePage() {
         </div>
       </Card>
 
-      <Card>
-        <div className="debtor-profile__card-header">
-          <h2 className="debtor-profile__card-heading">Debts</h2>
-          <Button variant="primary" size="sm" onClick={openAddDebt}>
-            + Add Debt
-          </Button>
-        </div>
+         {!isRelated && (
+        <Card>
+          <div className="debtor-profile__card-header">
+            <h2 className="debtor-profile__card-heading">Debts</h2>
+            <Button variant="primary" size="sm" onClick={openAddDebt}>
+              + Add Debt
+            </Button>
+          </div>
 
-        {debtsError && <ErrorBanner message={debtsError} />}
+          {debtsError && <ErrorBanner message={debtsError} />}
 
-        {debtsLoading ? (
-          <p className="debtor-profile__muted">Loading debts...</p>
-        ) : debts.length === 0 ? (
-          <p className="debtor-profile__muted">No debts recorded yet.</p>
-        ) : (
-          <ul className="debtor-profile__list">
-            {debts.map((d) => (
-              <li key={d.id} className="debtor-profile__row">
-                <span className="debtor-profile__amount">
-                  {d.amount.toLocaleString()} {d.currency}
-                </span>
-                <span className={`debtor-profile__badge ${debtStatusClass(d.status)}`}>
-                  {d.status}
-                </span>
-                <span className="debtor-profile__row-text">
-                  {d.description || '-'}
-                  {d.due_date && ` - due ${new Date(d.due_date).toLocaleDateString()}`}
-                </span>
-                <Button
-                  variant="primary"
-                  iconOnly
-                  onClick={() => openEditDebt(d)}
-                  title="Edit debt"
-                  aria-label="Edit debt"
-                >
-                  <Pencil size={14} />
-                </Button>
-                <Button
-                  variant="danger"
-                  iconOnly
-                  onClick={() => handleDeleteDebt(d)}
-                  title="Delete debt"
-                  aria-label="Delete debt"
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+          {debtsLoading ? (
+            <p className="debtor-profile__muted">Loading debts...</p>
+          ) : debts.length === 0 ? (
+            <p className="debtor-profile__muted">No debts recorded yet.</p>
+          ) : (
+            <ul className="debtor-profile__list">
+              {debts.map((d) => (
+                <li key={d.id} className="debtor-profile__row">
+                  <span className="debtor-profile__amount">
+                    {d.amount.toLocaleString()} {d.currency}
+                  </span>
+                  <span className={`debtor-profile__badge ${debtStatusClass(d.status)}`}>
+                    {d.status}
+                  </span>
+                  <span className="debtor-profile__row-text">
+                    {d.description || '-'}
+                    {d.due_date && ` - due ${new Date(d.due_date).toLocaleDateString()}`}
+                  </span>
+                  <Button
+                    variant="primary"
+                    iconOnly
+                    onClick={() => openEditDebt(d)}
+                    title="Edit debt"
+                    aria-label="Edit debt"
+                  >
+                    <Pencil size={14} />
+                  </Button>
+                  <Button
+                    variant="danger"
+                    iconOnly
+                    onClick={() => handleDeleteDebt(d)}
+                    title="Delete debt"
+                    aria-label="Delete debt"
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       <Card>
         <div className="debtor-profile__card-header">
@@ -618,22 +636,24 @@ export default function DebtorProfilePage() {
               ? `Relations (${relations.length})`
               : 'Relations'}
           </h2>
-          <div className="debtor-profile__card-header-actions">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => openAddRelation('GUARANTOR')}
-            >
-              + Add Guarantor
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => openAddRelation('PLEDGER')}
-            >
-              + Add Pledger
-            </Button>
-          </div>
+          {!isRelated && (
+            <div className="debtor-profile__card-header-actions">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => openAddRelation('GUARANTOR')}
+              >
+                + Add Guarantor
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => openAddRelation('PLEDGER')}
+              >
+                + Add Pledger
+              </Button>
+            </div>
+          )}
         </div>
 
         {relationsError && <ErrorBanner message={relationsError} />}

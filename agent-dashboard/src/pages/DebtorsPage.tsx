@@ -2,7 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Search, Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button, ErrorBanner, Input, Spinner } from '@/components/primitives';
-import { localDB, Debtor } from '@/services/local.db';
+import {
+  localDB,
+  Debtor,
+  DebtorDebtTotal,
+} from '@/services/local.db';
 import DebtorEditModal from '@/components/DebtorEditModal';
 import './DebtorsPage.css';
 
@@ -13,6 +17,10 @@ export default function DebtorsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+
+  const [roleMap, setRoleMap] = useState<Record<string, string[]>>({});
+  const [debtMap, setDebtMap] = useState<Record<string, DebtorDebtTotal[]>>({});
+  const [allTotals, setAllTotals] = useState<DebtorDebtTotal[]>([]);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -31,8 +39,44 @@ export default function DebtorsPage() {
     }
   };
 
+  const loadRolesAndTotals = async () => {
+    const [roles, totals] = await Promise.all([
+      localDB.getRelatedDebtorRoles(),
+      localDB.getDebtorDebtTotals(),
+    ]);
+
+    const rmap: Record<string, string[]> = {};
+    for (const r of roles) {
+      if (!rmap[r.debtor_id]) rmap[r.debtor_id] = [];
+      rmap[r.debtor_id].push(r.relation_type);
+    }
+
+    const dmap: Record<string, DebtorDebtTotal[]> = {};
+    for (const t of totals) {
+      if (!dmap[t.debtor_id]) dmap[t.debtor_id] = [];
+      dmap[t.debtor_id].push(t);
+    }
+
+    setRoleMap(rmap);
+    setDebtMap(dmap);
+    setAllTotals(totals);
+  };
+
   useEffect(() => {
-    loadDebtors();
+    (async () => {
+      try {
+        await localDB.cleanupOrphanedRelatedDebtors();
+      } catch {
+        // Cleanup failure is not fatal to the list.
+      }
+      await loadDebtors();
+      try {
+        await loadRolesAndTotals();
+      } catch {
+        // Roles/totals failure is not fatal to the list.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = async (q: string) => {
@@ -50,6 +94,15 @@ export default function DebtorsPage() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refresh = async () => {
+    await handleSearch(query);
+    try {
+      await loadRolesAndTotals();
+    } catch {
+      // Non-fatal.
     }
   };
 
@@ -73,7 +126,7 @@ export default function DebtorsPage() {
 
   const handleSaved = async () => {
     closeForm();
-    await handleSearch(query);
+    await refresh();
   };
 
   const handleDelete = async (d: Debtor) => {
@@ -83,7 +136,7 @@ export default function DebtorsPage() {
     }
     try {
       await localDB.deleteDebtor(d.id);
-      await handleSearch(query);
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -91,6 +144,22 @@ export default function DebtorsPage() {
 
   const openDetail = (d: Debtor) => {
     navigate(`/debtors/${d.id}`);
+  };
+
+  // Whole-org totals by currency. Not affected by the search filter.
+  const orgTotals = (() => {
+    const byCurrency: Record<string, number> = {};
+    for (const t of allTotals) {
+      byCurrency[t.currency] = (byCurrency[t.currency] ?? 0) + t.total_amount;
+    }
+    return Object.entries(byCurrency)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([currency, amount]) => ({ currency, amount }));
+  })();
+
+  const roleBadgeClass = (relationType: string): string => {
+    if (relationType === 'PLEDGER') return 'debtors-page__role-badge--pledger';
+    return 'debtors-page__role-badge--guarantor';
   };
 
   return (
@@ -153,49 +222,112 @@ export default function DebtorsPage() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Phone</th>
+                <th className="debtors-page__cell--right">Debt</th>
+                <th>Currency</th>
+                <th>Role</th>
                 <th className="debtors-page__cell--right">Actions</th>
+              </tr>
+              <tr className="debtors-page__total-row">
+                <td>
+                  <span className="debtors-page__total-label">TOTAL</span>
+                </td>
+                <td></td>
+                <td></td>
+                <td className="debtors-page__cell--right">
+                  {orgTotals.length === 0
+                    ? '-'
+                    : orgTotals.map((t) => (
+                        <div key={t.currency}>
+                          {t.amount.toLocaleString()}
+                        </div>
+                      ))}
+                </td>
+                <td>
+                  {orgTotals.map((t) => (
+                    <div key={t.currency}>{t.currency}</div>
+                  ))}
+                </td>
+                <td></td>
+                <td></td>
               </tr>
             </thead>
             <tbody>
-              {debtors.map((d) => (
-                <tr key={d.id}>
-                  <td>
-                    <button
-                      type="button"
-                      className="debtors-page__name-link"
-                      onClick={() => openDetail(d)}
-                    >
-                      {d.surname}, {d.name}
-                    </button>
-                  </td>
-                  <td className="debtors-page__cell--muted">
-                    {d.email || '-'}
-                  </td>
-                  <td className="debtors-page__cell--muted">
-                    {d.phone || '-'}
-                  </td>
-                  <td className="debtors-page__cell--right">
-                    <Button
-                      variant="primary"
-                      iconOnly
-                      onClick={() => openEdit(d)}
-                      title="Edit"
-                      aria-label="Edit"
-                    >
-                      <Pencil size={16} />
-                    </Button>
-                    <Button
-                      variant="danger"
-                      iconOnly
-                      onClick={() => handleDelete(d)}
-                      title="Delete"
-                      aria-label="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {debtors.map((d) => {
+                const totals = [...(debtMap[d.id] ?? [])].sort((a, b) =>
+                  a.currency.localeCompare(b.currency),
+                );
+                const roles = roleMap[d.id] ?? [];
+
+                return (
+                  <tr key={d.id}>
+                    <td>
+                      <button
+                        type="button"
+                        className="debtors-page__name-link"
+                        onClick={() => openDetail(d)}
+                      >
+                        {d.surname}, {d.name}
+                      </button>
+                    </td>
+                    <td className="debtors-page__cell--muted">
+                      {d.email || '-'}
+                    </td>
+                    <td className="debtors-page__cell--muted">
+                      {d.phone || '-'}
+                    </td>
+                    <td className="debtors-page__cell--right">
+                      {totals.length === 0 ? (
+                        '0'
+                      ) : (
+                        totals.map((t) => (
+                          <div key={t.currency}>
+                            {t.total_amount.toLocaleString()}
+                          </div>
+                        ))
+                      )}
+                    </td>
+                    <td>
+                      {totals.map((t) => (
+                        <div key={t.currency}>{t.currency}</div>
+                      ))}
+                    </td>
+                    <td>
+                      {roles.length > 0 && (
+                        <div className="debtors-page__role-badges">
+                          {roles.map((r, i) => (
+                            <span
+                              key={`${r}-${i}`}
+                              className={`debtors-page__role-badge ${roleBadgeClass(r)}`}
+                            >
+                              {r}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="debtors-page__cell--right">
+                      <Button
+                        variant="primary"
+                        iconOnly
+                        onClick={() => openEdit(d)}
+                        title="Edit"
+                        aria-label="Edit"
+                      >
+                        <Pencil size={16} />
+                      </Button>
+                      <Button
+                        variant="danger"
+                        iconOnly
+                        onClick={() => handleDelete(d)}
+                        title="Delete"
+                        aria-label="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

@@ -179,6 +179,17 @@ export interface DebtorRelationInput {
   relation_type: string;
 }
 
+export interface RelatedDebtorRole {
+  debtor_id: string;
+  relation_type: string;
+}
+
+export interface DebtorDebtTotal {
+  debtor_id: string;
+  currency: string;
+  total_amount: number;
+}
+
 // --- Local DB -------------------------------------------------
 
 export const localDB = {
@@ -368,5 +379,33 @@ export const localDB = {
 
   async deleteDebtorRelation(id: string): Promise<boolean> {
     return await invoke<boolean>('delete_debtor_relation', { id });
+  },
+
+  async getRelatedDebtorRoles(): Promise<RelatedDebtorRole[]> {
+    return await invoke<RelatedDebtorRole[]>('get_related_debtor_roles');
+  },
+
+  async getDebtorDebtTotals(): Promise<DebtorDebtTotal[]> {
+    return await invoke<DebtorDebtTotal[]>('get_debtor_debt_totals');
+  },
+
+  async insertRelatedDebtor(
+    input: DebtorInput,
+    role: string,
+  ): Promise<Debtor> {
+    return await invoke<Debtor>('insert_related_debtor', {
+      input: {
+        name: input.name,
+        surname: input.surname,
+        email: input.email ?? null,
+        phone: input.phone ?? null,
+        data: input.data ?? {},
+      },
+      role,
+    });
+  },
+
+  async cleanupOrphanedRelatedDebtors(): Promise<number> {
+    return await invoke<number>('cleanup_orphaned_related_debtors');
   },
 };

@@ -72,7 +72,9 @@
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(100vh - 240px);
 }
 
 .debtors-page__state {
@@ -110,14 +112,36 @@
 
 .debtors-page__table thead tr {
   background: var(--color-bg-main);
-  border-bottom: 1px solid var(--color-border);
 }
 
-.debtors-page__table th {
+.debtors-page__table thead tr:first-child th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 44px;
+  box-sizing: border-box;
   padding: 12px 16px;
   text-align: left;
   font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);
+  background: var(--color-bg-main);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.debtors-page__total-row td {
+  position: sticky;
+  top: 44px;
+  z-index: 3;
+  padding: 12px 16px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-strong);
+  background: var(--color-bg-main);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.debtors-page__total-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-strong);
 }
 
 .debtors-page__table tbody tr {
@@ -146,4 +170,31 @@
   text-decoration: underline;
   font-family: inherit;
   font-size: inherit;
+}
+
+/* Role badges (D.4b-2c). Same visual vocabulary as the
+   profile card's relation badges, local class names. */
+.debtors-page__role-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-gap-xs);
+}
+
+.debtors-page__role-badge {
+  display: inline-block;
+  padding: var(--space-hairline) var(--space-gap-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-badge);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.debtors-page__role-badge--guarantor {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+}
+
+.debtors-page__role-badge--pledger {
+  background: var(--color-badge-info-bg);
+  color: var(--color-badge-info-text);
 }
