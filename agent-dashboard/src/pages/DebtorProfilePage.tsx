@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { open } from '@tauri-apps/plugin-dialog';
 import { ArrowLeft, Pencil, Trash2, FileText, Upload } from 'lucide-react';
 import {
@@ -41,6 +41,18 @@ const DOCUMENT_CATEGORIES: { value: string; label: string }[] = [
 export default function DebtorProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const backState =
+    (location.state as
+      | { fromDebtorId?: string; fromDebtorLabel?: string }
+      | null) ?? null;
+  const backLabel = backState?.fromDebtorLabel
+    ? `Back to ${backState.fromDebtorLabel}`
+    : 'Back to Debtors';
+  const backTarget = backState?.fromDebtorId
+    ? `/debtors/${backState.fromDebtorId}`
+    : '/debtors';
 
   const [debtor, setDebtor] = useState<Debtor | null>(null);
   const [loading, setLoading] = useState(true);
@@ -328,7 +340,10 @@ export default function DebtorProfilePage() {
   };
 
   const openRelationProfile = (r: DebtorRelation) => {
-    navigate(`/debtors/${r.related_debtor_id}`);
+    const label = debtor ? `${debtor.surname}, ${debtor.name}` : undefined;
+    navigate(`/debtors/${r.related_debtor_id}`, {
+      state: { fromDebtorId: id, fromDebtorLabel: label },
+    });
   };
 
   const openCommunicationForm = () => setShowCommunicationForm(true);
@@ -476,10 +491,10 @@ export default function DebtorProfilePage() {
         <button
           type="button"
           className="debtor-profile__back"
-          onClick={() => navigate('/debtors')}
+          onClick={() => navigate(backTarget)}
         >
           <ArrowLeft size={14} />
-          Back to Debtors
+          {backLabel}
         </button>
         <ErrorBanner message={error || 'Debtor not found'} />
       </div>
@@ -492,10 +507,10 @@ export default function DebtorProfilePage() {
         <button
           type="button"
           className="debtor-profile__back"
-          onClick={() => navigate('/debtors')}
+          onClick={() => navigate(backTarget)}
         >
           <ArrowLeft size={14} />
-          Back to Debtors
+          {backLabel}
         </button>
         <div className="debtor-profile__actions-bar-right">
           <Button variant="ghost" onClick={() => setShowEdit(true)}>
