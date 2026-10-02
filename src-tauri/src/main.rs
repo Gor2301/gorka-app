@@ -18,7 +18,6 @@ use gorka_shared::documents;
 use gorka_shared::dashboard;
 
 mod auth;
-mod storage_migration;
 
 use gorka_shared::db;
 
@@ -566,15 +565,7 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            // Phase 2B: one-time storage-root migration.
-            // Runs before any code path can open the database.
-            storage_migration::migrate_client_storage_if_needed(&handle)
-                .map_err(|e| {
-                    eprintln!("[setup] storage migration failed: {}", e);
-                    Box::<dyn std::error::Error>::from(e)
-                })?;
-
-            // Construct the Client's AppStorage and place it in
+              // Construct the Client's AppStorage and place it in
             // managed state. Shared code consumes it via
             // tauri::State<AppStorage>.
             let app_data_dir = handle
