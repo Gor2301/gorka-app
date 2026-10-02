@@ -8396,3 +8396,224 @@ the two session process notes. No spec amendment in this
 session. No frozen document amended.
 
 End of entry.
+
+
+## Recovery Session - October 2, 2026 (Phase 9.5 closure)
+
+This entry records the closure of Phase 9.5. It covers
+three things: the closure-fixes slice, the Client
+storage-migration removal, and a sequencing decision for
+the next work. Technical slice records are in
+PHASE-9.5-EXTRACTION-LOG.md. Status is in HANDOFF.md.
+
+================================================================
+AGENT END-TO-END REGRESSION
+================================================================
+
+Before the closure slice, the full Agent end-to-end
+regression ran on cloud. Ten of eleven steps passed:
+
+  Entry flow                     PASS
+  Debtors list                   PASS
+  Debtor profile (all cards)     PASS
+  Photo change                   PASS
+  Relations (add, navigate)      PASS
+  Plan view (calendar, derived)  PASS
+  Communication Tools            PASS
+  Settings (layout)              PASS
+  Actions page                   PASS
+  Persistence across restart     PASS
+  Logout button                  FAIL (fixed in the
+                                      closure slice)
+
+The logout failure is why the closure slice exists.
+
+================================================================
+CLOSURE FIXES - HOW DECISIONS
+================================================================
+
+### CF-1 - Logout was wired to the wrong function
+
+Root cause: AppShell received onLogout={advance}, where
+advance() is the entry-flow check. It re-verifies
+auth-token, unlock, and enrollment — all present —
+and re-selects the shell step. Clicking logout did
+nothing visible. It never called the logout Tauri
+command.
+
+Decision: Add a dedicated handleLogout callback in
+App.tsx that invokes the logout command, then sets
+step to login. Bind onLogout to handleLogout.
+
+Why a new callback and not a tweak to advance(): advance
+is a gate-check that both the initial mount and each
+entry screen use to determine the next step. Adding
+side effects (a Rust call) to it would make the check
+impure and introduce behavior on every entry
+transition. A dedicated handler is the clean fix.
+
+The logout command itself was already correct — it
+mirrors the Client's post-September-23 shape
+(close the connection, then clear the store). The
+Agent's logout command was unchanged.
+
+### CF-2 - Bundle identifier change to click.gorka.*
+
+Root cause: both apps used com.gorka.* as their
+reverse-DNS identifier. The real domain is
+gorka.click. The identifier shows in Settings, is
+used by the OS to determine the app data folder, and
+becomes effectively permanent once shipped (signed
+installers, Microsoft Store publisher identity).
+
+Decision: Change to click.gorka.client and
+click.gorka.agent. Reverse-DNS form of the real
+domain.
+
+Consequence: both apps will behave as fresh installs
+on every machine that has run them before. The new
+identifier resolves to a new app data folder. The
+old %APPDATA%\com.gorka.*\ folders are left in
+place, unread, disposable. This was accepted
+explicitly: all existing data is mock data, and no
+real user exists.
+
+### CF-3 - No storage migration code for the change
+
+Decision: Do not write a migration that copies old
+data into the new identifier's folder. Old data is
+abandoned.
+
+Reasoning: The founder stated the data is mock and
+disposable. A migration would be more code, more
+failure modes, and no benefit. If the change had
+been about real users, the calculation would be
+different.
+
+Consequence discovered after the change (see
+CF-4): the Client still had an older migration
+module from September 28 that fired on every launch
+and caused the exact behavior we were trying to
+avoid.
+
+### CF-4 - Client storage migration removal
+
+Root cause: src-tauri/src/storage_migration.rs from
+September 28 (Phase 2B) was designed to relocate the
+Client DB from an old ProjectDirs path to the Tauri
+identifier path. It runs on every Client startup:
+"if the current identifier's folder has no DB, look
+for one in an older path and copy it in."
+
+After the identifier change, the module saw the old
+%APPDATA%\gorka\client\data\gorka-client.db still on
+disk, and copied it into %APPDATA%\click.gorka.client\
+on the first launch. The Client then showed "Enter
+Local Encryption Password" instead of "Set." The
+copied DB had the old password, which was unknown.
+
+Decision: Remove the module declaration from
+main.rs, remove the setup() call, delete
+storage_migration.rs. The module had no other
+callers.
+
+Reasoning: The migration was obsolete the moment the
+decision in CF-3 was made. Keeping the identifier
+change and the migration would have produced a
+permanent contradiction: the identifier says "fresh
+install," the migration says "carry old data
+forward."
+
+Impact: The Client showed "Set Local Encryption
+Password" on next launch, as intended. The Agent
+was unaffected — it never had a storage_migration
+module.
+
+### CF-5 - Support sidebar item
+
+Decision: Add a Support nav item between Copilot and
+Settings. Disabled with a "Soon" badge, same
+treatment as Copilot. Add a /support stub route and
+a TopHeader title entry.
+
+Reasoning: The founder asked for a visible marker of
+the future support system, matching the Copilot
+treatment. This is a UI marker, not a commitment to
+implement support in Phase 9.5. The support system
+belongs to a later phase.
+
+Impact: No code paths beyond the sidebar entry, the
+stub route, and the title map. One icon import
+(LifeBuoy).
+
+================================================================
+SUPPORT SPEC - SEQUENCING DECISION
+================================================================
+
+The founder asked whether to write the GORKA support
+specification now, before Phase 9.6, or after. This
+entry records the decision.
+
+Decision: Write GORKA-SUPPORT-SPEC.md now, as a
+parked deliverable. Then begin Phase 9.6.
+
+Reasoning: Support and the sync engine do not
+touch. Support lives in the Control Plane (cloud
+tables and cloud API). The sync engine operates on
+local replicas plus the Control Plane as a broker.
+Neither references the other. Writing the spec now,
+while the analysis is fresh, preserves the work.
+Beginning Phase 9.6 on schedule preserves the plan.
+
+The spec will be written against the current
+architecture, not as a revival of the old Support
+System Spec v2.3. The old spec (August 25, 2026) is
+a source of business requirements: status flow,
+categories, priorities, reply separation, audit
+pattern, rate limits, pagination. It is not a
+source of architecture: its Express/Prisma/PostgreSQL
+assumptions, its four-role model, and its three
+frontend targets do not match the current codebase.
+
+What is not in scope for the support spec: any
+change to the sync architecture, any local Tauri
+support table, any cross-boundary support data flow
+into debtor-data sync.
+
+================================================================
+PHASE 9.5 - CLOSED
+================================================================
+
+Phase 9.5 is complete. Both binaries build. The
+Agent App runs on cloud with all screens working.
+The Client Dashboard runs on cloud at the new
+identifier with a fresh DB. The Agent end-to-end
+regression passed except for the logout button,
+which is now fixed and verified.
+
+Total scope of Phase 9.5 (retrospective): the
+Adapter cleanup, the final Client regression, Stage
+B shared functions, Stage C Agent backend
+(authentication foundation, CRUD adapters, Stage B
+adapters, enrollment import, is_enrolled), Stage D
+Agent frontend through D.6.2, the Agent end-to-end
+regression, and the closure-fixes slice. All
+cloud-verified. No frozen document amended beyond
+the September 27 amendments already recorded and the
+AGENT-APP-SPEC 3.7 amendment from D.4b-2c-fix.
+
+Next: GORKA-SUPPORT-SPEC.md (parked), then Phase 9.6
+begins with reading SYNC-ARCHITECTURE.md v1.3 and
+LOCAL-TABLES.md v1.3 in full. No code on day one of
+9.6.
+
+================================================================
+END OF SESSION ENTRY
+================================================================
+
+This entry records the Phase 9.5 closure, the two
+closure slices (e9488aa and 92e9b7c), the support
+spec sequencing decision, and the phase closure.
+No frozen document amended.
+
+End of entry.

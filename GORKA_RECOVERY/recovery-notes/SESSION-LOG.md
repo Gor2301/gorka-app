@@ -3570,3 +3570,98 @@ RULE COMPLIANCE
   No frozen document amended.
 
 End of entry.
+
+
+================================================================
+SESSION - October 2, 2026 (Phase 9.5 closed)
+================================================================
+
+WHAT THIS SESSION DID
+
+Ran the Agent end-to-end regression, found and fixed a
+logout defect, changed the bundle identifier for both
+apps, removed an obsolete Client storage migration,
+added a Support sidebar placeholder, and closed
+Phase 9.5.
+
+Two implementation commits, one documentation batch.
+
+COMMITS
+
+  e9488aa  Phase 9.5 closure fixes: logout wiring,
+           bundle identifier change, Support item
+           (6 files)
+  92e9b7c  Client storage migration removal
+           (2 files, one deleted)
+  (this)   documentation batch
+
+AGENT END-TO-END REGRESSION
+
+Ten of eleven steps passed:
+
+  Entry flow                     PASS
+  Debtors list                   PASS
+  Debtor profile (all cards)     PASS
+  Photo change                   PASS
+  Relations                      PASS
+  Plan view (calendar)           PASS
+  Communication Tools            PASS
+  Settings (layout)              PASS
+  Actions page                   PASS
+  Persistence across restart     PASS
+  Logout button                  FAIL
+
+WHAT WAS FIXED
+
+  Logout button. Was bound to the entry-flow check
+  (advance), which re-selects the shell step without
+  calling logout. Now bound to a dedicated handler
+  that invokes the logout command and returns to
+  Login.
+
+  Bundle identifier. Both apps changed from
+  com.gorka.* to click.gorka.*. Reverse-DNS now
+  matches the real domain (gorka.click).
+
+  Client storage migration. The Phase 2B
+  storage_migration.rs module fired on every Client
+  launch and copied an old DB into the new
+  identifier folder. Removed. Client now shows "Set"
+  on first launch.
+
+  Support sidebar item. Added between Copilot and
+  Settings, disabled with "Soon" badge. Placeholder
+  only.
+
+WHAT WAS DEFERRED
+
+  GORKA-SUPPORT-SPEC.md. The support specification
+  will be written before Phase 9.6 begins. It is a
+  parked deliverable. Support and sync do not touch.
+
+STATE AT END OF SESSION
+
+  Main machine:  92e9b7c, clean, pushed.
+  Cloud machine: 92e9b7c, clean, powered off.
+  GitHub:        92e9b7c.
+
+NEXT WORK
+
+  1. Write GORKA-SUPPORT-SPEC.md. Structure proposal
+     first, founder approves, then write one section
+     at a time.
+  2. Begin Phase 9.6. Read SYNC-ARCHITECTURE.md v1.3
+     and LOCAL-TABLES.md v1.3 in full. No code on day
+     one.
+  3. CONNECTOR-MODEL.md at the start of Phase 9.6.
+
+RULE COMPLIANCE
+
+  No production touched.
+  No cloud schema change.
+  No CI/CD touched (release.yml unchanged).
+  Invariant held.
+  No frozen document amended beyond the AGENT-APP-SPEC
+  3.7 amendment recorded earlier in Phase 9.5.
+
+End of entry.

@@ -3389,3 +3389,135 @@ See PHASE-9.5-EXTRACTION-LOG.md for the two slice
 records and DECISIONS.md for the HOW decisions.
 
 End of entry.
+
+
+## STATUS UPDATE - October 2, 2026 (Phase 9.5 closed)
+
+### What this session did
+
+Closed Phase 9.5. Ran the Agent end-to-end regression,
+found and fixed a logout defect, changed the bundle
+identifier for both apps, removed an obsolete Client
+storage migration, added a Support sidebar placeholder,
+and wrote the Phase 9.5 closure documentation.
+
+Two implementation commits and one documentation commit
+(this batch).
+
+### The commits
+
+  e9488aa  Phase 9.5 closure fixes: logout wiring,
+           bundle identifier change, Support item
+           (6 files)
+  92e9b7c  Client storage migration removal
+           (2 files, one deleted)
+  (this)   documentation batch: extraction log,
+           DECISIONS, HANDOFF, START-HERE, SESSION-LOG,
+           PHASE-PLAN
+
+### The Agent end-to-end regression
+
+Ten of eleven steps passed on first pass. One defect.
+
+  Entry flow (Login, Unlock, Enroll)      PASS
+  Debtors list (rows, badges, total,
+    search)                               PASS
+  Debtor profile (all cards)              PASS
+  Photo change                            PASS
+  Relations (add, navigate, back)         PASS
+  Plan view (calendar, derived events)    PASS
+  Communication Tools                     PASS
+  Settings (layout)                       PASS
+  Actions page                            PASS
+  Persistence across process restart      PASS
+  Logout button                           FAIL
+
+The logout failure is why the closure slice exists.
+
+### What was fixed
+
+Logout button. Was wired to the entry-flow check
+function, which re-verifies state and re-selects the
+shell step. Never called the logout command. Now bound
+to a dedicated handler that invokes logout and returns
+to the Login step. Verified on cloud.
+
+Bundle identifier. Both apps changed from
+com.gorka.* to click.gorka.* (real domain is
+gorka.click). The reverse-DNS form is now correct.
+Both apps start fresh at the new identifiers. Old
+%APPDATA%\com.gorka.*\ folders are abandoned,
+disposable mock data.
+
+Obsolete Client storage migration. The Phase 2B
+storage_migration.rs module from September 28 fired
+on every Client launch after the identifier change,
+copying an old DB into the new identifier's folder and
+causing an "Enter" screen instead of "Set". Removed
+the module declaration, the setup() call, and the
+file. Verified: the Client now shows "Set" on first
+launch.
+
+Support sidebar item. Added between Copilot and
+Settings. Disabled with a "Soon" badge. Same treatment
+as Copilot. No functionality.
+
+### What is now working
+
+Phase 9.5 is complete. Both binaries build. The Agent
+App runs on cloud with all screens working:
+
+  - Entry flow (Login, Unlock, Enroll)
+  - Debtors list, profile, photo, relations
+  - Plan view (calendar)
+  - Communication Tools (placeholder)
+  - Settings (About, Data, Sync, Security)
+  - Cross-debtor Actions page
+  - Logout button (fixed)
+  - Support sidebar item (placeholder)
+
+The Client Dashboard runs on cloud at the new
+identifier. No storage migration, fresh DB.
+
+### Support spec - sequencing decision
+
+The GORKA support specification (GORKA-SUPPORT-SPEC.md)
+will be written before Phase 9.6 begins. It is a
+parked deliverable. Support and the sync engine do not
+touch: support lives in the Control Plane, sync
+operates on local replicas plus Control Plane as a
+broker. Writing it now, while the analysis is fresh,
+preserves the work without delaying the plan.
+
+The spec will be written against the current
+architecture, not as a revival of the old Support
+System Spec v2.3. The old spec is a source of
+business requirements (status flow, categories,
+priorities, reply separation, audit pattern, rate
+limits, pagination) but not of architecture
+(Express/Prisma/PostgreSQL, four-role model, three
+frontend targets).
+
+### State at end of session
+
+  Main machine:  92e9b7c, clean, pushed.
+  Cloud machine: 92e9b7c, clean, powered off.
+  GitHub:        92e9b7c.
+
+### Next work
+
+  1. Write GORKA-SUPPORT-SPEC.md. Parked deliverable.
+     Structure proposal first, founder approves, then
+     write one section at a time. Commit the file plus
+     a DECISIONS marker.
+  2. Begin Phase 9.6. Read SYNC-ARCHITECTURE.md v1.3
+     and LOCAL-TABLES.md v1.3 in full. No code on day
+     one. Propose the sync-engine implementation plan.
+  3. Then CONNECTOR-MODEL.md at the start of Phase 9.6.
+     The connector context dump from October 1 is the
+     input.
+
+See PHASE-9.5-EXTRACTION-LOG.md for the two closure
+slice records and DECISIONS.md for the HOW decisions.
+
+End of entry.

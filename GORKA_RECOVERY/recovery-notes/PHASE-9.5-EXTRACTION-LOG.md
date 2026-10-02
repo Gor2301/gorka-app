@@ -2539,8 +2539,169 @@ EXPLICIT NON-CHANGES
 DEVIATIONS
   None beyond the 6-to-8 file count correction above.
 
+
 ================================================================
-END OF D.6.2 RECORD
+PHASE 9.5 CLOSURE FIXES
+================================================================
+
+Date: October 2, 2026.
+Commit: e9488aa
+
+PURPOSE
+  Close Phase 9.5 with a small combined-fixes slice
+  before moving to Phase 9.6. Six items:
+
+  1. Fix the logout button, which had never worked.
+  2. Change the bundle identifier for both apps from
+     com.gorka.* to click.gorka.* (reverse-DNS should
+     match the real domain, gorka.click).
+  3. No storage migration. Old %APPDATA%\com.gorka.*
+     folders abandoned. Mock data.
+  4. Update Settings card text to show the new
+     identifier and app data path.
+  5. Add a Support sidebar item, disabled with a
+     "Soon" badge, same treatment as Copilot.
+  6. Add the Support stub route and TopHeader title.
+
+FILES CHANGED (6)
+  agent-dashboard/src/App.tsx                 MODIFIED
+  agent-dashboard/src/components/Sidebar.tsx  MODIFIED
+  agent-dashboard/src/components/TopHeader.tsx MODIFIED
+  agent-dashboard/src/pages/SettingsPage.tsx  MODIFIED
+  src-tauri/tauri.conf.json                   MODIFIED
+  src-tauri-agent/tauri.conf.json             MODIFIED
+
+WHAT WAS BUILT
+
+  Logout fix. The onLogout prop passed to AppShell was
+  bound to the entry-flow advance() function. advance()
+  re-checks auth-token, unlock, enrollment and, all
+  present, re-selects the shell step. Clicking logout
+  did nothing visible. The logout Tauri command itself
+  was already correct (mirrors the September 23 Client
+  connection-leak fix). App.tsx now has a dedicated
+  handleLogout that invokes the logout command, then
+  sets step to login. Two-line handler, one prop
+  change.
+
+  Bundle identifier. src-tauri/tauri.conf.json:
+  com.gorka.client -> click.gorka.client.
+  src-tauri-agent/tauri.conf.json:
+  com.gorka.agent -> click.gorka.agent. Both apps now
+  create their data folders under
+  %APPDATA%\click.gorka.*\ on first launch.
+
+  Settings card. SettingsPage.tsx: Bundle id and App
+  data dir values updated to reflect click.gorka.agent.
+
+  Support sidebar item. Sidebar.tsx: LifeBuoy icon
+  imported. Nav item added between Copilot and
+  Settings, disabled with "Soon" badge. TopHeader.tsx:
+  '/support': 'Support' title entry. App.tsx: support
+  route added as a StubPage.
+
+  No storage migration code. This is intentional. The
+  old %APPDATA%\com.gorka.*\ folders are abandoned.
+
+VERIFICATION (main, October 2, 2026)
+  npm run build PASS. tsc clean, vite clean.
+  Bundle: index-Ct6TK2II.js 598.48 kB,
+          index-DRwKh1IG.css 34.12 kB.
+
+VERIFICATION (cloud, October 2, 2026)
+  git pull fast-forward 3830952..e9488aa, 6 files.
+  cargo build -p gorka-client PASS, 3 warnings.
+  cargo build -p gorka-agent PASS, 2 warnings.
+  Agent fresh install at click.gorka.agent: verified.
+    %APPDATA%\click.gorka.agent\ created on launch.
+    "Set Local Encryption Password" shown.
+  Behavioral tests after enrollment:
+    Support item present in sidebar.
+    Logout returns to Login screen.
+    Settings shows click.gorka.agent.
+
+EXPLICIT NON-CHANGES
+  No Rust source change.
+  No schema change.
+  No new dependency.
+  No migration code added.
+
+DEVIATIONS
+  None.
+
+================================================================
+END OF CLOSURE FIXES RECORD
+================================================================
+
+================================================================
+CLIENT STORAGE MIGRATION REMOVAL
+================================================================
+
+Date: October 2, 2026.
+Commit: 92e9b7c
+
+PURPOSE
+  Remove the obsolete Client storage-root migration
+  (Phase 2B, added September 28). Its original job was
+  to move the Client DB from the ProjectDirs path to the
+  Tauri identifier path. After the identifier change to
+  click.gorka.client, the migration saw an old DB in
+  %APPDATA%\gorka\client\data\ and copied it into the
+  new identifier folder on every Client launch. The
+  Client then showed "Enter Local Encryption Password"
+  instead of "Set" — with the old, unknown password.
+  This directly contradicted the closure-fixes decision
+  that old data is abandoned and no migration runs.
+
+FILES CHANGED (2)
+  src-tauri/src/main.rs                   MODIFIED
+  src-tauri/src/storage_migration.rs      DELETED
+
+WHAT WAS CHANGED
+  main.rs: removed `mod storage_migration;` and the
+  `storage_migration::migrate_client_storage_if_needed`
+  call in setup(). No other change.
+  storage_migration.rs: deleted. The module had no
+  remaining callers.
+
+VERIFICATION (main, October 2, 2026)
+  findstr for "storage_migration" across src-tauri/src,
+  shared/src, src-tauri-agent/src: zero matches after
+  deletion.
+  git status: exactly two changes, one modified, one
+  deleted.
+  npm run build not applicable (no frontend change).
+
+VERIFICATION (cloud, October 2, 2026)
+  git pull fast-forward e9488aa..92e9b7c.
+  cargo build -p gorka-client PASS, 3 warnings.
+  Fresh-install test after wiping
+  %APPDATA%\click.gorka.client:
+    Client showed "Set Local Encryption Password"
+    (not "Enter"). Confirmed the migration no longer
+    fires.
+  Enrollment package exported from the fresh Client DB:
+    enable_sync returned null.
+    export_enrollment_package produced a 140-byte
+    package at C:\gorka-app\fresh-package.gorka.
+  Agent imported the package successfully with
+  passphrase test-passphrase-001 and entered the shell.
+
+EXPLICIT NON-CHANGES
+  No schema change.
+  No new dependency.
+  No other Rust module touched.
+  No change to the Agent binary (the Agent never had
+  storage_migration.rs).
+  The old %APPDATA%\com.gorka.*\ and
+  %APPDATA%\gorka\ folders remain on disk, abandoned,
+  unread by either app.
+
+DEVIATIONS
+  None.
+
+================================================================
+END OF CLIENT STORAGE MIGRATION REMOVAL RECORD
 ================================================================
 END OF DOCUMENT
 ================================================================
