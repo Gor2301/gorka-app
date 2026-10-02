@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileText,
   Sparkles,
+  LifeBuoy,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -28,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/actions', label: 'Actions', icon: ClipboardList },
   { to: '/documents', label: 'Documents', icon: FileText },
   { to: '/copilot', label: 'Copilot', icon: Sparkles, disabled: true },
+  { to: '/support', label: 'Support', icon: LifeBuoy, disabled: true },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 

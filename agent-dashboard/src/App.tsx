@@ -65,6 +65,15 @@ export default function App() {
     advance();
   }, [advance]);
 
+  const handleLogout = useCallback(async () => {
+    try {
+      await invoke('logout');
+    } catch {
+      // Logout failure must not block the UI transition.
+    }
+    setStep('login');
+  }, []);
+
   if (step === 'loading') {
     return (
       <EntryCard>
@@ -90,7 +99,7 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-        <Route element={<AppShell onLogout={advance} />}>
+        <Route element={<AppShell onLogout={handleLogout} />}>
           <Route
             path="/"
             element={
@@ -123,6 +132,15 @@ export default function App() {
               <StubPage
                 title="Copilot"
                 subtitle="The AI Copilot arrives in a later phase."
+              />
+            }
+          />
+          <Route
+            path="/support"
+            element={
+              <StubPage
+                title="Support"
+                subtitle="The support system arrives in a later phase."
               />
             }
           />

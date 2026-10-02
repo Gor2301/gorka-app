@@ -30,7 +30,7 @@ export default function SettingsPage() {
           </div>
           <div className="settings-page__row">
             <dt className="settings-page__label">Bundle id</dt>
-            <dd className="settings-page__value">com.gorka.agent</dd>
+            <dd className="settings-page__value">click.gorka.agent</dd>
           </div>
           <div className="settings-page__row">
             <dt className="settings-page__label">Product name</dt>
@@ -48,7 +48,7 @@ export default function SettingsPage() {
           <div className="settings-page__row">
             <dt className="settings-page__label">App data dir</dt>
             <dd className="settings-page__value">
-              %APPDATA%\com.gorka.agent\
+              %APPDATA%\click.gorka.agent\
               <span className="settings-page__note">
                 {' '}(resolves at runtime)
               </span>
