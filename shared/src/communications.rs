@@ -132,7 +132,7 @@ pub fn insert_communication(
         &input.debtor_id,
         comm_type_str,
         direction_str,
-        &input.content,
+        input.content.as_deref().unwrap_or(""),
         duration_str.as_deref(),
     );
     sync_events::originate_event(
