@@ -125,6 +125,11 @@ fn direct_sync_propagates_debtor() {
         DiscoveryConfig {
             jwt: String::new(),
             local_wire_device_id: device_a,
+            local_wire_device_id_hex: device_a
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>(),
+            backend_base_url: String::new(),
             manual_override: Some(format!("127.0.0.1:{}", port)),
         },
     );
