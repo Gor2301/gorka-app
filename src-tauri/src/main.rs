@@ -539,7 +539,11 @@ fn start_sync_engine(
         .try_into()
         .map_err(|_| "Organization key has wrong length".to_string())?;
 
-    let listen_address = format!("127.0.0.1:{}", port);
+    // TEMPORARY: Batch 6b-2b relay acceptance test.
+    // Registered address deliberately points at a dead port so
+    // the Agent's TCP connect fails and the relay fallback is
+    // exercised. Reverted immediately after the test.
+    let listen_address = format!("127.0.0.1:{}", port + 1);
 
     let config = ListenerConfig {
         jwt,
