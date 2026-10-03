@@ -1524,3 +1524,61 @@ Next work:
 See DECISIONS.md (October 2 Phase 9.5 closure entry),
 HANDOFF.md, SESSION-LOG.md, and PHASE-9.5-EXTRACTION-LOG.md
 for full details.
+
+================================================================
+Update - October 3, 2026 (Phase 9.6 opened, Batches 1 through 6b-1)
+================================================================
+
+Phase 9.6, the sync engine, was opened and eight batches were
+completed. Direct TCP sync and Control Plane discovery are both
+working and live-verified on the cloud machine.
+
+Sequence:
+
+  Batch 1   Category D migrations v8           7b4b35c
+  Batch 2   Transactions + event origination   6c0a8c4, 8d12eec
+  Batch 3   entity_field_state at origination  cbac09c, bd2f751
+  Batch 4a  Wire-format parsers                0d1e2bc, 800791a
+  Batch 4b  Receiving pipeline                 b76c15f
+  Batch 5   Transport and session              ecdb34f, ca49dd2
+  Batch 6a  Sync engine, direct TCP            21157b8, f46cbcd
+  Batch 6b-1 Control Plane discovery           900bfbd, 55976d4,
+                                                e963c4d, 0fc95ee
+  docs      Extraction log                     08907bf
+
+What exists now:
+
+  - Migration v8. Seven Category D tables plus soft-delete columns.
+  - Event origination on every mutation.
+  - Parsers for all six message types and four payloads.
+  - Receiving pipeline with reconciliation.
+  - TCP transport and four-message handshake.
+  - Sync engine with two-level loop and six-state status.
+  - Control Plane discovery: ephemeral endpoint registry on the
+    backend, sync_discovery client in Rust.
+
+Live on cloud:
+
+  - Client and Agent both reach synced over TCP loopback.
+  - Debtor inserted on Client appears on Agent within two seconds.
+  - Discovery path works: no manual peer address required.
+
+Criteria proven: 1, 2, 4, 7, 8.
+Criteria built but not live-tested: 3, 6, 10.
+Criteria not started: 5 (offline reconnect), 9 (relay).
+
+Next work: Batch 6b-2a (backend relay service), then 6b-2b
+(client relay fallback), then Batch 7 (full ten-criterion
+acceptance).
+
+Repository state:
+
+  Main machine:  0fc95ee, clean, pushed.
+  Cloud machine: 0fc95ee, clean.
+  GitHub:        0fc95ee plus the documentation commit for this
+                 update.
+
+See PHASE-9.6-EXTRACTION-LOG.md (new), DECISIONS.md, and
+HANDOFF.md for full details.
+
+End of update.

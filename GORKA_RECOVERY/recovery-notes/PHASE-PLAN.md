@@ -212,6 +212,16 @@ stored on GORKA's infrastructure.
 
 
 
+Status: IN PROGRESS (October 3, 2026). Batches 1 through 6b-1
+
+complete and verified. Direct TCP sync and Control Plane
+
+discovery both working live. Batch 6b-2 (relay) next.
+
+
+
+
+
 Deliverables:
 
 
@@ -514,7 +524,7 @@ SUMMARY TABLE
 
 9.5   Agent App and Client Dashboard     COMPLETE
 
-9.6   Sync Engine (MVP scope)            NOT STARTED
+9.6   Sync Engine (MVP scope)            IN PROGRESS
 
 9.7   Multi-User Demonstration           NOT STARTED
 

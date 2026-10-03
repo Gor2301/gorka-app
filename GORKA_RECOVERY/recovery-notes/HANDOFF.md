@@ -3521,3 +3521,96 @@ See PHASE-9.5-EXTRACTION-LOG.md for the two closure
 slice records and DECISIONS.md for the HOW decisions.
 
 End of entry.
+
+
+## STATUS UPDATE - October 3, 2026 (Phase 9.6 through Batch 6b-1)
+
+### What this session did
+
+Phase 9.6 was opened and eight batches were built, verified on
+cloud, and (for the last two) verified live. This entry records the
+state.
+
+### The batches
+
+  Batch 1   Category D migrations v8           7b4b35c
+  Batch 2   Transactions + event origination   6c0a8c4, 8d12eec
+  Batch 3   entity_field_state at origination  cbac09c, bd2f751
+  Batch 4a  Wire-format parsers                0d1e2bc, 800791a
+  Batch 4b  Receiving pipeline                 b76c15f
+  Batch 5   Transport and session              ecdb34f, ca49dd2
+  Batch 6a  Sync engine, direct TCP            21157b8, f46cbcd
+  Batch 6b-1 Control Plane discovery           900bfbd, 55976d4,
+                                                e963c4d, 0fc95ee
+  docs      Extraction log                     08907bf
+
+### What is now working
+
+A full MVP sync engine, direct connection path, with Control Plane
+discovery:
+
+- Category D migrations run on both apps.
+- Every mutation originates an event in the same transaction as the
+  state change.
+- The receiving pipeline accepts, duplicates, rejects, defers, and
+  reconciles.
+- The handshake and session protocol work on real TCP.
+- The engine drives sessions in both binaries.
+- The Control Plane provides discovery: the Agent calls
+  discover_peer and gets the Client's address; no manual peer
+  address needed.
+
+### Live verification (cloud, 2026-10-03)
+
+Two apps running as separate binaries on the cloud machine:
+
+- Both reached synced over TCP loopback.
+- Debtor inserted on Client propagated to Agent within two seconds.
+- Multiple debtors converged.
+- Discovery path: Agent called discover_peer, got the Client's
+  registered endpoint, dialed it, handshake succeeded, debtor
+  propagated. All without a typed peer address.
+
+### Criteria proven
+
+1 (initial sync), 2 (new debtor propagation), 4 (event propagation),
+7 (no data loss), 8 (direct connection path).
+
+Criteria built but not exercised live: 3 (state update), 6
+(duplicate prevention), 10 (corrupted message rejection).
+
+Criteria not started: 5 (offline then reconnect), 9 (relay
+fallback).
+
+### What is next
+
+Batch 6b-2a - backend relay service (WebSocket). Criterion 9.
+
+Batch 6b-2b - client relay fallback.
+
+Batch 7 - full ten-criterion acceptance.
+
+Then the sync indicator slice, and CONNECTOR-MODEL.md.
+
+### State at end of session
+
+  Main machine:  08907bf (this doc commit follows separately),
+                 clean, pushed.
+  Cloud machine: 0fc95ee, clean except test-output.txt (scratch).
+  GitHub:        0fc95ee plus this doc commit.
+
+39 shared tests pass. Agent 2 warnings, Client 3 warnings,
+shared 6 warnings.
+
+See PHASE-9.6-EXTRACTION-LOG.md and DECISIONS.md for the full
+records.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held.
+  - No frozen document amended.
+
+End of entry.

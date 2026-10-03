@@ -8923,3 +8923,195 @@ workstream. No architecture reopened. No frozen
 document amended.
 
 End of entry.
+
+
+---
+
+## Recovery Session - October 3, 2026 (Phase 9.6 through Batch 6b-1)
+
+This entry records the decisions and process notes for Phase 9.6,
+Batches 1 through 6b-1. Technical detail is in
+PHASE-9.6-EXTRACTION-LOG.md. This entry records what was decided and
+why.
+
+### The phase
+
+Phase 9.6 is the sync engine. Two client-owned machines synchronize
+debtor data directly, end-to-end encrypted, with GORKA's Control
+Plane providing discovery and an encrypted relay fallback. Ten
+acceptance criteria (GORKA-MVP-SCOPE.md Section 12.1).
+
+### Batching decision
+
+Fourteen original slices collapsed into seven batches, then two of
+those split further. Final shape:
+
+  Batch 1   Category D migrations v8
+  Batch 2   Transactions and event origination
+  Batch 3   entity_field_state at origination
+  Batch 4a  Wire-format parsers
+  Batch 4b  Receiving pipeline and reconciliation
+  Batch 5   Transport and session handshake
+  Batch 6a  Sync engine, direct TCP
+  Batch 6b-1 Control Plane discovery
+  Batch 6b-2a Backend relay service (not started)
+  Batch 6b-2b Client relay fallback (not started)
+  Batch 7   End-to-end acceptance (not started)
+
+Founder's reason: fewer commits, fewer cloud trips, without losing
+rollback granularity. If a batch fails on cloud and the failing
+change cannot be isolated, the batch splits temporarily.
+
+### Technical decisions made in 9.6
+
+D-B1. device_id stored as BLOB(16), the raw wire form
+(Section 25.6.6).
+
+D-B2. Soft delete. delete_debtor, delete_action,
+delete_communication set deleted = 'true' instead of DELETE FROM.
+Read queries filter deleted rows. Section 14.6.
+
+D-B3. encode_entity_updated_payload takes
+&[(&str, Option<&str>)]. None is null (zero-length TLV value).
+Some("") is empty string. Section 25.13.3.
+
+D-B4. encode_action_created_payload lives in sync.rs beside the
+other three payload encoders. Not in actions.rs. Corrected in
+Batch 4a from an earlier private placement.
+
+D-B5. Debt-in-data_json Rule 2 implemented in Batch 2:
+insert_debt, update_debt, delete_debt rebuild the parent debtor's
+data_json.debts array inside their transaction and originate an
+ENTITY_UPDATED event for the parent debtor. Section 25.9.2a.
+
+D-B6. Entity_field_state is populated at origination, in the same
+transaction as the state change. The comparison algorithm of
+Section 25.9.9 is exercised by the receiving pipeline (Batch 4b),
+not by origination. Locally-originated events are always winners
+for their own fields because the logical clock is strictly greater
+than any previously-accepted peer event (Section 12.3 Rule 2).
+
+D-B7. Duration removed from the communications fields_set. The
+column is immutable in the MVP and is not reconciled.
+
+D-B8. Engine is a two-level structure. Outer session lifecycle
+(connect or accept, handshake, set read timeout, session loop,
+close, exponential backoff, reconnect). Inner tick (check stop,
+send undelivered, try receive, dispatch, update status). Reviewer
+correction during batch 6a design.
+
+D-B9. Stream read timeout (500 ms) is set once, after the
+handshake, before the inner loop. It is a receive-poll property of
+the stream, not a protocol value.
+
+D-B10. Pending is narrowly defined. "Locally-originated events not
+yet acknowledged by the peer." Received dependency gaps do not set
+Pending. Reviewer correction during batch 6a design.
+
+D-B11. Session gains a small read buffer (try_recv_frame) so a
+partial frame arriving across a tick boundary is preserved. The
+blocking read_frame is kept for handshake only.
+
+D-B12. Engine owns one SQLCipher connection for its lifetime. No
+Arc<Mutex<Connection>>. Reviewer-confirmed.
+
+D-B13. AppState gains db_key and engine in both binaries.
+unlock_database writes the derived key. logout stops the engine,
+clears db, clears db_key, in that order. Reviewer-frozen ordering.
+
+D-B14. start_sync_engine fails synchronously if either db or
+db_key is absent. The engine never starts in a partially unlocked
+state. Reviewer-frozen.
+
+D-B15. On-originate push is engine polling. The mutation layer is
+not modified. The engine polls sync_events every 500 ms. Reviewer-
+confirmed separation: mutation code produces synchronization
+state; the engine consumes it.
+
+D-B16. Engine status is six values: Disabled, Connecting,
+Pending, Synced, Offline, Error.
+
+D-B17. Client listens, Agent connects. Topology role is a binary
+property, not a discovered fact.
+
+D-B18. Manual peer address is a dev/test mechanism only. It is not
+the normal MVP discovery path. It is kept temporarily as a
+fallback for isolating failures; removal is a later cleanup.
+
+### Batch 6b-1 decisions (from the reviewer's six-question round)
+
+Q1. Split 6b into discovery (6b-1) and relay (6b-2).
+Q2. In-memory ephemeral endpoint registry on the Control Plane.
+    No new cloud table. Keyed by (organizationId, wireDeviceId).
+Q3. Write device_registrations on register, using only the
+    authorized columns. No reserved fields. No address in that
+    table.
+Q4. Backend URL is a shared constant beside the auth
+    configuration. Not a second configuration mechanism.
+Q5. No peers discovered: Connecting, while discovery is actively
+    attempted. Offline means no active session and not currently
+    able to establish one. Distinguishing these was the reviewer's
+    correction to the original proposal.
+Q6. Keep the manual peer address as a testing fallback.
+Q7. Client listens on a fixed default port 54321. Not user-facing.
+Q8. Heartbeat every 15 seconds, registry TTL 30 seconds. Lazy
+    cleanup on reads, no background thread.
+Q9. Backend unreachable: Connecting plus retry. Do not add a
+    distinct engine state.
+
+### Open technical items recorded but not acted on
+
+T1. JWT expiry. The engine holds the JWT from start_sync_engine.
+    Supabase JWTs typically expire in one hour. The listener's
+    heartbeat then returns 401 and the registry entry expires.
+    Accepted as an MVP limitation. Funded-phase fix.
+
+T2. logout does not unregister the endpoint. stop_sync_engine does.
+    Accepted: the 30-second TTL handles it.
+
+T3. register_endpoint blocks the Tauri command. Accepted for MVP
+    on loopback; a 5-second reqwest timeout is a candidate fix
+    inside 6b-1 if the founder wants it.
+
+T4. New reqwest client per discovery call. Accepted. Cheap.
+
+T5. Role ambiguity if two peers of the same type start. Accepted.
+    Roles are configuration.
+
+T6. Peer crashes without unregistering. Accepted: 30-second TTL.
+
+### Process notes
+
+- The Client and Agent windows look identical in screenshots. A
+  batch of devtools commands went to the Agent when the founder
+  was asked to use the Client. The distinguishing check is
+  is_enrolled, which exists in the Agent only. Recorded so a
+  future session asks which window is in focus before issuing
+  devtools commands.
+- A file path was given as C:\gorka-app\... when the file was on
+  main at C:\Users\kucha\gorka-app\.... The two machines have
+  distinct paths. Recorded so a future session names the machine
+  in every command.
+- The OpenSSL linker emits hundreds of LNK4099 lines on the first
+  build after a TLS dependency change. Harmless. Redirect test
+  output to a file with > test-output.txt 2>&1 to read past the
+  flood.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change to production.
+- No CI/CD touched.
+- Invariant held. No debtor data reached GORKA cloud in readable
+  form at any point in the phase.
+- No frozen document amended. Section 3.7 of AGENT-APP-SPEC.md was
+  amended in Phase 9.5, before 9.6. Nothing in 9.6 amended a
+  frozen document.
+
+### What this entry closes
+
+The documentation of Phase 9.6 through batch 6b-1. Batches 6b-2a,
+6b-2b, and 7 remain; their documentation is written when they are
+done.
+
+End of entry.
