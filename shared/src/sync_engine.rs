@@ -44,6 +44,7 @@ use crate::sync_handshake::{
     MSG_SYNC_ACK,
 };
 use crate::sync_pipeline::process_sync_message;
+use crate::sync_discovery;
 use crate::sync_session::Session;
 
 // ---------------------------------------------------------------
@@ -65,6 +66,13 @@ pub const SYNC_ENGINE_MAX_EVENTS_PER_MESSAGE: usize = 100;
 /// Message type code for SYNC_MESSAGE (SYNC-ARCHITECTURE.md
 /// Section 22.6).
 const MSG_SYNC_MESSAGE: u16 = 0x0010;
+
+/// Heartbeat interval to the Control Plane, milliseconds.
+pub const SYNC_ENGINE_HEARTBEAT_MS: u64 = 15_000;
+
+/// Discovery poll interval when no peer is currently available,
+/// milliseconds.
+pub const SYNC_ENGINE_DISCOVERY_POLL_MS: u64 = 2_000;
 
 // ---------------------------------------------------------------
 // Status
@@ -124,6 +132,33 @@ impl Drop for EngineHandle {
 }
 
 // ---------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------
+
+/// Configuration for the connecting peer (Agent).
+pub struct DiscoveryConfig {
+    /// User's JWT, from settings.dat.
+    pub jwt: String,
+    /// This device's wire device_id, 16 bytes. Used by the Control
+    /// Plane to exclude the caller from its own peer list.
+    pub local_wire_device_id: [u8; 16],
+    /// Development/test override. If Some, the engine dials this
+    /// address directly and skips discovery. Not the normal MVP
+    /// path.
+    pub manual_override: Option<String>,
+}
+
+/// Configuration for the listening peer (Client).
+pub struct ListenerConfig {
+    /// User's JWT, from settings.dat.
+    pub jwt: String,
+    /// The port the listener binds to.
+    pub listen_port: u16,
+    /// The address the listener advertises to the Control Plane.
+    pub listen_address: String,
+}
+
+// ---------------------------------------------------------------
 // Public start functions
 // ---------------------------------------------------------------
 
@@ -134,7 +169,7 @@ pub fn start_engine_connect(
     organization_id: String,
     organization_key: [u8; 32],
     device_id: [u8; 16],
-    peer_address: String,
+    discovery: DiscoveryConfig,
 ) -> EngineHandle {
     let stop = Arc::new(AtomicBool::new(false));
     let status = Arc::new(Mutex::new(EngineStatus::Connecting));
@@ -143,7 +178,7 @@ pub fn start_engine_connect(
     let status_t = status.clone();
 
     let join = thread::spawn(move || {
-        let mode = PeerMode::Connect(peer_address);
+        let mode = PeerMode::Connect(discovery);
         run_engine(
             mode,
             connection,
@@ -165,10 +200,22 @@ pub fn start_engine_listen(
     organization_id: String,
     organization_key: [u8; 32],
     device_id: [u8; 16],
-    listen_port: u16,
+    config: ListenerConfig,
 ) -> Result<EngineHandle, String> {
-    let listener = TcpListener::bind(("0.0.0.0", listen_port))
-        .map_err(|e| format!("bind {}: {}", listen_port, e))?;
+    let listener = TcpListener::bind(("0.0.0.0", config.listen_port))
+        .map_err(|e| format!("bind {}: {}", config.listen_port, e))?;
+
+    // Register the endpoint with the Control Plane before spawning
+    // the thread. Registration failure is non-fatal in the MVP:
+    // the engine still listens, and a peer using a manual override
+    // can still connect. The error is logged.
+    if let Err(e) = sync_discovery::register_endpoint(
+        &config.jwt,
+        &device_id,
+        &config.listen_address,
+    ) {
+        eprintln!("register_endpoint failed (continuing anyway): {}", e);
+    }
 
     let stop = Arc::new(AtomicBool::new(false));
     let status = Arc::new(Mutex::new(EngineStatus::Connecting));
@@ -176,8 +223,11 @@ pub fn start_engine_listen(
     let stop_t = stop.clone();
     let status_t = status.clone();
 
+    let listen_address = config.listen_address.clone();
+    let jwt = config.jwt.clone();
+
     let join = thread::spawn(move || {
-        let mode = PeerMode::Listen(listener);
+        let mode = PeerMode::Listen(listener, jwt, listen_address);
         run_engine(
             mode,
             connection,
@@ -197,8 +247,8 @@ pub fn start_engine_listen(
 // ---------------------------------------------------------------
 
 enum PeerMode {
-    Connect(String),
-    Listen(TcpListener),
+    Connect(DiscoveryConfig),
+    Listen(TcpListener, String, String),
 }
 
 // ---------------------------------------------------------------
@@ -233,6 +283,16 @@ fn run_engine(
             Ok(Some(s)) => s,
             Ok(None) => break, // stop requested during accept/connect wait
             Err(e) => {
+                if e == "NO_PEER_DISCOVERED" || e.starts_with("DISCOVERY_FAILED") {
+                    // No peer yet, or the Control Plane is
+                    // unreachable. Stay in Connecting and poll
+                    // discovery again soon (Q5 decision).
+                    set_status(&status, EngineStatus::Connecting);
+                    if interruptible_sleep(&stop, SYNC_ENGINE_DISCOVERY_POLL_MS) {
+                        break;
+                    }
+                    continue;
+                }
                 set_status(&status, EngineStatus::Offline);
                 let _ = e;
                 if interruptible_sleep(&stop, backoff_ms) {
@@ -298,14 +358,32 @@ fn establish_session(
     stop: &Arc<AtomicBool>,
 ) -> Result<Option<Session>, String> {
     match mode {
-        PeerMode::Connect(address) => {
+        PeerMode::Connect(config) => {
+            // Determine the peer address.
+            let address: String = match &config.manual_override {
+                Some(a) => a.clone(),
+                None => {
+                    match sync_discovery::discover_peer(
+                        &config.jwt,
+                        &config.local_wire_device_id,
+                    ) {
+                        Ok(Some(p)) => p.listen_address,
+                        Ok(None) => {
+                            return Err("NO_PEER_DISCOVERED".to_string());
+                        }
+                        Err(e) => {
+                            return Err(format!("DISCOVERY_FAILED: {}", e));
+                        }
+                    }
+                }
+            };
+
+            if stop.load(Ordering::SeqCst) {
+                return Ok(None);
+            }
+
             let stream = TcpStream::connect(address.as_str())
                 .map_err(|e| format!("connect {}: {}", address, e))?;
-            // Note: connect is blocking. If the engine is stopped
-            // while waiting, the connect either completes or fails;
-            // either way, the next check of `stop` in run_engine
-            // terminates the outer loop.
-            let _ = stop;
             let session = Session::connect(
                 stream,
                 organization_id,
@@ -314,17 +392,35 @@ fn establish_session(
             )?;
             Ok(Some(session))
         }
-        PeerMode::Listen(listener) => {
+
+        PeerMode::Listen(listener, jwt, listen_address) => {
             // Non-blocking accept, so the loop can check the stop
             // signal between attempts.
             listener
                 .set_nonblocking(true)
                 .map_err(|e| format!("set_nonblocking: {}", e))?;
 
+            let mut last_heartbeat = std::time::Instant::now();
+            let heartbeat_interval =
+                Duration::from_millis(SYNC_ENGINE_HEARTBEAT_MS);
+
             loop {
                 if stop.load(Ordering::SeqCst) {
                     return Ok(None);
                 }
+                // Heartbeat keeps the registry entry fresh while we
+                // wait for a peer to dial us.
+                if last_heartbeat.elapsed() >= heartbeat_interval {
+                    if let Err(e) = sync_discovery::heartbeat(
+                        jwt,
+                        device_id,
+                        listen_address,
+                    ) {
+                        eprintln!("heartbeat failed (continuing): {}", e);
+                    }
+                    last_heartbeat = std::time::Instant::now();
+                }
+
                 match listener.accept() {
                     Ok((stream, _)) => {
                         // Back to blocking for the handshake.

@@ -29,7 +29,7 @@ use gorka_shared::documents;
 use gorka_shared::calendar;
 use gorka_shared::relations;
 use gorka_shared::enrollment::parse_enrollment_package;
-use gorka_shared::sync_engine::{self, EngineHandle, EngineStatus};
+use gorka_shared::sync_engine::{self, EngineHandle, EngineStatus, DiscoveryConfig};
 use gorka_shared::sync_events;
 
 mod auth;
@@ -623,7 +623,7 @@ fn delete_debtor_relation(
 
 #[command]
 fn start_sync_engine(
-    peer_address: String,
+    manual_override: Option<String>,
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
     storage: tauri::State<AppStorage>,
@@ -640,14 +640,7 @@ fn start_sync_engine(
         }
     }
 
-    let address = if peer_address.trim().is_empty() {
-        auth::get_peer_address(&app)?
-            .ok_or("No peer address provided and none stored")?
-    } else {
-        auth::set_peer_address(&app, &peer_address)?;
-        peer_address
-    };
-
+    let jwt = auth::get_token(app.clone())?;
     let organization_id = get_trusted_organization_id(&app)?;
 
     let mut engine_conn = db::init_db(&storage, &db_key)?;
@@ -672,12 +665,18 @@ fn start_sync_engine(
         .try_into()
         .map_err(|_| "Organization key has wrong length".to_string())?;
 
+    let discovery = DiscoveryConfig {
+        jwt,
+        local_wire_device_id: device_id,
+        manual_override: manual_override.filter(|s| !s.trim().is_empty()),
+    };
+
     let handle = sync_engine::start_engine_connect(
         engine_conn,
         organization_id,
         organization_key,
         device_id,
-        address,
+        discovery,
     );
 
     let mut guard = state.engine.lock().map_err(|e| e.to_string())?;
@@ -685,12 +684,29 @@ fn start_sync_engine(
 
     Ok(())
 }
-
 #[command]
-fn stop_sync_engine(state: tauri::State<AppState>) -> Result<(), String> {
+fn stop_sync_engine(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     let mut guard = state.engine.lock().map_err(|e| e.to_string())?;
     if let Some(mut handle) = guard.take() {
         handle.stop();
+    }
+    drop(guard);
+
+    // Best-effort: tell the Control Plane this endpoint is gone.
+    // Failure is logged but not returned; the entry will expire on
+    // its own TTL.
+    if let Ok(jwt) = auth::get_token(app.clone()) {
+        if let Ok(guard) = state.db.lock() {
+            if let Some(conn) = guard.as_ref() {
+                if let Ok(did) = conn.query_row::<Vec<u8>, _, _>(
+                    "SELECT device_id FROM sync_state LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                ) {
+                    let _ = gorka_shared::sync_discovery::unregister_endpoint(&jwt, &did);
+                }
+            }
+        }
     }
     Ok(())
 }

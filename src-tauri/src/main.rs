@@ -10,7 +10,7 @@ use rand::RngCore;
 use gorka_shared::storage::AppStorage;
 use gorka_shared::models::*;
 use gorka_shared::enrollment::{build_enrollment_package, parse_enrollment_package};
-use gorka_shared::sync_engine::{self, EngineHandle, EngineStatus};
+use gorka_shared::sync_engine::{self, EngineHandle, EngineStatus, ListenerConfig};
 use gorka_shared::sync_events;
 use gorka_shared::debtors;
 use gorka_shared::debts;
@@ -503,13 +503,18 @@ fn start_sync_engine(
         }
     }
 
+    // Fixed default MVP port. A non-zero argument overrides it.
+    // The port is not user-facing; discovery registers whichever
+    // port the listener actually bound to.
+    const DEFAULT_LISTEN_PORT: u16 = 54321;
     let port = if listen_port == 0 {
-        auth::get_listen_port(&app)?.ok_or("No listen port provided and none stored")?
+        auth::get_listen_port(&app)?.unwrap_or(DEFAULT_LISTEN_PORT)
     } else {
         auth::set_listen_port(&app, listen_port)?;
         listen_port
     };
 
+    let jwt = auth::get_token(app.clone())?;
     let organization_id = get_trusted_organization_id(&app)?;
 
     let mut engine_conn = db::init_db(&storage, &db_key)?;
@@ -534,12 +539,20 @@ fn start_sync_engine(
         .try_into()
         .map_err(|_| "Organization key has wrong length".to_string())?;
 
+    let listen_address = format!("127.0.0.1:{}", port);
+
+    let config = ListenerConfig {
+        jwt,
+        listen_port: port,
+        listen_address,
+    };
+
     let handle = sync_engine::start_engine_listen(
         engine_conn,
         organization_id,
         organization_key,
         device_id,
-        port,
+        config,
     )?;
 
     let mut guard = state.engine.lock().map_err(|e| e.to_string())?;
@@ -547,12 +560,29 @@ fn start_sync_engine(
 
     Ok(())
 }
-
 #[command]
-fn stop_sync_engine(state: tauri::State<AppState>) -> Result<(), String> {
+fn stop_sync_engine(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     let mut guard = state.engine.lock().map_err(|e| e.to_string())?;
     if let Some(mut handle) = guard.take() {
         handle.stop();
+    }
+    drop(guard);
+
+    // Best-effort: tell the Control Plane this endpoint is gone.
+    // Failure is logged but not returned; the entry will expire on
+    // its own TTL.
+    if let Ok(jwt) = auth::get_token(app.clone()) {
+        if let Ok(guard) = state.db.lock() {
+            if let Some(conn) = guard.as_ref() {
+                if let Ok(did) = conn.query_row::<Vec<u8>, _, _>(
+                    "SELECT device_id FROM sync_state LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                ) {
+                    let _ = gorka_shared::sync_discovery::unregister_endpoint(&jwt, &did);
+                }
+            }
+        }
     }
     Ok(())
 }
