@@ -15,7 +15,7 @@
 // here changes the sync protocol or the engine's session logic.
 // It only replaces how the peer address is obtained.
 
-use reqwest::Client;
+use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
 /// The Control Plane base URL for the discovery client. Same
