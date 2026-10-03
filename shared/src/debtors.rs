@@ -190,7 +190,7 @@ pub fn bulk_insert_debtors(
             organization_id,
             sync_events::EVENT_DEBTOR_CREATED,
             sync_events::ENTITY_DEBTOR,
-            id,
+            &id,
             &payload,
             &["name", "surname", "email", "phone", "data_json"],
        )?;
