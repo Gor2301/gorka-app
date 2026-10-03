@@ -11,6 +11,7 @@ import connectorsRoutes from './routes/connectors.routes';
 import connectorUsageRoutes from './routes/connector-usage.routes';
 import billingRoutes from './routes/billing.routes';
 import licensesRoutes from './routes/licenses.routes';
+import { attachRelay } from './relay.service';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -134,10 +135,12 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 // ─── Start Server ──────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`🚀 Express server running on http://localhost:${PORT}`);
-  console.log(`📚 API docs available at http://localhost:${PORT}/api/docs`);
-  console.log(`✅ Environment: ${process.env.NODE_ENV || 'development'}`);
+const httpServer = app.listen(PORT, () => {
+  console.log(`Express server running on http://localhost:${PORT}`);
+  console.log(`API docs available at http://localhost:${PORT}/api/docs`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+attachRelay(httpServer);
 
 export default app;
