@@ -11,13 +11,31 @@
 // Nothing here is Tauri-specific. Nothing here performs I/O or
 // generates randomness. Every input is supplied by the caller.
 //
-// Phase 9.6 (the sync engine) will consume these primitives. They
-// are not test-only code.
+// Phase 9.6 (the sync engine) will consume these primitives.
+//
+// Device identity: the wire device_id is exactly 16 raw bytes
+// (Section 25.6.6). It is passed as &[u8] here, never as &str.
 
 use chacha20poly1305::{aead::{Aead, KeyInit, Payload}, XChaCha20Poly1305, XNonce};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+
+/// Derive the handshake authentication key (Section 8.5).
+///
+///   handshake_key = HKDF-SHA256(
+///       IKM  = organization_key,
+///       salt = empty,
+///       info = "GORKA-MVP-HANDSHAKE-v1",
+///       output_length = 32
+///   )
+pub fn derive_handshake_key(organization_key: &[u8; 32]) -> Result<[u8; 32], String> {
+    let hk = Hkdf::<Sha256>::new(None, organization_key);
+    let mut out = [0u8; 32];
+    hk.expand(b"GORKA-MVP-HANDSHAKE-v1", &mut out)
+        .map_err(|e| format!("HKDF expand failed: {}", e))?;
+    Ok(out)
+}
 
 /// Derive the session key for a sync session.
 ///
@@ -39,13 +57,16 @@ use sha2::Sha256;
 ///              || responder_device_id,
 ///       output_length = 32
 ///   )
+///
+/// The device ids are raw bytes; the length prefix is the byte
+/// count.
 pub fn derive_session_key(
     organization_key: &[u8; 32],
     initiator_nonce: &[u8; 24],
     responder_nonce: &[u8; 24],
     organization_id: &str,
-    initiator_device_id: &str,
-    responder_device_id: &str,
+    initiator_device_id: &[u8],
+    responder_device_id: &[u8],
 ) -> Result<[u8; 32], String> {
     // salt = initiator_nonce || responder_nonce, 48 bytes.
     let mut salt = [0u8; 48];
@@ -61,12 +82,10 @@ pub fn derive_session_key(
     let org_id_bytes = organization_id.as_bytes();
     info.extend_from_slice(&(org_id_bytes.len() as u16).to_be_bytes());
     info.extend_from_slice(org_id_bytes);
-    let init_dev_bytes = initiator_device_id.as_bytes();
-    info.extend_from_slice(&(init_dev_bytes.len() as u16).to_be_bytes());
-    info.extend_from_slice(init_dev_bytes);
-    let resp_dev_bytes = responder_device_id.as_bytes();
-    info.extend_from_slice(&(resp_dev_bytes.len() as u16).to_be_bytes());
-    info.extend_from_slice(resp_dev_bytes);
+    info.extend_from_slice(&(initiator_device_id.len() as u16).to_be_bytes());
+    info.extend_from_slice(initiator_device_id);
+    info.extend_from_slice(&(responder_device_id.len() as u16).to_be_bytes());
+    info.extend_from_slice(responder_device_id);
 
     let hk = Hkdf::<Sha256>::new(Some(&salt), organization_key);
     let mut out = [0u8; 32];
@@ -97,10 +116,10 @@ pub fn compute_handshake_reply_tag(
     handshake_key: &[u8; 32],
     protocol_version: u16,
     initiator_organization_id: &str,
-    initiator_device_id: &str,
+    initiator_device_id: &[u8],
     initiator_nonce: &[u8; 24],
     responder_organization_id: &str,
-    responder_device_id: &str,
+    responder_device_id: &[u8],
     responder_nonce: &[u8; 24],
 ) -> Result<[u8; 32], String> {
     let input = build_handshake_proof_input(
@@ -134,10 +153,10 @@ pub fn compute_handshake_confirm_tag(
     handshake_key: &[u8; 32],
     protocol_version: u16,
     initiator_organization_id: &str,
-    initiator_device_id: &str,
+    initiator_device_id: &[u8],
     initiator_nonce: &[u8; 24],
     responder_organization_id: &str,
-    responder_device_id: &str,
+    responder_device_id: &[u8],
     responder_nonce: &[u8; 24],
 ) -> Result<[u8; 32], String> {
     let input = build_handshake_proof_input(
@@ -169,10 +188,10 @@ fn build_handshake_proof_input(
     domain: &[u8],
     protocol_version: u16,
     initiator_organization_id: &str,
-    initiator_device_id: &str,
+    initiator_device_id: &[u8],
     initiator_nonce: &[u8; 24],
     responder_organization_id: &str,
-    responder_device_id: &str,
+    responder_device_id: &[u8],
     responder_nonce: &[u8; 24],
 ) -> Vec<u8> {
     let mut input = Vec::new();
@@ -184,20 +203,18 @@ fn build_handshake_proof_input(
     let b = initiator_organization_id.as_bytes();
     input.extend_from_slice(&(b.len() as u16).to_be_bytes());
     input.extend_from_slice(b);
-    // initiator_device_id, u16 BE length prefix
-    let b = initiator_device_id.as_bytes();
-    input.extend_from_slice(&(b.len() as u16).to_be_bytes());
-    input.extend_from_slice(b);
+    // initiator_device_id, u16 BE length prefix, raw bytes
+    input.extend_from_slice(&(initiator_device_id.len() as u16).to_be_bytes());
+    input.extend_from_slice(initiator_device_id);
     // initiator_nonce, 24 bytes, no prefix
     input.extend_from_slice(initiator_nonce);
     // responder_organization_id, u16 BE length prefix
     let b = responder_organization_id.as_bytes();
     input.extend_from_slice(&(b.len() as u16).to_be_bytes());
     input.extend_from_slice(b);
-    // responder_device_id, u16 BE length prefix
-    let b = responder_device_id.as_bytes();
-    input.extend_from_slice(&(b.len() as u16).to_be_bytes());
-    input.extend_from_slice(b);
+    // responder_device_id, u16 BE length prefix, raw bytes
+    input.extend_from_slice(&(responder_device_id.len() as u16).to_be_bytes());
+    input.extend_from_slice(responder_device_id);
     // responder_nonce, 24 bytes, no prefix
     input.extend_from_slice(responder_nonce);
     input
@@ -377,7 +394,6 @@ pub fn build_sync_message(
     message_id: &[u8; 16],
     event_records: &[Vec<u8>],
 ) -> Result<Vec<u8>, String> {
-    // Inner content.
     let mut inner = Vec::new();
     inner.extend_from_slice(&encode_tlv(0x1001, message_id));
     let event_count = event_records.len() as u32;
@@ -386,13 +402,11 @@ pub fn build_sync_message(
         inner.extend_from_slice(&encode_tlv(0x1003, record));
     }
 
-    // Outer header: type 0x0010 || length.
     let outer_length = (24 + inner.len() + 16) as u32;
     let mut outer_header = Vec::with_capacity(6);
     outer_header.extend_from_slice(&0x0010u16.to_be_bytes());
     outer_header.extend_from_slice(&outer_length.to_be_bytes());
 
-    // Encrypt with XChaCha20-Poly1305, header as AAD.
     let cipher = XChaCha20Poly1305::new_from_slice(session_key)
         .map_err(|e| format!("Encryption failed: {}", e))?;
     let xnonce = XNonce::from_slice(nonce);
@@ -406,7 +420,6 @@ pub fn build_sync_message(
         )
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
-    // Assemble: outer_header || nonce || ciphertext (includes tag).
     let mut framed = Vec::with_capacity(6 + 24 + ciphertext.len());
     framed.extend_from_slice(&outer_header);
     framed.extend_from_slice(nonce);
@@ -427,7 +440,6 @@ pub fn parse_sync_message(
         return Err("SYNC_MESSAGE too short".to_string());
     }
 
-    // Read and verify the outer header.
     let msg_type = u16::from_be_bytes([framed_message[0], framed_message[1]]);
     if msg_type != 0x0010 {
         return Err("SYNC_MESSAGE: unexpected type code".to_string());

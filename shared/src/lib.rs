@@ -25,6 +25,8 @@ pub mod sync_events;
 pub mod sync_handshake;
 pub mod sync_parse;
 pub mod sync_pipeline;
+pub mod sync_session;
+pub mod sync_transport;
 
 pub fn placeholder() -> &'static str {
     "gorka-shared"

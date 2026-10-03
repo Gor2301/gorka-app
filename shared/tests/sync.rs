@@ -39,8 +39,8 @@ fn h1_session_key_derivation() {
         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
     ];
     let organization_id = "org-test-A";
-    let initiator_device_id = "device-test-A";
-    let responder_device_id = "device-test-B";
+    let initiator_device_id: &[u8] = b"device-test-A";
+    let responder_device_id: &[u8] = b"device-test-B";
 
     // Byte-width assertions (spec Section 7).
     assert_eq!(
@@ -83,10 +83,10 @@ fn h2_handshake_reply_tag() {
     let handshake_key = [0u8; 32];
     let protocol_version: u16 = 0x0001;
     let initiator_organization_id = "org-test-A";
-    let initiator_device_id = "device-test-A";
+    let initiator_device_id: &[u8] = b"device-test-A";
     let initiator_nonce: [u8; 24] = [0u8; 24];
     let responder_organization_id = "org-test-B";
-    let responder_device_id = "device-test-B";
+    let responder_device_id: &[u8] = b"device-test-B";
     let responder_nonce: [u8; 24] = [
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
         0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
@@ -138,10 +138,10 @@ fn h3_handshake_confirm_tag() {
     let handshake_key = [0u8; 32];
     let protocol_version: u16 = 0x0001;
     let initiator_organization_id = "org-test-A";
-    let initiator_device_id = "device-test-A";
+    let initiator_device_id: &[u8] = b"device-test-A";
     let initiator_nonce: [u8; 24] = [0u8; 24];
     let responder_organization_id = "org-test-B";
-    let responder_device_id = "device-test-B";
+    let responder_device_id: &[u8] = b"device-test-B";
     let responder_nonce: [u8; 24] = [
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
         0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
