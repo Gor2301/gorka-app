@@ -112,6 +112,20 @@ conn.execute("PRAGMA foreign_keys = ON", [])
     Ok(conn_mut)
 }
 
+/// Open a file-backed SQLite connection and run migrations.
+///
+/// Used by integration tests that need two connections to the same
+/// file (one for the engine, one for the test's own assertions).
+/// Not for production. Plain SQLite; no SQLCipher.
+pub fn open_file_for_tests(path: &std::path::Path) -> Result<Connection, String> {
+    let mut conn = Connection::open(path).map_err(|e| e.to_string())?;
+    conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?;
+    conn.execute("PRAGMA foreign_keys = ON", []).map_err(|e| e.to_string())?;
+    run_migrations(&mut conn)?;
+    Ok(conn)
+}
+
 /// Open a fresh in-memory SQLite database and run migrations.
 ///
 /// Used by integration tests. Not used by production code. The
@@ -129,7 +143,6 @@ pub fn verify_password(conn: &Connection) -> Result<(), String> {
         .map_err(|_| "Incorrect password".to_string())?;
     Ok(())
 }
-
 
 /// Returns true if the local database contains an organization
 /// key row, i.e. this device has completed enrollment.

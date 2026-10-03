@@ -145,3 +145,25 @@ pub fn logout(app: tauri::AppHandle) -> Result<(), String> {
     
     Ok(())
 }
+
+/// The TCP port the Client's sync engine listens on. Development
+/// mechanism for Phase 9.6; replaced by Control Plane discovery in
+/// Phase 9.6b.
+pub fn get_listen_port(app: &tauri::AppHandle) -> Result<Option<u16>, String> {
+    let store = StoreBuilder::new(app, "settings.dat")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(store.get("listen_port").and_then(|v| v.as_u64()).map(|n| n as u16))
+}
+
+pub fn set_listen_port(app: &tauri::AppHandle, port: u16) -> Result<(), String> {
+    let store = StoreBuilder::new(app, "settings.dat")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    store.set("listen_port", Value::Number(serde_json::Number::from(port as u64)));
+    store.save().map_err(|e| e.to_string())?;
+
+    Ok(())
+}

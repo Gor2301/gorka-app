@@ -29,11 +29,15 @@ use gorka_shared::documents;
 use gorka_shared::calendar;
 use gorka_shared::relations;
 use gorka_shared::enrollment::parse_enrollment_package;
+use gorka_shared::sync_engine::{self, EngineHandle, EngineStatus};
+use gorka_shared::sync_events;
 
 mod auth;
 
 struct AppState {
     db: Mutex<Option<Connection>>,
+    db_key: Mutex<Option<String>>,
+    engine: Mutex<Option<EngineHandle>>,
 }
 
 fn get_trusted_organization_id(app: &tauri::AppHandle) -> Result<String, String> {
@@ -82,8 +86,14 @@ fn unlock_database(
     db::verify_password(&conn)?;
 
     let state = app.state::<AppState>();
-    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    *db_guard = Some(conn);
+    {
+        let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+        *db_guard = Some(conn);
+    }
+    {
+        let mut key_guard = state.db_key.lock().map_err(|e| e.to_string())?;
+        *key_guard = Some(key);
+    }
 
     auth::set_unlocked(&app, true)?;
 
@@ -105,9 +115,22 @@ fn is_enrolled(state: tauri::State<AppState>) -> Result<bool, String> {
 
 #[command]
 fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
+    // 1. Stop the engine and wait for its thread to exit.
+    {
+        let mut engine_guard = state.engine.lock().map_err(|e| e.to_string())?;
+        if let Some(mut handle) = engine_guard.take() {
+            handle.stop();
+        }
+    }
+    // 2. Close the Tauri command's connection.
     {
         let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
         *db_guard = None;
+    }
+    // 3. Clear the derived key.
+    {
+        let mut key_guard = state.db_key.lock().map_err(|e| e.to_string())?;
+        *key_guard = None;
     }
     auth::logout(app)
 }
@@ -599,6 +622,97 @@ fn delete_debtor_relation(
 }
 
 #[command]
+fn start_sync_engine(
+    peer_address: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
+) -> Result<(), String> {
+    let db_key: String = {
+        let guard = state.db_key.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("Database not unlocked")?
+    };
+
+    {
+        let guard = state.engine.lock().map_err(|e| e.to_string())?;
+        if guard.is_some() {
+            return Err("Sync engine is already running".to_string());
+        }
+    }
+
+    let address = if peer_address.trim().is_empty() {
+        auth::get_peer_address(&app)?
+            .ok_or("No peer address provided and none stored")?
+    } else {
+        auth::set_peer_address(&app, &peer_address)?;
+        peer_address
+    };
+
+    let organization_id = get_trusted_organization_id(&app)?;
+
+    let mut engine_conn = db::init_db(&storage, &db_key)?;
+
+    let device_id = {
+        let tx = engine_conn.transaction().map_err(|e| e.to_string())?;
+        let did = sync_events::ensure_sync_state(&tx, &organization_id)?;
+        tx.commit().map_err(|e| e.to_string())?;
+        did
+    };
+
+    let key_bytes: Vec<u8> = engine_conn
+        .query_row(
+            "SELECT key_material FROM organization_keys WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| {
+            "Organization key not found. Import an enrollment package first.".to_string()
+        })?;
+    let organization_key: [u8; 32] = key_bytes
+        .try_into()
+        .map_err(|_| "Organization key has wrong length".to_string())?;
+
+    let handle = sync_engine::start_engine_connect(
+        engine_conn,
+        organization_id,
+        organization_key,
+        device_id,
+        address,
+    );
+
+    let mut guard = state.engine.lock().map_err(|e| e.to_string())?;
+    *guard = Some(handle);
+
+    Ok(())
+}
+
+#[command]
+fn stop_sync_engine(state: tauri::State<AppState>) -> Result<(), String> {
+    let mut guard = state.engine.lock().map_err(|e| e.to_string())?;
+    if let Some(mut handle) = guard.take() {
+        handle.stop();
+    }
+    Ok(())
+}
+
+#[command]
+fn sync_engine_status(state: tauri::State<AppState>) -> Result<String, String> {
+    let guard = state.engine.lock().map_err(|e| e.to_string())?;
+    let status_str = match guard.as_ref() {
+        None => "disabled".to_string(),
+        Some(handle) => match handle.status() {
+            EngineStatus::Disabled => "disabled".to_string(),
+            EngineStatus::Connecting => "connecting".to_string(),
+            EngineStatus::Pending => "pending".to_string(),
+            EngineStatus::Synced => "synced".to_string(),
+            EngineStatus::Offline => "offline".to_string(),
+            EngineStatus::Error(e) => format!("error: {}", e),
+        },
+    };
+    Ok(status_str)
+}
+
+#[command]
 fn import_enrollment_package(
     passphrase: String,
     file_path: String,
@@ -647,6 +761,8 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .manage(AppState {
             db: Mutex::new(None),
+            db_key: Mutex::new(None),
+            engine: Mutex::new(None),
         })
         .setup(|app| {
             let handle = app.handle().clone();
@@ -728,6 +844,9 @@ fn main() {
             insert_debtor_relation,
             delete_debtor_relation,
             import_enrollment_package,
+            start_sync_engine,
+            stop_sync_engine,
+            sync_engine_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

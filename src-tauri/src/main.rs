@@ -10,6 +10,8 @@ use rand::RngCore;
 use gorka_shared::storage::AppStorage;
 use gorka_shared::models::*;
 use gorka_shared::enrollment::{build_enrollment_package, parse_enrollment_package};
+use gorka_shared::sync_engine::{self, EngineHandle, EngineStatus};
+use gorka_shared::sync_events;
 use gorka_shared::debtors;
 use gorka_shared::debts;
 use gorka_shared::communications;
@@ -23,6 +25,8 @@ use gorka_shared::db;
 
 struct AppState {
     db: Mutex<Option<Connection>>,
+    db_key: Mutex<Option<String>>,
+    engine: Mutex<Option<EngineHandle>>,
 }
 
 fn get_trusted_organization_id(app: &tauri::AppHandle) -> Result<String, String> {
@@ -46,8 +50,18 @@ fn get_auth_token(app: tauri::AppHandle) -> Result<String, String> {
 #[command]
 fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     {
+        let mut engine_guard = state.engine.lock().map_err(|e| e.to_string())?;
+        if let Some(mut handle) = engine_guard.take() {
+            handle.stop();
+        }
+    }
+    {
         let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
         *db_guard = None;
+    }
+    {
+        let mut key_guard = state.db_key.lock().map_err(|e| e.to_string())?;
+        *key_guard = None;
     }
     auth::logout(app)
 }
@@ -120,15 +134,27 @@ fn unlock_database(password: String, app: tauri::AppHandle, storage: tauri::Stat
 
     println!("📌 [RUST] Step 5: Storing connection in app state...");
     let state = app.state::<AppState>();
-    let mut db_guard = match state.db.lock() {
-        Ok(g) => g,
-        Err(e) => {
-            println!("❌ [RUST] Failed to lock db: {}", e);
-            return Err(e.to_string());
-        }
-    };
-    *db_guard = Some(conn);
-    println!("✅ [RUST] Connection stored in app state");
+    {
+        let mut db_guard = match state.db.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                println!("❌ [RUST] Failed to lock db: {}", e);
+                return Err(e.to_string());
+            }
+        };
+        *db_guard = Some(conn);
+    }
+    {
+        let mut key_guard = match state.db_key.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                println!("❌ [RUST] Failed to lock db_key: {}", e);
+                return Err(e.to_string());
+            }
+        };
+                *key_guard = Some(key);
+    }
+    println!("✅ [RUST] Connection and key stored in app state");
 
     println!("📌 [RUST] Step 6: Setting unlocked state...");
     match auth::set_unlocked(&app, true) {
@@ -459,6 +485,96 @@ fn delete_document(
 }
 
 #[command]
+fn start_sync_engine(
+    listen_port: u16,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
+) -> Result<(), String> {
+    let db_key: String = {
+        let guard = state.db_key.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("Database not unlocked")?
+    };
+
+    {
+        let guard = state.engine.lock().map_err(|e| e.to_string())?;
+        if guard.is_some() {
+            return Err("Sync engine is already running".to_string());
+        }
+    }
+
+    let port = if listen_port == 0 {
+        auth::get_listen_port(&app)?.ok_or("No listen port provided and none stored")?
+    } else {
+        auth::set_listen_port(&app, listen_port)?;
+        listen_port
+    };
+
+    let organization_id = get_trusted_organization_id(&app)?;
+
+    let mut engine_conn = db::init_db(&storage, &db_key)?;
+
+    let device_id = {
+        let tx = engine_conn.transaction().map_err(|e| e.to_string())?;
+        let did = sync_events::ensure_sync_state(&tx, &organization_id)?;
+        tx.commit().map_err(|e| e.to_string())?;
+        did
+    };
+
+    let key_bytes: Vec<u8> = engine_conn
+        .query_row(
+            "SELECT key_material FROM organization_keys WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| {
+            "Organization key not found. Enable sync first.".to_string()
+        })?;
+    let organization_key: [u8; 32] = key_bytes
+        .try_into()
+        .map_err(|_| "Organization key has wrong length".to_string())?;
+
+    let handle = sync_engine::start_engine_listen(
+        engine_conn,
+        organization_id,
+        organization_key,
+        device_id,
+        port,
+    )?;
+
+    let mut guard = state.engine.lock().map_err(|e| e.to_string())?;
+    *guard = Some(handle);
+
+    Ok(())
+}
+
+#[command]
+fn stop_sync_engine(state: tauri::State<AppState>) -> Result<(), String> {
+    let mut guard = state.engine.lock().map_err(|e| e.to_string())?;
+    if let Some(mut handle) = guard.take() {
+        handle.stop();
+    }
+    Ok(())
+}
+
+#[command]
+fn sync_engine_status(state: tauri::State<AppState>) -> Result<String, String> {
+    let guard = state.engine.lock().map_err(|e| e.to_string())?;
+    let status_str = match guard.as_ref() {
+        None => "disabled".to_string(),
+        Some(handle) => match handle.status() {
+            EngineStatus::Disabled => "disabled".to_string(),
+            EngineStatus::Connecting => "connecting".to_string(),
+            EngineStatus::Pending => "pending".to_string(),
+            EngineStatus::Synced => "synced".to_string(),
+            EngineStatus::Offline => "offline".to_string(),
+            EngineStatus::Error(e) => format!("error: {}", e),
+        },
+    };
+    Ok(status_str)
+}
+
+#[command]
 fn export_enrollment_package(
     passphrase: String,
     file_path: String,
@@ -556,6 +672,8 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .manage(AppState {
             db: Mutex::new(None),
+            db_key: Mutex::new(None),
+            engine: Mutex::new(None),
         })
         .setup(|app| {
             let handle = app.handle().clone();
@@ -614,6 +732,9 @@ fn main() {
             delete_document,
             export_enrollment_package,
             import_enrollment_package,
+            start_sync_engine,
+            stop_sync_engine,
+            sync_engine_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
