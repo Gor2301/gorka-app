@@ -458,3 +458,40 @@ pub fn parse_sync_message(
 
     Ok(plaintext)
 }
+
+/// Encode an ACTION_CREATED payload (SYNC-ARCHITECTURE.md
+/// Section 25.10.3).
+///
+/// Fields, in order:
+///   debtor_id    0x4001
+///   action_type  0x4002
+///   status       0x4003
+///   assigned_to  0x4004  optional
+///   due_date     0x4005  optional
+///   description  0x4006  optional
+///   data_json    0x4007  optional
+pub fn encode_action_created_payload(
+    debtor_id: &str,
+    action_type: &str,
+    status: &str,
+    assigned_to: Option<&str>,
+    due_date: Option<&str>,
+    description: Option<&str>,
+    data_json: &str,
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&encode_tlv(0x4001, &encode_string_value(debtor_id)));
+    out.extend_from_slice(&encode_tlv(0x4002, &encode_string_value(action_type)));
+    out.extend_from_slice(&encode_tlv(0x4003, &encode_string_value(status)));
+    if let Some(v) = assigned_to {
+        out.extend_from_slice(&encode_tlv(0x4004, &encode_string_value(v)));
+    }
+    if let Some(v) = due_date {
+        out.extend_from_slice(&encode_tlv(0x4005, &encode_string_value(v)));
+    }
+    if let Some(v) = description {
+        out.extend_from_slice(&encode_tlv(0x4006, &encode_string_value(v)));
+    }
+    out.extend_from_slice(&encode_tlv(0x4007, &encode_string_value(data_json)));
+    out
+}
