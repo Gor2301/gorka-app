@@ -428,6 +428,186 @@ fn run_migrations(conn: &mut Connection) -> Result<(), String> {
         tx.commit().map_err(|e| e.to_string())?;
     }
 
+    if current_version < 8 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        // Category A additions: the monotonic soft-delete marker
+        // on the three synchronized entities (LOCAL-TABLES.md v1.2
+        // amendment).
+        tx.execute(
+            "ALTER TABLE debtors ADD COLUMN deleted TEXT NOT NULL DEFAULT 'false'",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "ALTER TABLE actions ADD COLUMN deleted TEXT NOT NULL DEFAULT 'false'",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "ALTER TABLE communications ADD COLUMN deleted TEXT NOT NULL DEFAULT 'false'",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // D.1 sync_events: the append-only event log.
+        // device_id is the raw 16-byte wire form (SYNC-ARCHITECTURE.md
+        // Section 25.6.6). payload is the canonical wire serialization
+        // of the event payload (Section 22.13).
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS sync_events (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                device_id BLOB NOT NULL,
+                event_type TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT,
+                payload BLOB NOT NULL,
+                sequence INTEGER NOT NULL,
+                logical_clock INTEGER NOT NULL,
+                created_at DATETIME NOT NULL,
+                local_received_at DATETIME NOT NULL,
+                UNIQUE (device_id, sequence)
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sync_events_org ON sync_events(organization_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sync_events_device ON sync_events(device_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sync_events_created ON sync_events(created_at)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // D.2 sync_state: one row per local device. Holds the local
+        // sequence counter and logical clock (SYNC-ARCHITECTURE.md
+        // Sections 11.4, 12.3).
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS sync_state (
+                device_id BLOB PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                sequence_counter INTEGER NOT NULL DEFAULT 0,
+                logical_clock INTEGER NOT NULL DEFAULT 0,
+                updated_at DATETIME
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // D.3 sync_delivery: per (local_device, peer, origin) delivery
+        // bookkeeping (SYNC-ARCHITECTURE.md Sections 17.5, 18.2).
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS sync_delivery (
+                local_device_id BLOB NOT NULL,
+                peer_device_id BLOB NOT NULL,
+                origin_device_id BLOB NOT NULL,
+                organization_id TEXT NOT NULL,
+                watermark INTEGER NOT NULL DEFAULT 0,
+                gap_set TEXT NOT NULL DEFAULT '',
+                updated_at DATETIME,
+                PRIMARY KEY (local_device_id, peer_device_id, origin_device_id)
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sync_delivery_pair ON sync_delivery(local_device_id, peer_device_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // D.4 sync_peers: local cache of known peer devices
+        // (SYNC-ARCHITECTURE.md Sections 3, 4, 26.2).
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS sync_peers (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                peer_name TEXT,
+                peer_type TEXT,
+                role TEXT,
+                status TEXT,
+                last_seen_at DATETIME,
+                last_successful_sync DATETIME,
+                last_endpoint TEXT,
+                is_trusted BOOLEAN DEFAULT 1,
+                created_at DATETIME,
+                updated_at DATETIME
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sync_peers_org ON sync_peers(organization_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sync_peers_status ON sync_peers(status)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // D.6 history_records: losing values from reconciliation
+        // (SYNC-ARCHITECTURE.md Sections 13.3, 25.7.1).
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS history_records (
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                field_name TEXT NOT NULL,
+                losing_value TEXT,
+                losing_event_id TEXT NOT NULL,
+                winning_event_id TEXT NOT NULL,
+                reconciled_at DATETIME NOT NULL,
+                PRIMARY KEY (entity_type, entity_id, field_name)
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // D.7 pending_events: work queue for deferred application
+        // (SYNC-ARCHITECTURE.md Sections 14.5, 25.7.5).
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS pending_events (
+                event_id TEXT PRIMARY KEY,
+                reason TEXT NOT NULL,
+                depends_on_entity_type TEXT NOT NULL,
+                depends_on_entity_id TEXT NOT NULL,
+                added_at DATETIME NOT NULL
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pending_events_depends ON pending_events(depends_on_entity_type, depends_on_entity_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // D.8 entity_field_state: current winner per field
+        // (SYNC-ARCHITECTURE.md Sections 13, 25.9.9).
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS entity_field_state (
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                field_name TEXT NOT NULL,
+                winning_event_id TEXT NOT NULL,
+                winning_logical_clock INTEGER NOT NULL,
+                winning_device_id BLOB NOT NULL,
+                winning_sequence INTEGER NOT NULL,
+                updated_at DATETIME,
+                PRIMARY KEY (entity_type, entity_id, field_name)
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute("PRAGMA user_version = 8", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 
