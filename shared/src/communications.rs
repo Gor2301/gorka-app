@@ -142,7 +142,7 @@ pub fn insert_communication(
         sync_events::ENTITY_COMMUNICATION,
         &id,
         &payload,
-        &["debtor_id", "communication_type", "direction", "content", "duration"],
+        &["debtor_id", "communication_type", "direction", "content"],
     )?;
 
     db::log_audit(&tx, "INSERT_COMM", Some(&input.debtor_id), 1, "Inserted communication")?;

@@ -112,6 +112,18 @@ conn.execute("PRAGMA foreign_keys = ON", [])
     Ok(conn_mut)
 }
 
+/// Open a fresh in-memory SQLite database and run migrations.
+///
+/// Used by integration tests. Not used by production code. The
+/// returned connection is a plain in-memory SQLite, not SQLCipher.
+/// That is acceptable for tests; the migrations themselves run
+/// identically against SQLCipher in production.
+pub fn open_in_memory_for_tests() -> Result<Connection, String> {
+    let mut conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
+    run_migrations(&mut conn)?;
+    Ok(conn)
+}
+
 pub fn verify_password(conn: &Connection) -> Result<(), String> {
     conn.query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get::<_, i64>(0))
         .map_err(|_| "Incorrect password".to_string())?;
