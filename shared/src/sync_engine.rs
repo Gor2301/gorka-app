@@ -230,9 +230,18 @@ pub fn start_engine_listen(
 
     let listen_address = config.listen_address.clone();
     let jwt = config.jwt.clone();
+    let backend_base_url =
+        sync_discovery::CONTROL_PLANE_BASE_URL.to_string();
+    let local_wire_device_id_hex = hex_encode(&device_id);
 
     let join = thread::spawn(move || {
-        let mode = PeerMode::Listen(listener, jwt, listen_address);
+        let mode = PeerMode::Listen {
+            listener,
+            jwt,
+            listen_address,
+            backend_base_url,
+            local_wire_device_id_hex,
+        };
         run_engine(
             mode,
             connection,
@@ -253,7 +262,13 @@ pub fn start_engine_listen(
 
 enum PeerMode {
     Connect(DiscoveryConfig),
-    Listen(TcpListener, String, String),
+    Listen {
+        listener: TcpListener,
+        jwt: String,
+        listen_address: String,
+        backend_base_url: String,
+        local_wire_device_id_hex: String,
+    },
 }
 
 // ---------------------------------------------------------------
@@ -471,12 +486,32 @@ fn establish_session(
             }
         }
 
-        PeerMode::Listen(listener, jwt, listen_address) => {
+        PeerMode::Listen {
+            listener,
+            jwt,
+            listen_address,
+            backend_base_url,
+            local_wire_device_id_hex,
+        } => {
             // Non-blocking accept, so the loop can check the stop
             // signal between attempts.
             listener
                 .set_nonblocking(true)
                 .map_err(|e| format!("set_nonblocking: {}", e))?;
+
+            // Relay presence. The waiter is best-effort: if the
+            // relay is unreachable, TCP-only still works. Retry
+            // ownership lives here, not inside the waiter. The
+            // waiter never reopens itself.
+            let mut relay_waiter: Option<crate::sync_relay::RelayPairingWaiter> =
+                crate::sync_relay::RelayPairingWaiter::open(
+                    backend_base_url,
+                    jwt,
+                    local_wire_device_id_hex,
+                )
+                .ok();
+            let mut last_relay_open = std::time::Instant::now();
+            const RELAY_REOPEN_INTERVAL: Duration = Duration::from_secs(2);
 
             let mut last_heartbeat = std::time::Instant::now();
             let heartbeat_interval =
@@ -487,7 +522,7 @@ fn establish_session(
                     return Ok(None);
                 }
                 // Heartbeat keeps the registry entry fresh while we
-                // wait for a peer to dial us.
+                // wait for a peer.
                 if last_heartbeat.elapsed() >= heartbeat_interval {
                     if let Err(e) = sync_discovery::heartbeat(
                         jwt,
@@ -499,6 +534,7 @@ fn establish_session(
                     last_heartbeat = std::time::Instant::now();
                 }
 
+                // TCP first.
                 match listener.accept() {
                     Ok((stream, _)) => {
                         // Back to blocking for the handshake.
@@ -515,11 +551,48 @@ fn establish_session(
                         )?;
                         return Ok(Some(session));
                     }
-                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(100));
-                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                     Err(e) => return Err(format!("accept: {}", e)),
                 }
+
+                // Relay second.
+                if let Some(waiter) = relay_waiter.as_mut() {
+                    match waiter.try_accept_pairing() {
+                        Ok(Some(transport)) => {
+                            let session = Session::accept(
+                                transport,
+                                organization_id,
+                                organization_key,
+                                device_id,
+                                Duration::from_millis(SYNC_ENGINE_TICK_MS),
+                            )?;
+                            return Ok(Some(session));
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            eprintln!("relay pairing failed: {}", e);
+                            relay_waiter = None;
+                            last_relay_open = std::time::Instant::now();
+                        }
+                    }
+                }
+
+                // Reopen the relay waiter only if it is dead and
+                // enough time has passed. The 2-second throttle
+                // prevents hammering a down relay at 10 Hz.
+                if relay_waiter.is_none()
+                    && last_relay_open.elapsed() >= RELAY_REOPEN_INTERVAL
+                {
+                    relay_waiter = crate::sync_relay::RelayPairingWaiter::open(
+                        backend_base_url,
+                        jwt,
+                        local_wire_device_id_hex,
+                    )
+                    .ok();
+                    last_relay_open = std::time::Instant::now();
+                }
+
+                thread::sleep(Duration::from_millis(100));
             }
         }
     }
@@ -1010,6 +1083,16 @@ fn interruptible_sleep(stop: &Arc<AtomicBool>, ms: u64) -> bool {
         elapsed += sleep_for;
     }
     stop.load(Ordering::SeqCst)
+}
+
+/// Lowercase hex encoding of a byte slice. Used to derive the
+/// wire device id hex string for the relay's open frame.
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{:02x}", b));
+    }
+    s
 }
 
 fn random_nonce() -> [u8; 24] {

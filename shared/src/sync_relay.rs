@@ -84,6 +84,22 @@ impl RelayTransport {
             }
         }
     }
+
+    /// Wrap an already-paired WebSocket as a RelayTransport.
+    ///
+    /// The underlying socket is put back into blocking mode so
+    /// the handshake's recv_blocking works. Session::accept then
+    /// calls enter_tick_loop, which switches the same socket to
+    /// a read timeout for the tick loop.
+    pub fn from_paired_websocket(
+        mut ws: WebSocket<MaybeTlsStream<TcpStream>>,
+    ) -> Result<Self, String> {
+        if let MaybeTlsStream::Plain(s) = ws.get_mut() {
+            s.set_nonblocking(false)
+                .map_err(|e| format!("relay set blocking: {}", e))?;
+        }
+        Ok(Self { ws })
+    }
 }
 
 fn ws_url_from_base(base: &str) -> String {
@@ -96,6 +112,115 @@ fn ws_url_from_base(base: &str) -> String {
         trimmed.to_string()
     };
     format!("{}/api/sync/relay", ws)
+}
+
+// ---------------------------------------------------------------
+// Listener-side pairing
+// ---------------------------------------------------------------
+
+/// Open a pairing WebSocket to the relay with no target. The
+/// underlying socket is set non-blocking on return, so the
+/// listener can poll it alongside its TCP listener.
+///
+/// One attempt. The caller decides when to retry.
+fn open_pairing_websocket(
+    backend_base_url: &str,
+    jwt: &str,
+    wire_device_id_hex: &str,
+) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, String> {
+    let ws_url = ws_url_from_base(backend_base_url);
+    let (mut ws, _response) = connect(&ws_url)
+        .map_err(|e| format!("relay connect {}: {}", ws_url, e))?;
+
+    let open = serde_json::json!({
+        "type": "open",
+        "jwt": jwt,
+        "wireDeviceId": wire_device_id_hex,
+        // No targetWireDeviceId: the listener waits for a
+        // connector to name it as its target.
+    });
+    ws.send(Message::Text(open.to_string()))
+        .map_err(|e| format!("relay send open: {}", e))?;
+
+    if let MaybeTlsStream::Plain(s) = ws.get_mut() {
+        s.set_nonblocking(true)
+            .map_err(|e| format!("relay set nonblocking: {}", e))?;
+    }
+    Ok(ws)
+}
+
+/// Listener-side pairing waiter.
+///
+/// Owns one pairing WebSocket. Does not reopen itself. When the
+/// socket dies, `try_accept_pairing` returns `Err` and the caller
+/// is expected to replace the waiter. Retry ownership lives with
+/// the caller's loop, not here, so there is exactly one owner of
+/// the retry/session lifecycle.
+pub struct RelayPairingWaiter {
+    // None after pairing has been claimed by try_accept_pairing.
+    // Polling a consumed waiter returns Err.
+    ws: Option<WebSocket<MaybeTlsStream<TcpStream>>>,
+}
+
+impl RelayPairingWaiter {
+    /// Open a pairing WebSocket. One attempt. Returns Err if the
+    /// relay is unreachable or the open frame cannot be sent.
+    pub fn open(
+        backend_base_url: &str,
+        jwt: &str,
+        wire_device_id_hex: &str,
+    ) -> Result<Self, String> {
+        let ws = open_pairing_websocket(
+            backend_base_url,
+            jwt,
+            wire_device_id_hex,
+        )?;
+        Ok(Self { ws: Some(ws) })
+    }
+
+    /// Non-blocking poll.
+    ///
+    ///   Ok(Some(t))  paired; waiter is now consumed
+    ///   Ok(None)     still waiting
+    ///   Err(_)       this waiter is dead; caller must replace it
+    pub fn try_accept_pairing(
+        &mut self,
+    ) -> Result<Option<RelayTransport>, String> {
+        // Read one WebSocket message. The borrow of self.ws ends
+        // when this match completes, so a later self.ws.take() is
+        // legal.
+        let paired = match self.ws.as_mut() {
+            Some(ws) => match ws.read() {
+                Ok(Message::Text(t)) => t.contains("\"paired\""),
+                Ok(Message::Ping(p)) => {
+                    let _ = ws.send(Message::Pong(p));
+                    false
+                }
+                Ok(Message::Close(_)) => {
+                    return Err("relay closed before pairing".to_string());
+                }
+                Ok(_) => false,
+                Err(tungstenite::Error::Io(e))
+                    if e.kind() == ErrorKind::WouldBlock
+                        || e.kind() == ErrorKind::TimedOut =>
+                {
+                    false
+                }
+                Err(e) => return Err(format!("relay read: {}", e)),
+            },
+            None => {
+                return Err("relay pairing waiter already consumed".to_string());
+            }
+        };
+
+        if !paired {
+            return Ok(None);
+        }
+
+        let ws = self.ws.take().unwrap();
+        let transport = RelayTransport::from_paired_websocket(ws)?;
+        Ok(Some(transport))
+    }
 }
 
 impl HandshakeTransport for RelayTransport {
