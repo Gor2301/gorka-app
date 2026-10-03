@@ -21,6 +21,7 @@ pub mod models;
 pub mod relations;
 pub mod storage;
 pub mod sync;
+pub mod sync_events;
 
 pub fn placeholder() -> &'static str {
     "gorka-shared"

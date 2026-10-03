@@ -62,7 +62,6 @@ fn get_salt(app: tauri::AppHandle) -> Result<Vec<u8>, String> {
     auth::get_salt(&app)
 }
 
-
 #[command]
 fn database_exists(storage: tauri::State<AppStorage>) -> bool {
     db::database_exists(&storage)
@@ -71,77 +70,77 @@ fn database_exists(storage: tauri::State<AppStorage>) -> bool {
 #[command]
 fn unlock_database(password: String, app: tauri::AppHandle, storage: tauri::State<AppStorage>) -> Result<(), String> {
     println!("========================================");
-    println!("ðŸ”‘ [RUST] unlock_database STARTED");
+    println!("🔑 [RUST] unlock_database STARTED");
     println!("========================================");
 
-    println!("ðŸ“Œ [RUST] Step 1: Getting salt...");
+    println!("📌 [RUST] Step 1: Getting salt...");
     let salt = match auth::get_salt(&app) {
         Ok(s) => {
-            println!("âœ… [RUST] Salt retrieved: {} bytes", s.len());
+            println!("✅ [RUST] Salt retrieved: {} bytes", s.len());
             s
         }
         Err(e) => {
-            println!("âŒ [RUST] Failed to get salt: {}", e);
+            println!("❌ [RUST] Failed to get salt: {}", e);
             return Err(e);
         }
     };
 
-    println!("ðŸ“Œ [RUST] Step 2: Deriving key from password...");
+    println!("📌 [RUST] Step 2: Deriving key from password...");
     let key = match db::derive_key(&password, &salt) {
         Ok(k) => {
-            println!("âœ… [RUST] Key derived successfully (length: {})", k.len());
+            println!("✅ [RUST] Key derived successfully (length: {})", k.len());
             k
         }
         Err(e) => {
-            println!("âŒ [RUST] Key derivation failed: {}", e);
+            println!("❌ [RUST] Key derivation failed: {}", e);
             return Err(format!("Key derivation failed: {}", e));
         }
     };
 
-    println!("ðŸ“Œ [RUST] Step 3: Initializing database with key...");
+    println!("📌 [RUST] Step 3: Initializing database with key...");
     let conn = match db::init_db(&storage, &key) {
         Ok(c) => {
-            println!("âœ… [RUST] Database initialized successfully");
+            println!("✅ [RUST] Database initialized successfully");
             c
         }
         Err(e) => {
-            println!("âŒ [RUST] Database init failed: {}", e);
+            println!("❌ [RUST] Database init failed: {}", e);
             return Err(e);
         }
     };
 
-    println!("ðŸ“Œ [RUST] Step 4: Verifying password...");
+    println!("📌 [RUST] Step 4: Verifying password...");
     match db::verify_password(&conn) {
-        Ok(()) => println!("âœ… [RUST] Password verified successfully"),
+        Ok(()) => println!("✅ [RUST] Password verified successfully"),
         Err(e) => {
-            println!("âŒ [RUST] Password verification failed: {}", e);
+            println!("❌ [RUST] Password verification failed: {}", e);
             return Err(e);
         }
     };
 
-    println!("ðŸ“Œ [RUST] Step 5: Storing connection in app state...");
+    println!("📌 [RUST] Step 5: Storing connection in app state...");
     let state = app.state::<AppState>();
     let mut db_guard = match state.db.lock() {
         Ok(g) => g,
         Err(e) => {
-            println!("âŒ [RUST] Failed to lock db: {}", e);
+            println!("❌ [RUST] Failed to lock db: {}", e);
             return Err(e.to_string());
         }
     };
     *db_guard = Some(conn);
-    println!("âœ… [RUST] Connection stored in app state");
+    println!("✅ [RUST] Connection stored in app state");
 
-    println!("ðŸ“Œ [RUST] Step 6: Setting unlocked state...");
+    println!("📌 [RUST] Step 6: Setting unlocked state...");
     match auth::set_unlocked(&app, true) {
-        Ok(()) => println!("âœ… [RUST] Unlocked state set successfully"),
+        Ok(()) => println!("✅ [RUST] Unlocked state set successfully"),
         Err(e) => {
-            println!("âŒ [RUST] Failed to set unlocked state: {}", e);
+            println!("❌ [RUST] Failed to set unlocked state: {}", e);
             return Err(e);
         }
     };
 
     println!("========================================");
-    println!("âœ… [RUST] unlock_database COMPLETE");
+    println!("✅ [RUST] unlock_database COMPLETE");
     println!("========================================");
 
     Ok(())
@@ -160,8 +159,8 @@ fn enable_sync(
 ) -> Result<(), String> {
     let organization_id = get_trusted_organization_id(&app)?;
 
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
 
     let existing: Option<i64> = conn
         .query_row(
@@ -186,6 +185,7 @@ fn enable_sync(
 
     Ok(())
 }
+
 #[command]
 fn get_debtors(
     app: tauri::AppHandle,
@@ -216,8 +216,8 @@ fn insert_debtor(
     state: tauri::State<AppState>,
 ) -> Result<Debtor, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debtors::insert_debtor(conn, &organization_id, input)
 }
 
@@ -241,8 +241,8 @@ fn update_debtor(
     state: tauri::State<AppState>,
 ) -> Result<Debtor, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debtors::update_debtor(conn, &organization_id, &id, input)
 }
 
@@ -251,12 +251,11 @@ fn delete_debtor(
     id: String,
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
-    storage: tauri::State<AppStorage>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-    debtors::delete_debtor(conn, &storage, &organization_id, &id)
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    debtors::delete_debtor(conn, &organization_id, &id)
 }
 
 #[command]
@@ -281,6 +280,7 @@ fn get_debtor_count(
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
     debtors::get_debtor_count(conn, &organization_id)
 }
+
 #[command]
 fn get_dashboard_stats(
     app: tauri::AppHandle,
@@ -311,8 +311,8 @@ fn insert_debt(
     state: tauri::State<AppState>,
 ) -> Result<Debt, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debts::insert_debt(conn, &organization_id, input)
 }
 
@@ -324,8 +324,8 @@ fn update_debt(
     state: tauri::State<AppState>,
 ) -> Result<Debt, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debts::update_debt(conn, &organization_id, &id, input)
 }
 
@@ -336,11 +336,10 @@ fn delete_debt(
     state: tauri::State<AppState>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debts::delete_debt(conn, &organization_id, &id)
 }
-
 
 #[command]
 fn get_actions(
@@ -361,8 +360,8 @@ fn insert_action(
     state: tauri::State<AppState>,
 ) -> Result<Action, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     actions::insert_action(conn, &organization_id, input)
 }
 
@@ -374,8 +373,8 @@ fn update_action(
     state: tauri::State<AppState>,
 ) -> Result<Action, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     actions::update_action(conn, &organization_id, &id, input)
 }
 
@@ -386,8 +385,8 @@ fn delete_action(
     state: tauri::State<AppState>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     actions::delete_action(conn, &organization_id, &id)
 }
 
@@ -410,8 +409,8 @@ fn insert_communication(
     state: tauri::State<AppState>,
 ) -> Result<Communication, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     communications::insert_communication(conn, &organization_id, input)
 }
 
@@ -422,8 +421,8 @@ fn delete_communication(
     state: tauri::State<AppState>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     communications::delete_communication(conn, &organization_id, &id)
 }
 
@@ -458,7 +457,6 @@ fn delete_document(
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
     documents::delete_document(conn, &id)
 }
-
 
 #[command]
 fn export_enrollment_package(
@@ -507,6 +505,7 @@ fn export_enrollment_package(
 
     Ok(file_path)
 }
+
 #[command]
 fn import_enrollment_package(
     passphrase: String,
@@ -521,12 +520,11 @@ fn import_enrollment_package(
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
     let organization_key = parse_enrollment_package(&file, &passphrase, &organization_id)?;
-    // Begin the transaction.
+
     let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
-    // Check for an existing key inside the transaction.
     let existing: Option<i64> = tx
         .query_row("SELECT id FROM organization_keys WHERE id = 1", [], |row| row.get(0))
         .ok();
@@ -535,7 +533,6 @@ fn import_enrollment_package(
         return Err("Sync is already enabled for this organization".to_string());
     }
 
-    // Insert the key.
     tx.execute(
         "INSERT INTO organization_keys (id, organization_id, key_material, created_at)
          VALUES (1, ?1, ?2, ?3)",
@@ -543,10 +540,8 @@ fn import_enrollment_package(
     )
     .map_err(|e| e.to_string())?;
 
-    // Commit.
     tx.commit().map_err(|e| e.to_string())?;
 
-    // Delete the package file after commit. Failure is logged, not fatal.
     if let Err(e) = std::fs::remove_file(&file_path) {
         eprintln!("Failed to delete package file: {}", e);
     }
@@ -565,9 +560,6 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-              // Construct the Client's AppStorage and place it in
-            // managed state. Shared code consumes it via
-            // tauri::State<AppStorage>.
             let app_data_dir = handle
                 .path()
                 .app_data_dir()

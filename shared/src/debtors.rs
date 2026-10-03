@@ -3,11 +3,16 @@
 // Debtor database operations. Moved from the Client Dashboard's
 // Tauri command layer in Phase 9.5, slice "debtors".
 //
-// Every SQL string, parameter binding, row mapping, transaction
-// boundary, and audit call is identical to the code that lived
-// in src-tauri/src/main.rs. Only the signatures changed: the
-// organization id, the connection, and any needed storage context
-// are supplied by the caller.
+// Every SQL string, parameter binding, row mapping, and audit
+// call is preserved from the version that lived in
+// src-tauri/src/main.rs.
+//
+// Phase 9.6 batch 2: every mutating function now opens a
+// transaction, applies the state change, originates a
+// sync_events row, and commits atomically. Delete is a soft
+// delete: rows are marked deleted = 'true' and retained
+// (SYNC-ARCHITECTURE.md Section 14.6). Read queries filter
+// deleted rows out.
 //
 // Nothing here is Tauri-specific.
 
@@ -17,6 +22,8 @@ use uuid::Uuid;
 use chrono::Utc;
 
 use crate::db;
+use crate::sync;
+use crate::sync_events;
 use crate::storage::AppStorage;
 use crate::models::{Debtor, DebtorInput, DebtorPhotoData, RelatedDebtorRole, DebtorDebtTotal, PrimaryDebtorRelation};
 
@@ -26,7 +33,7 @@ pub fn get_debtors(
 ) -> Result<Vec<Debtor>, String> {
     let mut stmt = conn.prepare(
         "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at
-         FROM debtors WHERE organization_id = ?1
+         FROM debtors WHERE organization_id = ?1 AND deleted != 'true'
          ORDER BY surname, name"
     ).map_err(|e| e.to_string())?;
 
@@ -60,7 +67,7 @@ pub fn get_debtor(
 ) -> Result<Debtor, String> {
     let debtor = conn.query_row(
         "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at
-         FROM debtors WHERE id = ?1 AND organization_id = ?2",
+         FROM debtors WHERE id = ?1 AND organization_id = ?2 AND deleted != 'true'",
         params![id, organization_id],
         |row| {
             let data_json: String = row.get(6)?;
@@ -82,14 +89,17 @@ pub fn get_debtor(
 }
 
 pub fn insert_debtor(
-    conn: &Connection,
+    conn: &mut Connection,
     organization_id: &str,
     input: DebtorInput,
 ) -> Result<Debtor, String> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
+    let data_json = serde_json::to_string(&input.data).unwrap_or_else(|_| "{}".to_string());
 
-    conn.execute(
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    tx.execute(
         "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
@@ -99,13 +109,31 @@ pub fn insert_debtor(
             &input.surname,
             &input.email,
             &input.phone,
-            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+            &data_json,
             &now,
             &now,
         ],
     ).map_err(|e| e.to_string())?;
 
-    db::log_audit(conn, "INSERT", Some(&id), 1, "Inserted debtor")?;
+    let payload = sync::encode_debtor_created_payload(
+        &input.name,
+        &input.surname,
+        input.email.as_deref(),
+        input.phone.as_deref(),
+        Some(&data_json),
+    );
+    sync_events::originate_event(
+        &tx,
+        organization_id,
+        sync_events::EVENT_DEBTOR_CREATED,
+        sync_events::ENTITY_DEBTOR,
+        &id,
+        &payload,
+    )?;
+
+    db::log_audit(&tx, "INSERT", Some(&id), 1, "Inserted debtor")?;
+
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(Debtor {
         id,
@@ -132,6 +160,7 @@ pub fn bulk_insert_debtors(
 
     for input in inputs {
         let id = Uuid::new_v4().to_string();
+        let data_json = serde_json::to_string(&input.data).unwrap_or_else(|_| "{}".to_string());
 
         tx.execute(
             "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, created_at, updated_at)
@@ -143,11 +172,27 @@ pub fn bulk_insert_debtors(
                 &input.surname,
                 &input.email,
                 &input.phone,
-                &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+                &data_json,
                 &now,
                 &now,
             ],
         ).map_err(|e| e.to_string())?;
+
+        let payload = sync::encode_debtor_created_payload(
+            &input.name,
+            &input.surname,
+            input.email.as_deref(),
+            input.phone.as_deref(),
+            Some(&data_json),
+        );
+        sync_events::originate_event(
+            &tx,
+            organization_id,
+            sync_events::EVENT_DEBTOR_CREATED,
+            sync_events::ENTITY_DEBTOR,
+            &id,
+            &payload,
+        )?;
 
         inserted.push(Debtor {
             id,
@@ -162,23 +207,26 @@ pub fn bulk_insert_debtors(
         });
     }
 
-    tx.commit().map_err(|e| e.to_string())?;
-
     let count = inserted.len() as i64;
-    db::log_audit(conn, "BULK_INSERT", None, count, &format!("Inserted {} debtors", count))?;
+    db::log_audit(&tx, "BULK_INSERT", None, count, &format!("Inserted {} debtors", count))?;
+
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(inserted)
 }
 
 pub fn update_debtor(
-    conn: &Connection,
+    conn: &mut Connection,
     organization_id: &str,
     id: &str,
     input: DebtorInput,
 ) -> Result<Debtor, String> {
     let now = Utc::now().to_rfc3339();
+    let data_json = serde_json::to_string(&input.data).unwrap_or_else(|_| "{}".to_string());
 
-    let affected = conn.execute(
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let affected = tx.execute(
         "UPDATE debtors
          SET name = ?1, surname = ?2, email = ?3, phone = ?4, data = ?5, updated_at = ?6
          WHERE id = ?7 AND organization_id = ?8",
@@ -187,7 +235,7 @@ pub fn update_debtor(
             &input.surname,
             &input.email,
             &input.phone,
-            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+            &data_json,
             &now,
             id,
             organization_id,
@@ -198,7 +246,26 @@ pub fn update_debtor(
         return Err("Debtor not found or not in this organization".to_string());
     }
 
-    db::log_audit(conn, "UPDATE", Some(id), 1, "Updated debtor")?;
+    let changes: Vec<(&str, Option<&str>)> = vec![
+        ("name", Some(&input.name)),
+        ("surname", Some(&input.surname)),
+        ("email", input.email.as_deref()),
+        ("phone", input.phone.as_deref()),
+        ("data_json", Some(&data_json)),
+    ];
+    let payload = sync::encode_entity_updated_payload(&changes);
+    sync_events::originate_event(
+        &tx,
+        organization_id,
+        sync_events::EVENT_ENTITY_UPDATED,
+        sync_events::ENTITY_DEBTOR,
+        id,
+        &payload,
+    )?;
+
+    db::log_audit(&tx, "UPDATE", Some(id), 1, "Updated debtor")?;
+
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(Debtor {
         id: id.to_string(),
@@ -214,28 +281,40 @@ pub fn update_debtor(
 }
 
 pub fn delete_debtor(
-    conn: &Connection,
-    storage: &AppStorage,
+    conn: &mut Connection,
     organization_id: &str,
     id: &str,
 ) -> Result<bool, String> {
-    let affected = conn.execute(
-        "DELETE FROM debtors WHERE id = ?1 AND organization_id = ?2",
-        params![id, organization_id],
+    let now = Utc::now().to_rfc3339();
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let affected = tx.execute(
+        "UPDATE debtors SET deleted = 'true', updated_at = ?1
+         WHERE id = ?2 AND organization_id = ?3 AND deleted != 'true'",
+        params![&now, id, organization_id],
     ).map_err(|e| e.to_string())?;
 
-    if affected > 0 {
-        let debtor_dir = db::get_debtor_files_dir(storage, id)?;
-        if debtor_dir.exists() {
-            std::fs::remove_dir_all(&debtor_dir)
-                .map_err(|e| format!("Failed to delete debtor files: {}", e))?;
-        }
-
-        db::log_audit(conn, "DELETE", Some(id), 1, "Deleted debtor")?;
-        Ok(true)
-    } else {
-        Ok(false)
+    if affected == 0 {
+        return Ok(false);
     }
+
+    let changes: Vec<(&str, Option<&str>)> = vec![("deleted", Some("true"))];
+    let payload = sync::encode_entity_updated_payload(&changes);
+    sync_events::originate_event(
+        &tx,
+        organization_id,
+        sync_events::EVENT_ENTITY_UPDATED,
+        sync_events::ENTITY_DEBTOR,
+        id,
+        &payload,
+    )?;
+
+    db::log_audit(&tx, "DELETE", Some(id), 1, "Deleted debtor (soft delete)")?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+
+    Ok(true)
 }
 
 pub fn search_debtors(
@@ -249,6 +328,7 @@ pub fn search_debtors(
         "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at
          FROM debtors
          WHERE organization_id = ?1
+         AND deleted != 'true'
          AND (name LIKE ?2 OR surname LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2
          OR json_extract(data, '$.contacts.phone1') LIKE ?2
          OR json_extract(data, '$.contacts.email1') LIKE ?2
@@ -284,7 +364,7 @@ pub fn get_debtor_count(
     organization_id: &str,
 ) -> Result<i64, String> {
     let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM debtors WHERE organization_id = ?1",
+        "SELECT COUNT(*) FROM debtors WHERE organization_id = ?1 AND deleted != 'true'",
         params![organization_id],
         |row| row.get(0),
     ).map_err(|e| e.to_string())?;
@@ -448,6 +528,7 @@ pub fn get_debtor_debt_totals(
          FROM debts d
          INNER JOIN debtors b ON b.id = d.debtor_id
          WHERE b.organization_id = ?1
+           AND b.deleted != 'true'
            AND d.status NOT IN ('PAID', 'CANCELLED')
          GROUP BY d.debtor_id, d.currency
          ORDER BY d.debtor_id, d.currency"
@@ -470,7 +551,7 @@ pub fn get_debtor_debt_totals(
 }
 
 pub fn insert_related_debtor(
-    conn: &Connection,
+    conn: &mut Connection,
     organization_id: &str,
     input: DebtorInput,
     role: &str,
@@ -482,8 +563,11 @@ pub fn insert_related_debtor(
 
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
+    let data_json = serde_json::to_string(&input.data).unwrap_or_else(|_| "{}".to_string());
 
-    conn.execute(
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    tx.execute(
         "INSERT INTO debtors (id, organization_id, name, surname, email, phone, data, role, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
@@ -493,14 +577,32 @@ pub fn insert_related_debtor(
             &input.surname,
             &input.email,
             &input.phone,
-            &serde_json::to_string(&input.data).unwrap_or("{}".to_string()),
+            &data_json,
             role,
             &now,
             &now,
         ],
     ).map_err(|e| e.to_string())?;
 
-    db::log_audit(conn, "INSERT_RELATED_DEBTOR", Some(&id), 1, "Inserted related debtor")?;
+    let payload = sync::encode_debtor_created_payload(
+        &input.name,
+        &input.surname,
+        input.email.as_deref(),
+        input.phone.as_deref(),
+        Some(&data_json),
+    );
+    sync_events::originate_event(
+        &tx,
+        organization_id,
+        sync_events::EVENT_DEBTOR_CREATED,
+        sync_events::ENTITY_DEBTOR,
+        &id,
+        &payload,
+    )?;
+
+    db::log_audit(&tx, "INSERT_RELATED_DEBTOR", Some(&id), 1, "Inserted related debtor")?;
+
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(Debtor {
         id,
@@ -578,7 +680,7 @@ pub fn cleanup_orphaned_related_debtors(
     let ids: Vec<String> = {
         let mut stmt = conn.prepare(
             "SELECT id FROM debtors
-             WHERE organization_id = ?1 AND role != 'DEBTOR'"
+             WHERE organization_id = ?1 AND role != 'DEBTOR' AND deleted != 'true'"
         ).map_err(|e| e.to_string())?;
 
         let rows = stmt.query_map([organization_id], |row| row.get::<_, String>(0))
@@ -621,7 +723,6 @@ pub fn cleanup_orphaned_related_debtors(
     Ok(removed)
 }
 
-
 pub fn get_primary_debtors(
     conn: &Connection,
     organization_id: &str,
@@ -629,7 +730,7 @@ pub fn get_primary_debtors(
     let mut stmt = conn.prepare(
         "SELECT id, organization_id, name, surname, email, phone, data, created_at, updated_at
          FROM debtors
-         WHERE organization_id = ?1 AND role = 'DEBTOR'
+         WHERE organization_id = ?1 AND role = 'DEBTOR' AND deleted != 'true'
          ORDER BY surname, name"
     ).map_err(|e| e.to_string())?;
 
@@ -668,6 +769,7 @@ pub fn search_primary_debtors(
          FROM debtors
          WHERE organization_id = ?1
          AND role = 'DEBTOR'
+         AND deleted != 'true'
          AND (name LIKE ?2 OR surname LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2
          OR json_extract(data, '$.contacts.phone1') LIKE ?2
          OR json_extract(data, '$.contacts.email1') LIKE ?2

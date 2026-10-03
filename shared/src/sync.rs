@@ -272,15 +272,26 @@ pub fn encode_debtor_created_payload(
 /// lexicographic order by field_name. This encoder establishes
 /// that order before serializing. The input slice is not itself
 /// a wire-order guarantee.
-pub fn encode_entity_updated_payload(changes: &[(&str, &str)]) -> Vec<u8> {
-    let mut sorted: Vec<(&str, &str)> = changes.to_vec();
+pub fn encode_entity_updated_payload(changes: &[(&str, Option<&str>)]) -> Vec<u8> {
+    let mut sorted: Vec<(&str, Option<&str>)> = changes.to_vec();
     sorted.sort_by(|a, b| a.0.cmp(b.0));
 
     let mut out = Vec::new();
     for (field_name, field_value) in sorted {
         let mut change = Vec::new();
         change.extend_from_slice(&encode_tlv(0x3011, &encode_string_value(field_name)));
-        change.extend_from_slice(&encode_tlv(0x3012, &encode_string_value(field_value)));
+        match field_value {
+            Some(v) => {
+                change.extend_from_slice(&encode_tlv(0x3012, &encode_string_value(v)));
+            }
+            None => {
+                // Null field: record present with zero-length value
+                // (SYNC-ARCHITECTURE.md Section 25.13.3). This is
+                // distinct from an empty string, which encodes as a
+                // 4-byte length prefix with zero bytes following.
+                change.extend_from_slice(&encode_tlv(0x3012, &[]));
+            }
+        }
         out.extend_from_slice(&encode_tlv(0x3001, &change));
     }
     out

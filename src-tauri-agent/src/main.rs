@@ -8,12 +8,9 @@
 // data folder, its own settings.dat, and its own SQLCipher
 // database file.
 //
-// Stage C.1 wires the Agent's authentication foundation: login,
-// unlock, logout, and the session reads the entry flow requires.
-// Stage C.2 adds the CRUD adapters (debtors, debts,
-// communications, actions, documents). Stage C.3 adds the Stage B
-// adapters (photo, calendar, relations). Stage C.4 adds the
-// enrollment import command.
+// Phase 9.6 batch 2: mutating commands now hold a &mut connection
+// so that the shared layer can open a transaction for the state
+// change and the sync_events row.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -35,8 +32,6 @@ use gorka_shared::enrollment::parse_enrollment_package;
 
 mod auth;
 
-/// Application state for the Agent binary. Holds the unlocked
-/// SQLCipher connection, if any. Mirrors the Client's AppState.
 struct AppState {
     db: Mutex<Option<Connection>>,
 }
@@ -117,19 +112,6 @@ fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), St
     auth::logout(app)
 }
 
-// ---------------------------------------------------------------------
-// Stage C.2 - CRUD adapters.
-//
-// Each adapter mirrors the Client's equivalent in
-// src-tauri/src/main.rs. Thin wrapper: lock AppState, acquire the
-// trusted organization id where applicable, call the shared
-// function.
-//
-// Documents commands do NOT perform organization scoping. That is
-// the Client's existing behavior (Slice 5 preserved it); the Agent
-// mirrors it. No Agent-only behavior is introduced here.
-// ---------------------------------------------------------------------
-
 #[command]
 fn get_debtors(
     app: tauri::AppHandle,
@@ -160,8 +142,8 @@ fn insert_debtor(
     state: tauri::State<AppState>,
 ) -> Result<Debtor, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debtors::insert_debtor(conn, &organization_id, input)
 }
 
@@ -173,8 +155,8 @@ fn update_debtor(
     state: tauri::State<AppState>,
 ) -> Result<Debtor, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debtors::update_debtor(conn, &organization_id, &id, input)
 }
 
@@ -183,12 +165,11 @@ fn delete_debtor(
     id: String,
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
-    storage: tauri::State<AppStorage>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-    debtors::delete_debtor(conn, &storage, &organization_id, &id)
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    debtors::delete_debtor(conn, &organization_id, &id)
 }
 
 #[command]
@@ -244,8 +225,8 @@ fn insert_related_debtor(
     state: tauri::State<AppState>,
 ) -> Result<Debtor, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debtors::insert_related_debtor(conn, &organization_id, input, &role)
 }
 
@@ -260,6 +241,7 @@ fn cleanup_orphaned_related_debtors(
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
     debtors::cleanup_orphaned_related_debtors(conn, &storage, &organization_id)
 }
+
 #[command]
 fn get_primary_debtors(
     app: tauri::AppHandle,
@@ -313,8 +295,8 @@ fn insert_debt(
     state: tauri::State<AppState>,
 ) -> Result<Debt, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debts::insert_debt(conn, &organization_id, input)
 }
 
@@ -326,8 +308,8 @@ fn update_debt(
     state: tauri::State<AppState>,
 ) -> Result<Debt, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debts::update_debt(conn, &organization_id, &id, input)
 }
 
@@ -338,8 +320,8 @@ fn delete_debt(
     state: tauri::State<AppState>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     debts::delete_debt(conn, &organization_id, &id)
 }
 
@@ -362,8 +344,8 @@ fn insert_communication(
     state: tauri::State<AppState>,
 ) -> Result<Communication, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     communications::insert_communication(conn, &organization_id, input)
 }
 
@@ -374,8 +356,8 @@ fn delete_communication(
     state: tauri::State<AppState>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     communications::delete_communication(conn, &organization_id, &id)
 }
 
@@ -409,8 +391,8 @@ fn insert_action(
     state: tauri::State<AppState>,
 ) -> Result<Action, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     actions::insert_action(conn, &organization_id, input)
 }
 
@@ -422,8 +404,8 @@ fn update_action(
     state: tauri::State<AppState>,
 ) -> Result<Action, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     actions::update_action(conn, &organization_id, &id, input)
 }
 
@@ -434,8 +416,8 @@ fn delete_action(
     state: tauri::State<AppState>,
 ) -> Result<bool, String> {
     let organization_id = get_trusted_organization_id(&app)?;
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     actions::delete_action(conn, &organization_id, &id)
 }
 
@@ -470,16 +452,6 @@ fn delete_document(
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
     documents::delete_document(conn, &id)
 }
-
-// ---------------------------------------------------------------------
-// Stage C.3 - Stage B adapters.
-//
-// Photo commands do NOT perform organization scoping, matching
-// the shared functions in Stage B.1 and the Slice 5 documents
-// precedent. Calendar and relations commands DO acquire the
-// trusted organization id via the helper, per LOCAL-TABLES.md
-// v1.3 Amendment 1. The asymmetry is intentional.
-// ---------------------------------------------------------------------
 
 #[command]
 fn set_debtor_photo(
@@ -626,15 +598,6 @@ fn delete_debtor_relation(
     relations::delete_debtor_relation(conn, &storage, &organization_id, &id)
 }
 
-// ---------------------------------------------------------------------
-// Stage C.4 - Enrollment import.
-//
-// Mirrors the Client's import_enrollment_package exactly. The
-// Agent imports an enrollment package exported by the admin's
-// Client Dashboard. Export is Client-only (spec 6.4) and is not
-// added to the Agent.
-// ---------------------------------------------------------------------
-
 #[command]
 fn import_enrollment_package(
     passphrase: String,
@@ -644,17 +607,15 @@ fn import_enrollment_package(
 ) -> Result<(), String> {
     let organization_id = get_trusted_organization_id(&app)?;
 
-    // Read the package file.
     let file = std::fs::read(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
     let organization_key = parse_enrollment_package(&file, &passphrase, &organization_id)?;
-    // Begin the transaction.
+
     let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
-    // Check for an existing key inside the transaction.
     let existing: Option<i64> = tx
         .query_row("SELECT id FROM organization_keys WHERE id = 1", [], |row| row.get(0))
         .ok();
@@ -663,7 +624,6 @@ fn import_enrollment_package(
         return Err("Sync is already enabled for this organization".to_string());
     }
 
-    // Insert the key.
     tx.execute(
         "INSERT INTO organization_keys (id, organization_id, key_material, created_at)
          VALUES (1, ?1, ?2, ?3)",
@@ -671,10 +631,8 @@ fn import_enrollment_package(
     )
     .map_err(|e| e.to_string())?;
 
-    // Commit.
     tx.commit().map_err(|e| e.to_string())?;
 
-    // Delete the package file after commit. Failure is logged, not fatal.
     if let Err(e) = std::fs::remove_file(&file_path) {
         eprintln!("Failed to delete package file: {}", e);
     }

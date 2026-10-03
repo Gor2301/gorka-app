@@ -311,7 +311,7 @@ fn v1_debtor_created_payload() {
 
 #[test]
 fn v4_entity_updated_payload() {
-    let payload = encode_entity_updated_payload(&[("deleted", "false")]);
+    let payload = encode_entity_updated_payload(&[("deleted", Some("false"))]);
 
     // Structural check: outer 0x3001.
     assert_eq!(&payload[0..2], &[0x30, 0x01], "V4: outer type");
