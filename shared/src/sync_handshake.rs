@@ -101,16 +101,6 @@ impl<'a> SeqReader<'a> {
         Ok(v)
     }
 
-    fn read_u64(&mut self) -> Result<u64, String> {
-        if self.pos + 8 > self.data.len() {
-            return Err("truncated u64".to_string());
-        }
-        let mut b = [0u8; 8];
-        b.copy_from_slice(&self.data[self.pos..self.pos + 8]);
-        self.pos += 8;
-        Ok(u64::from_be_bytes(b))
-    }
-
     fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], String> {
         if self.pos + n > self.data.len() {
             return Err("truncated byte sequence".to_string());
