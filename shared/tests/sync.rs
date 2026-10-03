@@ -339,3 +339,24 @@ fn v6_communication_logged_payload() {
     let expected = hex::decode("5001000000130000000f656e746974792d746573742d3030315002000000080000000443414c4c50030000000c000000084f5554424f554e4450040000000d00000009546573742063616c6c500500000006000000023031").expect("V6: recorded hex is not valid");
     assert_eq!(payload, expected, "V6: payload differs from recorded vector");
 }
+
+
+#[test]
+fn h_handshake_key_derivation() {
+    let organization_key = [0u8; 32];
+    let handshake_key = gorka_shared::sync::derive_handshake_key(&organization_key)
+        .expect("handshake key derivation failed");
+    assert_eq!(handshake_key.len(), 32);
+
+    // Deterministic.
+    let handshake_key2 = gorka_shared::sync::derive_handshake_key(&organization_key)
+        .expect("second derivation failed");
+    assert_eq!(handshake_key, handshake_key2);
+
+    // HKDF-SHA256 with IKM = 32 zero bytes, salt empty,
+    // info = "GORKA-MVP-HANDSHAKE-v1", output length 32.
+    // The value is printed for the record; a frozen vector may
+    // be recorded later if the implementation is confirmed.
+    let hex: String = handshake_key.iter().map(|b| format!("{:02x}", b)).collect();
+    println!("H handshake key (32 bytes): {}", hex);
+}
