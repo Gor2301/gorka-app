@@ -21,6 +21,7 @@ use gorka_shared::models::DebtorInput;
 use gorka_shared::sync_events::ensure_sync_state;
 use gorka_shared::sync_engine::{
     start_engine_connect, start_engine_listen, EngineHandle, EngineStatus,
+    DiscoveryConfig, ListenerConfig,
 };
 
 const ORG_ID: &str = "org-engine-test";
@@ -105,7 +106,11 @@ fn direct_sync_propagates_debtor() {
         ORG_ID.to_string(),
         ORG_KEY,
         device_b,
-        port,
+        ListenerConfig {
+            jwt: String::new(),
+            listen_port: port,
+            listen_address: format!("127.0.0.1:{}", port),
+        },
     )
     .expect("start engine B");
 
@@ -117,7 +122,11 @@ fn direct_sync_propagates_debtor() {
         ORG_ID.to_string(),
         ORG_KEY,
         device_a,
-        format!("127.0.0.1:{}", port),
+        DiscoveryConfig {
+            jwt: String::new(),
+            local_wire_device_id: device_a,
+            manual_override: Some(format!("127.0.0.1:{}", port)),
+        },
     );
 
     // Wait for both sides to reach Synced.
