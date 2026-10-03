@@ -110,26 +110,3 @@ pub fn logout(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-
-/// The manual peer address ("host:port") the engine will dial.
-/// Development/test mechanism for Phase 9.6; replaced by Control
-/// Plane discovery in Phase 9.6b.
-pub fn get_peer_address(app: &tauri::AppHandle) -> Result<Option<String>, String> {
-    let store = StoreBuilder::new(app, "settings.dat")
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    Ok(store.get("peer_address")
-        .and_then(|v| v.as_str().map(|s| s.to_string())))
-}
-
-pub fn set_peer_address(app: &tauri::AppHandle, address: &str) -> Result<(), String> {
-    let store = StoreBuilder::new(app, "settings.dat")
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    store.set("peer_address", Value::String(address.to_string()));
-    store.save().map_err(|e| e.to_string())?;
-
-    Ok(())
-}
