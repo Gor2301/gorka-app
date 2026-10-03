@@ -9115,3 +9115,67 @@ The documentation of Phase 9.6 through batch 6b-1. Batches 6b-2a,
 done.
 
 End of entry.
+
+
+---
+
+## Recovery Session - October 3, 2026 (Batch 6b-2a: backend relay)
+
+This entry records the decisions in Batch 6b-2a. The extraction
+log records the technical detail.
+
+### The decision
+
+Build the relay as a WebSocket service on the existing Express
+backend, with first-message authentication, an in-memory pairing
+map, and one relay_sessions row per paired connection.
+
+### Reviewer-locked clarifications
+
+Two identities, not one. wireDeviceId is the ephemeral pairing
+handle. DeviceRegistration.id is the persistent DB identity used
+only in relay_sessions.deviceAId / deviceBId. The relay resolves
+between them; it never substitutes one for the other.
+
+Pairing boundary. No relay_sessions row until two WebSockets are
+actually paired. An opener whose target is not yet connected
+waits.
+
+Relay invariants, treated as hard requirements:
+  Never inspect binary payloads.
+  Never persist payload bytes.
+  Never log JWTs or ciphertext.
+  Count bytes only after successful forward.
+  Create exactly one relay_sessions row per paired connection.
+  Canonicalize A/B by lexicographic DeviceRegistration.id.
+  Update the same row on termination.
+  Normal close -> ENDED. Transport failure -> FAILED.
+  No change to sync wire messages or session encryption.
+  No organization key and no session key ever reaches the backend.
+
+### The four questions and answers
+
+Q1. Endpoint path ws://backend/api/sync/relay. Approved,
+    consistent with the /api/sync/* namespace.
+Q2. First-message auth, not a JWT query parameter. The JWT is
+    validated immediately and then discarded. Never logged.
+Q3. device_registrations required for both peers. Ensures valid
+    FK targets and clears the is_authorized check.
+Q4. Add ws and @types/ws as dependencies.
+
+### MVP behavior note
+
+Two wire devices under the same user share one
+device_registrations row, because the schema has
+@@unique([organizationId, userId]). The relay test used one
+JWT, so deviceAId and deviceBId landed with the same value.
+In production, Client and Agent are distinct users; the ids
+differ. The relay does not need a change. The schema encodes
+the correct constraint.
+
+### What this entry closes
+
+The backend half of criterion 9. The client-side fallback
+remains: Batch 6b-2b.
+
+End of entry.

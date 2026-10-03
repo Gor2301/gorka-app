@@ -40,9 +40,8 @@ SEQUENCE
 
 &#x20;                                                    e963c4d, 0fc95ee)
 
-&#x20; Batch 6b-2a Backend relay service            NOT STARTED
-
-&#x20; Batch 6b-2b Client relay fallback            NOT STARTED
+  Batch 6b-2a Backend relay service            DONE (9b526a5)
+  Batch 6b-2b Client relay fallback            NOT STARTED
 
 &#x20; Batch 7   End-to-end acceptance              NOT STARTED
 
@@ -977,44 +976,102 @@ Verification (cloud, 2026-10-03):
 
 
 ================================================================
-
-STATE AT END OF BATCH 6B-1
-
+BATCH 6B-2A - BACKEND RELAY SERVICE
 ================================================================
 
+Commit: 9b526a5
+Files:
+  package.json                       ws, @types/ws
+  package-lock.json                  resolved
+  src/backend/relay.service.ts       NEW (336 lines)
+  src/backend/index.ts               import, httpServer, attach
 
+What was added:
+  WebSocketServer attached to the existing HTTP server at
+  ws://localhost:3000/api/sync/relay.
 
-&#x20; Main machine:  0fc95ee, clean, pushed.
+  First-message auth. The peer sends a JSON frame:
+    { type: "open", jwt, wireDeviceId, targetWireDeviceId? }
+  The JWT is verified once with JWT_SECRET and discarded.
 
-&#x20; Cloud machine: 0fc95ee, clean except test-output.txt (scratch).
+  Pairing uses an in-memory active-connections map keyed by
+  (organizationId, wireDeviceId). No relay_sessions row is
+  created until two peers are paired. If the opener's target is
+  not connected, the peer waits.
 
-&#x20; GitHub:        0fc95ee.
+  On pairing: one relay_sessions row with canonical deviceAId
+  and deviceBId by lexicographic order of DeviceRegistration.id.
+  Both peers must have an is_authorized device_registrations
+  row.
 
+  Binary frames forwarded verbatim. Bytes counted only after
+  successful forward. Nothing inspected, persisted, or logged.
 
+  On termination: endedAt, bytesTransferred, sessionStatus
+  (ENDED or FAILED), closeReason.
 
-Both binaries build. 39 tests pass. The Client and Agent can
+  The relay holds no organization key and no session key. It
+  cannot decrypt.
 
-discover each other through the Control Plane and synchronize
+  index.ts captures the http.Server returned by app.listen and
+  calls attachRelay.
 
-without a manual peer address.
+Distinction preserved (reviewer-required):
+  wireDeviceId           ephemeral pairing handle, not persisted
+  DeviceRegistration.id  persistent DB identity, the FK target
+                         in relay_sessions
+  No substitution between the two.
 
+Verification (cloud, 2026-10-03):
+  npm install on cloud. ws and @types/ws resolved.
+  Backend started with the usual inline DATABASE_URL override.
+  Two WebSocket clients, one JWT, two wire device ids.
 
+    [1] login test@example.com
+    [2] register both endpoints with /api/sync/register-endpoint
+    [3] open both WebSockets, both paired
+    [4] A -> B binary 5 bytes  (0102030405)
+    [5] B -> A binary 3 bytes  (0a141e)
+    [6] close both, ENDED
 
-Criterion 9 (relay fallback) is the only remaining unstarted
+  relay_sessions row inspected:
+    sessionStatus:     ENDED
+    bytesTransferred:  8
+    endedAt:           set
+    closeReason:       normal-close
+    deviceAId = deviceBId
 
-acceptance criterion. It is Batch 6b-2a (backend) and 6b-2b
+  Same deviceAId and deviceBId because the test logged in once
+  as one user. device_registrations has
+  @@unique([organizationId, userId]), so both wire devices
+  resolved to the same registration row. In production, Client
+  and Agent are distinct users; the ids differ. The relay does
+  not need a change. This is an MVP behavior note.
 
-(client).
+Fix during the batch: none.
 
+================================================================
+           STATE AT END OF BATCH 6B-2A
+================================================================
 
+  Main machine:  9b526a5 plus this doc commit, clean, pushed.
+  Cloud machine: 9b526a5, clean.
+  GitHub:        9b526a5 plus this doc commit.
+
+Both binaries build. 39 shared tests pass. The Client and Agent
+can discover each other through the Control Plane and
+synchronize without a manual peer address. The Control Plane
+relay accepts WebSocket connections, pairs two peers,
+forwards opaque ciphertext both directions, and records the
+session in relay_sessions.
+
+Criterion 9 (relay fallback) requires the client-side fallback
+path, which is Batch 6b-2b. The backend half is done.
 
 Batch 7 is the full ten-criterion acceptance.
-
-
 
 ================================================================
 
 END OF DOCUMENT
 
 ================================================================
-
