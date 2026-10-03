@@ -1,6 +1,6 @@
 // gorka-shared::sync_session
 //
-// Session establishment and message exchange over a TCP stream.
+// Session establishment and message exchange.
 //
 // SYNC-ARCHITECTURE.md v1.4, Section 8 and Section 22.8 through
 // 22.11. The handshake is four messages:
@@ -13,22 +13,16 @@
 //                            <-------- SESSION_ESTABLISHED
 //
 // After SESSION_ESTABLISHED, both peers hold the same session
-// key. SYNC_MESSAGE and SYNC_ACK travel over the same stream.
+// key. SYNC_MESSAGE and SYNC_ACK travel over the same transport.
 //
-// Receive side, two forms:
+// Two transports are supported, both implementing
+// SessionTransport and HandshakeTransport from sync_transport:
+//   TcpTransport    direct TCP
+//   RelayTransport  WebSocket via the Control Plane relay
+//                   (in sync_relay.rs)
 //
-//   recv_frame       blocking read, used during handshake
-//   try_recv_frame   buffered non-blocking read, used by the engine
-//
-// try_recv_frame keeps a small buffer so a partial frame that
-// arrives across a tick boundary is preserved, not discarded.
-// The two forms must not be mixed on the same Session: once the
-// engine takes over, it uses try_recv_frame exclusively.
-//
-// Nothing here is Tauri-specific. The stream is a TcpStream.
+// Nothing here is Tauri-specific.
 
-use std::io::Read;
-use std::net::TcpStream;
 use std::time::Duration;
 
 use rand::RngCore;
@@ -44,28 +38,35 @@ use crate::sync_handshake::{
     encode_handshake_confirm, parse_handshake_confirm,
     encode_session_established, parse_session_established,
 };
-use crate::sync_transport::{read_frame, write_frame, MAX_FRAME_VALUE_BYTES};
+use crate::sync_transport::{HandshakeTransport, SessionTransport};
 
 /// The MVP protocol version (SYNC-ARCHITECTURE.md Section 24.1).
 pub const PROTOCOL_VERSION: u16 = 0x0001;
 
 /// A live sync session between two peers.
 pub struct Session {
-    stream: TcpStream,
+    transport: Box<dyn SessionTransport>,
     session_key: [u8; 32],
     peer_device_id: Vec<u8>,
-    read_buffer: Vec<u8>,
 }
 
 impl Session {
     /// Initiator side of the handshake.
-    pub fn connect(
-        stream: TcpStream,
+    ///
+    /// After the handshake, the transport is switched to tick-loop
+    /// mode with the given tick interval. That is a mode
+    /// transition, not a protocol value.
+    pub fn connect<T>(
+        transport: T,
         organization_id: &str,
         organization_key: &[u8; 32],
         device_id: &[u8],
-    ) -> Result<Session, String> {
-        let mut stream = stream;
+        tick: Duration,
+    ) -> Result<Session, String>
+    where
+        T: SessionTransport + HandshakeTransport + 'static,
+    {
+        let mut transport = transport;
 
         let mut initiator_nonce = [0u8; 24];
         rand::rngs::OsRng.fill_bytes(&mut initiator_nonce);
@@ -76,9 +77,9 @@ impl Session {
             device_id: device_id.to_vec(),
             nonce: initiator_nonce,
         };
-        write_frame(&mut stream, &encode_handshake_hello(&hello))?;
+        transport.send_blocking(&encode_handshake_hello(&hello))?;
 
-        let reply_frame = read_frame(&mut stream)?;
+        let reply_frame = transport.recv_blocking()?;
         let reply = parse_handshake_reply(&reply_frame)?;
 
         if reply.protocol_version != PROTOCOL_VERSION {
@@ -116,8 +117,7 @@ impl Session {
             &reply.device_id,
             &reply.nonce,
         )?;
-        write_frame(
-            &mut stream,
+        transport.send_blocking(
             &encode_handshake_confirm(&HandshakeConfirm { proof_tag: confirm_tag }),
         )?;
 
@@ -130,25 +130,32 @@ impl Session {
             &reply.device_id,
         )?;
 
-        let est_frame = read_frame(&mut stream)?;
+        let est_frame = transport.recv_blocking()?;
         let _ = parse_session_established(&session_key, &est_frame)?;
 
+        transport.enter_tick_loop(tick)?;
+
         Ok(Session {
-            stream,
+            transport: Box::new(transport),
             session_key,
             peer_device_id: reply.device_id,
-            read_buffer: Vec::new(),
         })
     }
 
     /// Responder side of the handshake.
-    pub fn accept(
-        mut stream: TcpStream,
+    pub fn accept<T>(
+        transport: T,
         organization_id: &str,
         organization_key: &[u8; 32],
         device_id: &[u8],
-    ) -> Result<Session, String> {
-        let hello_frame = read_frame(&mut stream)?;
+        tick: Duration,
+    ) -> Result<Session, String>
+    where
+        T: SessionTransport + HandshakeTransport + 'static,
+    {
+        let mut transport = transport;
+
+        let hello_frame = transport.recv_blocking()?;
         let hello = parse_handshake_hello(&hello_frame)?;
 
         if hello.protocol_version != PROTOCOL_VERSION {
@@ -183,9 +190,9 @@ impl Session {
             nonce: responder_nonce,
             proof_tag: reply_tag,
         };
-        write_frame(&mut stream, &encode_handshake_reply(&reply))?;
+        transport.send_blocking(&encode_handshake_reply(&reply))?;
 
-        let confirm_frame = read_frame(&mut stream)?;
+        let confirm_frame = transport.recv_blocking()?;
         let confirm = parse_handshake_confirm(&confirm_frame)?;
 
         let expected_confirm_tag = compute_handshake_confirm_tag(
@@ -214,16 +221,16 @@ impl Session {
         let est = SessionEstablished { origin_sequence_hint: 0 };
         let mut est_nonce = [0u8; 24];
         rand::rngs::OsRng.fill_bytes(&mut est_nonce);
-        write_frame(
-            &mut stream,
+        transport.send_blocking(
             &encode_session_established(&session_key, &est_nonce, &est)?,
         )?;
 
+        transport.enter_tick_loop(tick)?;
+
         Ok(Session {
-            stream,
+            transport: Box::new(transport),
             session_key,
             peer_device_id: hello.device_id,
-            read_buffer: Vec::new(),
         })
     }
 
@@ -239,81 +246,15 @@ impl Session {
         &self.peer_device_id
     }
 
-    /// Set the socket read timeout. Called once after the handshake,
-    /// before entering the engine's tick loop. It is a receive-poll
-    /// property of the stream, not a protocol value.
-    pub fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<(), String> {
-        self.stream
-            .set_read_timeout(timeout)
-            .map_err(|e| format!("set read timeout: {}", e))
-    }
-
     /// Send one framed message over the session.
     pub fn send_frame(&mut self, framed_bytes: &[u8]) -> Result<(), String> {
-        write_frame(&mut self.stream, framed_bytes)
+        self.transport.send_frame(framed_bytes)
     }
 
-    /// Blocking read of one framed message. Used during handshake
-    /// and in tests. Do not mix with try_recv_frame after a read
-    /// timeout has been set.
-    pub fn recv_frame(&mut self) -> Result<Vec<u8>, String> {
-        read_frame(&mut self.stream)
-    }
-
-    /// Non-blocking read of one framed message.
-    ///
-    /// Reads whatever bytes are available, appends them to an
-    /// internal buffer, and tries to extract a complete frame. A
-    /// partial frame that arrives across a tick boundary is kept in
-    /// the buffer for the next call.
-    ///
-    /// Returns:
-    ///   Ok(Some(frame))   a complete frame was available
-    ///   Ok(None)          no complete frame yet; try again later
-    ///   Err(...)          connection closed or a real I/O error
-    ///
-    /// The read timeout must already be set on the stream; otherwise
-    /// this method blocks.
+    /// Non-blocking read of one framed message. Delegates to the
+    /// transport. Returns Ok(None) if no complete frame is
+    /// available yet.
     pub fn try_recv_frame(&mut self) -> Result<Option<Vec<u8>>, String> {
-        loop {
-            // Try to parse a complete frame from the buffer.
-            if self.read_buffer.len() >= 6 {
-                let value_len = u32::from_be_bytes([
-                    self.read_buffer[2],
-                    self.read_buffer[3],
-                    self.read_buffer[4],
-                    self.read_buffer[5],
-                ]) as usize;
-                if value_len > MAX_FRAME_VALUE_BYTES {
-                    return Err(format!(
-                        "frame value too large: {} bytes (max {})",
-                        value_len, MAX_FRAME_VALUE_BYTES
-                    ));
-                }
-                let total = 6 + value_len;
-                if self.read_buffer.len() >= total {
-                    let frame = self.read_buffer[..total].to_vec();
-                    self.read_buffer.drain(..total);
-                    return Ok(Some(frame));
-                }
-            }
-
-            // Need more bytes.
-            let mut chunk = [0u8; 8192];
-            match self.stream.read(&mut chunk) {
-                Ok(0) => return Err("peer closed the connection".to_string()),
-                Ok(n) => {
-                    self.read_buffer.extend_from_slice(&chunk[..n]);
-                    // Loop again to try parsing with the new bytes.
-                }
-                Err(e)
-                    if e.kind() == std::io::ErrorKind::WouldBlock
-                        || e.kind() == std::io::ErrorKind::TimedOut =>
-                {
-                    return Ok(None);
-                }
-                Err(e) => return Err(format!("read: {}", e)),
-            }
-        }
+        self.transport.try_recv_frame()
     }
 }

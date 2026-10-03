@@ -7,6 +7,7 @@
 
 use std::net::{TcpListener, TcpStream};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use gorka_shared::db::open_in_memory_for_tests;
 use gorka_shared::sync::{
@@ -17,11 +18,25 @@ use gorka_shared::sync::{
 use gorka_shared::sync_handshake::AckOutcome;
 use gorka_shared::sync_pipeline::process_sync_message;
 use gorka_shared::sync_session::Session;
+use gorka_shared::sync_transport::TcpTransport;
 
 const ORG_ID: &str = "org-test-A";
 const ORG_KEY: [u8; 32] = [0u8; 32];
 const DEVICE_INITIATOR: &[u8] = b"device-A-16bytes";
 const DEVICE_RESPONDER: &[u8] = b"device-B-16bytes";
+const TICK: Duration = Duration::from_millis(100);
+
+fn poll_frame(session: &mut Session, deadline: Duration) -> Option<Vec<u8>> {
+    let start = Instant::now();
+    while start.elapsed() < deadline {
+        match session.try_recv_frame() {
+            Ok(Some(f)) => return Some(f),
+            Ok(None) => thread::sleep(Duration::from_millis(50)),
+            Err(_) => return None,
+        }
+    }
+    None
+}
 
 #[test]
 fn full_handshake_and_one_message_each_way() {
@@ -31,17 +46,19 @@ fn full_handshake_and_one_message_each_way() {
     // Responder thread.
     let responder = thread::spawn(move || {
         let (stream, _) = listener.accept().expect("accept");
+        let transport = TcpTransport::new(stream);
         let mut session = Session::accept(
-            stream,
+            transport,
             ORG_ID,
             &ORG_KEY,
             DEVICE_RESPONDER,
+            TICK,
         )
         .expect("accept handshake");
 
-        // Responder receives one SYNC_MESSAGE.
-        let frame = session.recv_frame().expect("recv");
-        // Responder's session key is the same as the initiator's.
+        // Responder waits for one SYNC_MESSAGE.
+        let frame = poll_frame(&mut session, Duration::from_secs(5))
+            .expect("no frame received within deadline");
         let key = *session.session_key();
         let mut conn = open_in_memory_for_tests().expect("db");
         let result = process_sync_message(&mut conn, ORG_ID, &key, &frame)
@@ -52,11 +69,13 @@ fn full_handshake_and_one_message_each_way() {
 
     // Initiator.
     let stream = TcpStream::connect(addr).expect("connect");
+    let transport = TcpTransport::new(stream);
     let mut session = Session::connect(
-        stream,
+        transport,
         ORG_ID,
         &ORG_KEY,
         DEVICE_INITIATOR,
+        TICK,
     )
     .expect("connect handshake");
 
@@ -97,22 +116,31 @@ fn wrong_organization_key_fails_handshake() {
         // A read timeout prevents this thread from blocking forever
         // when the initiator aborts after rejecting the bad REPLY.
         stream
-            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .set_read_timeout(Some(Duration::from_secs(5)))
             .expect("set read timeout");
+        let transport = TcpTransport::new(stream);
         // Responder uses a different org key.
         let wrong_key = [0xFFu8; 32];
-        let result = Session::accept(stream, ORG_ID, &wrong_key, DEVICE_RESPONDER);
+        let result = Session::accept(
+            transport,
+            ORG_ID,
+            &wrong_key,
+            DEVICE_RESPONDER,
+            TICK,
+        );
         // Either accept fails, or the initiator rejects the reply.
         // Either way the responder does not complete a full session.
         let _ = result;
     });
 
     let stream = TcpStream::connect(addr).expect("connect");
+    let transport = TcpTransport::new(stream);
     let initiator_result = Session::connect(
-        stream,
+        transport,
         ORG_ID,
         &ORG_KEY,
         DEVICE_INITIATOR,
+        TICK,
     );
     // The initiator must fail: the REPLY proof tag uses the wrong key.
     assert!(initiator_result.is_err(), "expected handshake failure");

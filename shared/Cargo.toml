@@ -22,3 +22,4 @@ chrono = "0.4"
 hex = "0.4"
 rand = "0.8"
 rand_core = "0.6"
+tungstenite = { version = "0.21", default-features = false, features = ["handshake"] }

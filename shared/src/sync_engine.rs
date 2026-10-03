@@ -8,8 +8,7 @@
 //
 //   OUTER LOOP (session lifecycle)
 //     connect or listen
-//     handshake
-//     set stream read timeout (once)
+//     handshake (transport switches itself into tick mode)
 //     INNER SESSION LOOP
 //     close session
 //     exponential backoff
@@ -46,6 +45,7 @@ use crate::sync_handshake::{
 use crate::sync_pipeline::process_sync_message;
 use crate::sync_discovery;
 use crate::sync_session::Session;
+use crate::sync_transport::TcpTransport;
 
 // ---------------------------------------------------------------
 // Constants
@@ -139,9 +139,14 @@ impl Drop for EngineHandle {
 pub struct DiscoveryConfig {
     /// User's JWT, from settings.dat.
     pub jwt: String,
-    /// This device's wire device_id, 16 bytes. Used by the Control
-    /// Plane to exclude the caller from its own peer list.
+    /// This device's wire device_id, 16 bytes.
     pub local_wire_device_id: [u8; 16],
+    /// This device's wire device_id as a hex string, for the
+    /// relay's WebSocket open frame.
+    pub local_wire_device_id_hex: String,
+    /// Control Plane base URL, e.g. "http://localhost:3000".
+    /// Used to derive the relay WebSocket URL.
+    pub backend_base_url: String,
     /// Development/test override. If Some, the engine dials this
     /// address directly and skips discovery. Not the normal MVP
     /// path.
@@ -303,18 +308,6 @@ fn run_engine(
             }
         };
 
-        // Set the read timeout once, before entering the tick loop.
-        if let Err(e) =
-            session.set_read_timeout(Some(Duration::from_millis(SYNC_ENGINE_TICK_MS)))
-        {
-            set_status(&status, EngineStatus::Error(e));
-            if interruptible_sleep(&stop, backoff_ms) {
-                break;
-            }
-            backoff_ms = (backoff_ms * 2).min(SYNC_ENGINE_BACKOFF_MAX_MS);
-            continue;
-        }
-
         // Successful session. Reset backoff.
         backoff_ms = SYNC_ENGINE_BACKOFF_INITIAL_MS;
 
@@ -350,6 +343,36 @@ fn run_engine(
 // Session establishment
 // ---------------------------------------------------------------
 
+/// Open a direct TCP session with a bounded connect timeout.
+/// Used as the first attempt before falling back to the relay.
+fn try_tcp_session(
+    address: &str,
+    organization_id: &str,
+    organization_key: &[u8; 32],
+    device_id: &[u8; 16],
+) -> Result<Session, String> {
+    // A 5-second connect timeout gives deterministic fallback
+    // without introducing parallel races.
+    use std::net::ToSocketAddrs;
+    let mut addrs = address
+        .to_socket_addrs()
+        .map_err(|e| format!("resolve {}: {}", address, e))?;
+    let addr = addrs
+        .next()
+        .ok_or_else(|| format!("no addresses for {}", address))?;
+
+    let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5))
+        .map_err(|e| format!("connect {}: {}", address, e))?;
+    let transport = TcpTransport::new(stream);
+    Session::connect(
+        transport,
+        organization_id,
+        organization_key,
+        device_id,
+        Duration::from_millis(SYNC_ENGINE_TICK_MS),
+    )
+}
+
 fn establish_session(
     mode: &mut PeerMode,
     organization_id: &str,
@@ -382,15 +405,70 @@ fn establish_session(
                 return Ok(None);
             }
 
-            let stream = TcpStream::connect(address.as_str())
-                .map_err(|e| format!("connect {}: {}", address, e))?;
-            let session = Session::connect(
-                stream,
+            // Try direct TCP first, with a short connect timeout.
+            // If the TCP path fails, fall back to the WebSocket
+            // relay. TCP first, relay second. No parallel race.
+            let tcp_result = try_tcp_session(
+                &address,
                 organization_id,
                 organization_key,
                 device_id,
-            )?;
-            Ok(Some(session))
+            );
+
+            match tcp_result {
+                Ok(session) => return Ok(Some(session)),
+                Err(tcp_err) => {
+                    // Fall back to the relay. The peer must have
+                    // been discovered through the Control Plane, so
+                    // we know its wire device_id.
+                    let target_wire_device_id_hex = match &config.manual_override {
+                        Some(_) => {
+                            // Manual override skips discovery. The
+                            // relay needs a target id we do not have.
+                            return Err(format!(
+                                "TCP connect failed and manual override path cannot fall back to relay: {}",
+                                tcp_err
+                            ));
+                        }
+                        None => {
+                            match sync_discovery::discover_peer(
+                                &config.jwt,
+                                &config.local_wire_device_id,
+                            ) {
+                                Ok(Some(p)) => p.wire_device_id_hex,
+                                Ok(None) => {
+                                    return Err(format!(
+                                        "TCP failed, and no peer discoverable for relay: {}",
+                                        tcp_err
+                                    ));
+                                }
+                                Err(e) => {
+                                    return Err(format!(
+                                        "TCP failed, and discovery failed for relay: {}: {}",
+                                        tcp_err, e
+                                    ));
+                                }
+                            }
+                        }
+                    };
+
+                    let relay_transport = crate::sync_relay::RelayTransport::connect(
+                        &config.backend_base_url,
+                        &config.jwt,
+                        &config.local_wire_device_id_hex,
+                        &target_wire_device_id_hex,
+                    )?;
+
+                    let session = Session::connect(
+                        relay_transport,
+                        organization_id,
+                        organization_key,
+                        device_id,
+                        Duration::from_millis(SYNC_ENGINE_TICK_MS),
+                    )?;
+                    Ok(Some(session))
+                }
+            }
         }
 
         PeerMode::Listen(listener, jwt, listen_address) => {
@@ -427,11 +505,13 @@ fn establish_session(
                         stream
                             .set_nonblocking(false)
                             .map_err(|e| format!("set_nonblocking(false): {}", e))?;
+                        let transport = TcpTransport::new(stream);
                         let session = Session::accept(
-                            stream,
+                            transport,
                             organization_id,
                             organization_key,
                             device_id,
+                            Duration::from_millis(SYNC_ENGINE_TICK_MS),
                         )?;
                         return Ok(Some(session));
                     }

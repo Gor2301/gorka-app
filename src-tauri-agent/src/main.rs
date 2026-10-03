@@ -665,9 +665,15 @@ fn start_sync_engine(
         .try_into()
         .map_err(|_| "Organization key has wrong length".to_string())?;
 
+    let local_wire_device_id_hex = hex::encode(device_id);
+    let backend_base_url =
+        gorka_shared::sync_discovery::CONTROL_PLANE_BASE_URL.to_string();
+
     let discovery = DiscoveryConfig {
         jwt,
         local_wire_device_id: device_id,
+        local_wire_device_id_hex,
+        backend_base_url,
         manual_override: manual_override.filter(|s| !s.trim().is_empty()),
     };
 

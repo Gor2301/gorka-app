@@ -27,6 +27,7 @@ pub mod sync_discovery;
 pub mod sync_handshake;
 pub mod sync_parse;
 pub mod sync_pipeline;
+pub mod sync_relay;
 pub mod sync_session;
 pub mod sync_transport;
 
