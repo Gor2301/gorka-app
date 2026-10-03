@@ -32,7 +32,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use rand::RngCore;
 use rusqlite::{params, Connection};
@@ -299,7 +299,7 @@ fn establish_session(
 ) -> Result<Option<Session>, String> {
     match mode {
         PeerMode::Connect(address) => {
-            let stream = TcpStream::connect(address)
+            let stream = TcpStream::connect(address.as_str())
                 .map_err(|e| format!("connect {}: {}", address, e))?;
             // Note: connect is blocking. If the engine is stopped
             // while waiting, the connect either completes or fails;
