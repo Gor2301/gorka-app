@@ -189,6 +189,7 @@ pub fn insert_debt(
         sync_events::ENTITY_DEBTOR,
         &input.debtor_id,
         &payload,
+        &["data_json"],
     )?;
 
     db::log_audit(&tx, "INSERT_DEBT", Some(&input.debtor_id), 1, "Inserted debt")?;
@@ -262,6 +263,7 @@ pub fn update_debt(
         sync_events::ENTITY_DEBTOR,
         &owner_debtor_id,
         &payload,
+        &["data_json"],
     )?;
 
     db::log_audit(&tx, "UPDATE_DEBT", Some(&owner_debtor_id), 1, "Updated debt")?;
@@ -322,6 +324,7 @@ pub fn delete_debt(
         sync_events::ENTITY_DEBTOR,
         &owner_debtor_id,
         &payload,
+        &["data_json"],
     )?;
 
     db::log_audit(&tx, "DELETE_DEBT", Some(&owner_debtor_id), 1, "Deleted debt")?;

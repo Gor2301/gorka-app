@@ -142,6 +142,7 @@ pub fn insert_communication(
         sync_events::ENTITY_COMMUNICATION,
         &id,
         &payload,
+        &["debtor_id", "communication_type", "direction", "content", "duration"],
     )?;
 
     db::log_audit(&tx, "INSERT_COMM", Some(&input.debtor_id), 1, "Inserted communication")?;
@@ -199,6 +200,7 @@ pub fn delete_communication(
         sync_events::ENTITY_COMMUNICATION,
         id,
         &payload,
+        &["deleted"],
     )?;
 
     db::log_audit(&tx, "DELETE_COMM", Some(&owner_debtor_id), 1, "Deleted communication (soft delete)")?;

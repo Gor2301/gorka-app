@@ -115,8 +115,8 @@ pub fn insert_action(
         sync_events::ENTITY_ACTION,
         &id,
         &payload,
+        &["debtor_id", "action_type", "status", "assigned_to", "due_date", "description", "data_json"],
     )?;
-
     db::log_audit(&tx, "INSERT_ACTION", Some(&input.debtor_id), 1, "Inserted action")?;
 
     tx.commit().map_err(|e| e.to_string())?;
@@ -193,6 +193,7 @@ pub fn update_action(
         sync_events::ENTITY_ACTION,
         id,
         &payload,
+        &["action_type", "status", "assigned_to", "due_date", "description", "data_json"],
     )?;
 
     db::log_audit(&tx, "UPDATE_ACTION", Some(&owner_debtor_id), 1, "Updated action")?;
@@ -252,8 +253,8 @@ pub fn delete_action(
         sync_events::ENTITY_ACTION,
         id,
         &payload,
+        &["deleted"],
     )?;
-
     db::log_audit(&tx, "DELETE_ACTION", Some(&owner_debtor_id), 1, "Deleted action (soft delete)")?;
 
     tx.commit().map_err(|e| e.to_string())?;

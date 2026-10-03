@@ -129,8 +129,8 @@ pub fn insert_debtor(
         sync_events::ENTITY_DEBTOR,
         &id,
         &payload,
+        &["name", "surname", "email", "phone", "data_json"],
     )?;
-
     db::log_audit(&tx, "INSERT", Some(&id), 1, "Inserted debtor")?;
 
     tx.commit().map_err(|e| e.to_string())?;
@@ -190,9 +190,10 @@ pub fn bulk_insert_debtors(
             organization_id,
             sync_events::EVENT_DEBTOR_CREATED,
             sync_events::ENTITY_DEBTOR,
-            &id,
+            id,
             &payload,
-        )?;
+            &["name", "surname", "email", "phone", "data_json"],
+       )?;
 
         inserted.push(Debtor {
             id,
@@ -261,6 +262,7 @@ pub fn update_debtor(
         sync_events::ENTITY_DEBTOR,
         id,
         &payload,
+        &["name", "surname", "email", "phone", "data_json"],
     )?;
 
     db::log_audit(&tx, "UPDATE", Some(id), 1, "Updated debtor")?;
@@ -308,6 +310,7 @@ pub fn delete_debtor(
         sync_events::ENTITY_DEBTOR,
         id,
         &payload,
+        &["deleted"],
     )?;
 
     db::log_audit(&tx, "DELETE", Some(id), 1, "Deleted debtor (soft delete)")?;
@@ -598,6 +601,7 @@ pub fn insert_related_debtor(
         sync_events::ENTITY_DEBTOR,
         &id,
         &payload,
+        &["name", "surname", "email", "phone", "data_json"],
     )?;
 
     db::log_audit(&tx, "INSERT_RELATED_DEBTOR", Some(&id), 1, "Inserted related debtor")?;

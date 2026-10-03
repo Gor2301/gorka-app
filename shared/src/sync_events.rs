@@ -4,12 +4,15 @@
 //
 // Every state mutation in gorka-shared opens a transaction,
 // applies the state change, and calls originate_event to append
-// the corresponding sync_events row. The state change and the
-// event commit or roll back together (SYNC-ARCHITECTURE.md
-// Section 25.4.1).
+// the corresponding sync_events row and update
+// entity_field_state. The state change and the event commit or
+// roll back together (SYNC-ARCHITECTURE.md Section 25.4.1).
 //
-// The primitives in gorka-shared::sync build the payload bytes.
-// This module wraps them and writes the row.
+// At origination time, the new event is always the winner for
+// the fields it sets. This device's logical clock is strictly
+// greater than any previously-accepted peer event (Section 12.3,
+// Rule 2). The comparison algorithm of Section 25.9.9 is
+// exercised by the receiving pipeline, not here.
 
 use rusqlite::{params, Transaction};
 use uuid::Uuid;
@@ -50,7 +53,6 @@ pub fn ensure_sync_state(
             out.copy_from_slice(&bytes);
             return Ok(out);
         }
-        // Malformed row: replace it.
         tx.execute("DELETE FROM sync_state", [])
             .map_err(|e| e.to_string())?;
     }
@@ -71,8 +73,12 @@ pub fn ensure_sync_state(
 /// Originate one event.
 ///
 /// Allocates the next sequence number and logical clock value,
-/// writes the sync_events row, and advances the counters in
-/// sync_state. Returns the event_id (36-char UUIDv7 string).
+/// writes the sync_events row, records this event as the current
+/// winner in entity_field_state for each field it sets, and
+/// advances the counters in sync_state.
+///
+/// `fields_set` is the list of wire field names this event sets.
+/// Same names the payload carries.
 ///
 /// Must be called inside an open transaction. The caller commits
 /// after this returns and after the state write is complete.
@@ -83,6 +89,7 @@ pub fn originate_event(
     entity_type: &str,
     entity_id: &str,
     payload: &[u8],
+    fields_set: &[&str],
 ) -> Result<String, String> {
     let device_id = ensure_sync_state(tx, organization_id)?;
 
@@ -124,6 +131,32 @@ pub fn originate_event(
             &now,
         ],
     ).map_err(|e| e.to_string())?;
+
+    for field_name in fields_set {
+        tx.execute(
+            "INSERT INTO entity_field_state (
+                entity_type, entity_id, field_name,
+                winning_event_id, winning_logical_clock, winning_device_id,
+                winning_sequence, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(entity_type, entity_id, field_name) DO UPDATE SET
+                winning_event_id = excluded.winning_event_id,
+                winning_logical_clock = excluded.winning_logical_clock,
+                winning_device_id = excluded.winning_device_id,
+                winning_sequence = excluded.winning_sequence,
+                updated_at = excluded.updated_at",
+            params![
+                entity_type,
+                entity_id,
+                field_name,
+                &event_id,
+                next_clock,
+                &device_id[..],
+                next_seq,
+                &now,
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
 
     Ok(event_id)
 }
