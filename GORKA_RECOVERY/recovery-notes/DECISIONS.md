@@ -8617,3 +8617,309 @@ spec sequencing decision, and the phase closure.
 No frozen document amended.
 
 End of entry.
+
+
+## Recovery Session - October 3, 2026 (GORKA-SUPPORT-SPEC v1.0.1 frozen)
+
+This entry records the freeze of GORKA-SUPPORT-SPEC.md
+v1.0.1 and the opening of a separate future workstream
+(internal chat between admin and agents). Support is a
+Control Plane feature; nothing here amends the sync
+architecture or the local-first model.
+
+### The support specification
+
+Location:
+GORKA_RECOVERY/recovery-notes/GORKA-SUPPORT-SPEC.md
+
+Version: 1.0.1. Status: FROZEN. Two parts, twenty
+sections, one document.
+
+The specification went through three review passes
+before freeze:
+
+  v0.1 draft. First complete write.
+  v0.2 (Pass 1). Contradiction and clarity fixes
+    from an external review.
+  v1.0 (Pass 2). API contract expansion.
+  v1.0.1. Five specification-level corrections from
+    a final external review, applied inline.
+
+The five v1.0.1 corrections:
+
+  1. Section 6.1: escalation now explicitly sets the
+     Owner as assignee (was contradicting Section 9.2).
+  2. Section 17.1: tenant isolation now distinguishes
+     CLIENT / SUPPORT_AGENT / OWNER scope (was
+     contradicting the helper capability in Section 3.3).
+  3. Section 15.12: assignment validation now enforces
+     queue compatibility (OWNER queue -> Owner only;
+     STAFF queue -> Owner or helper).
+  4. Section 14.3: duplicate-subject window (one hour)
+     and 409 vs 429 semantics made explicit.
+  5. Section 15.5: RESOLVED event emission made
+     explicit alongside STATUS_CHANGED.
+
+None of the five was architectural. All were
+determinism fixes. No decision was reopened.
+
+### What the spec settles (summary)
+
+  - Two parties: GORKA side (Owner plus helpers) and
+    Client side (agency admin). The Agent role is
+    excluded from support entirely.
+  - Two surfaces: Owner Dashboard (web, part of
+    gorka.click) and Client Dashboard (Tauri).
+  - One capability: SUPPORT_AGENT, held by GORKA
+    Support Helpers in the GORKA Support internal
+    organization.
+  - One immutable queue per ticket, set at creation
+    from category: OWNER or STAFF.
+  - Assignment is separate from routing; escalation
+    (Client -> Owner) does not move the queue.
+  - Five-state lifecycle with no auto-reopen.
+  - Control Plane only. No local Tauri tables. No
+    sync events. No support data in the local-first
+    plane.
+  - In-app notifications only in v1.
+  - Simplified PII model: warning, organizational
+    acknowledgment, pattern-based rejection with
+    metadata-only rejection logging.
+  - Simplified rate limiting: three limits, per user,
+    configurable by the Owner, counters in the cloud
+    database.
+
+### Why the design collapsed to two parties
+
+The original review of the old Support System Spec
+v2.3 assumed three or four participating roles. The
+decision to remove the Agent role from support was a
+scaling decision.
+
+GORKA support load should be proportional to the
+number of client admins, not the number of agents. A
+10-client platform with 1,000 total agents presents
+GORKA with 10 support counterparties, not 1,000. The
+admin is the filter, both downward and upward.
+
+The cost, accepted: an agent whose app crashes has no
+direct line to GORKA. He waits for his admin. In
+practice, an agency large enough to have many agents
+also has enough admin coverage. If a client ever asks
+for direct agent access, the spec names it as a
+funded-phase per-organization setting.
+
+### Implementation is parked
+
+The specification is frozen. It is not implemented.
+It is not on the critical path. Phase 9.6 (sync
+engine) is next.
+
+Support enters implementation when a phase is opened
+for it, likely after Phase 9.7. At that point:
+
+  - Phase 1: rewrite support.routes.ts against the
+    current backend conventions. Apply the schema
+    changes. Verify with curl.
+  - Phase 2: Owner Dashboard support page.
+  - Phase 3: Client Dashboard support page.
+  - Phase 4: in-app notifications.
+  - Phase 5: first helper activation (create the
+    GORKA Support organization, grant SUPPORT_AGENT).
+
+The full phase detail is in Section 19 of the spec.
+
+---
+
+## Internal Chat between Admin and Agents - future workstream
+
+This entry records a separate future workstream that
+emerged during the support spec work. It is not part
+of the support system and is not part of this phase.
+It is recorded here so the analysis is not lost.
+
+### Why the topic appeared
+
+While settling the support spec, the founder raised a
+scaling concern: if every agent can reach GORKA
+support directly, GORKA support becomes unusable at
+moderate scale. Agents are numerous, requests are
+short, many are low quality, and the volume scales
+with the number of users, not the number of clients.
+
+The resolution for support was: agents do not reach
+GORKA directly. The admin is the filter.
+
+But that leaves a gap: an agent who needs help from
+his admin needs a channel. And the admin needs a way
+to inform his team about operational matters ("Twilio
+is slow today, keep in mind").
+
+That channel is not support.
+
+### What the workstream is
+
+A client-side internal communication feature, scoped
+to a single client organization. Working names:
+"Team Notices", "Agency Announcements", "Internal
+Chat", "Team Chat". The name is not final. Whatever
+name is chosen, it is one workstream, not four.
+
+The feature is:
+
+  - A way for the admin to broadcast notices to his
+    agents.
+  - A way for agents to reach their admin for matters
+    that are not GORKA support issues.
+  - Later, possibly direct messages, group threads,
+    read receipts.
+
+### What the feature is NOT
+
+  - It is not a support ticket. GORKA never sees the
+    content.
+  - It is not routed. It has no queue. It has no
+    category. It has no priority.
+  - It is not counted in support stats.
+  - It is not stored in any support table.
+  - It is not visible to GORKA in any form.
+  - It does not travel through the sync engine. It is
+    a Control Plane feature of the client's own
+    organization, living entirely inside the client's
+    tenant.
+
+### What we already know about how it should work
+
+Surfaces:
+
+  - Client Dashboard (admin side).
+  - Agent Dashboard (agent side).
+
+Scope:
+
+  - Same organization only.
+  - The admin and his agents.
+  - No cross-organization messaging.
+  - No GORKA participation.
+
+Initial shape (MVP version, when it is built):
+
+  - Admin -> all agents: a single broadcast message.
+    This is the primary use case the founder named.
+  - Agent -> admin: a direct message to the admin.
+
+Funded-phase shape (later):
+
+  - Direct messages between any two members of the
+    same organization.
+  - Group threads.
+  - Read receipts.
+  - Possibly message editing, deletion, reply-in-thread.
+
+Data model (proposed, to be specified):
+
+  A small messages table, roughly:
+    id, organization_id, sender_user_id,
+    recipient_user_id (nullable for broadcasts),
+    content, created_at, read_at.
+  Own table. Own migrations. Own lifecycle.
+  Nothing shared with support tables.
+
+Notifications:
+
+  The internal chat likely reuses the notification
+  infrastructure (the notifications table), but this
+  is TBD. It may need its own parallel notification
+  scope, or its own table. To be decided when the
+  workstream is opened.
+
+PII:
+
+  The same PII model that applies to support should
+  apply to internal chat. This is not support, but
+  it is still Control Plane data, and the boundary
+  is the same: no debtor-derived plaintext. The
+  warning and pattern-rejection model from the
+  support spec is a candidate to reuse. To be
+  confirmed when the workstream is opened.
+
+Own specification:
+
+  When this workstream is opened, it gets its own
+  spec: INTERNAL-CHAT-SPEC.md or TEAM-NOTICES-SPEC.md
+  (name TBD). It is not appended to the support
+  spec. It does not share tables with support. It
+  does not share lifecycle rules with support.
+
+### Why it is a separate workstream
+
+Three reasons.
+
+  1. Different audience. Support is GORKA-to-client.
+     Internal chat is admin-to-agent within one
+     organization. GORKA is not a participant.
+
+  2. Different lifecycle. Support has queues, status,
+     assignment, escalation. Internal chat is a
+     message. No queue, no status, no assignment.
+
+  3. Different privacy model. Support is designed to
+     allow GORKA to read the content (with PII
+     protection). Internal chat is designed so that
+     GORKA never reads the content, at all. These are
+     opposite privacy postures. They should not share
+     a table.
+
+### What to do when we implement it
+
+When the workstream is opened, the first step is to
+re-read this DECISIONS entry and confirm the scope
+above. Then:
+
+  1. Write the spec (own document, own structure).
+  2. Apply the schema (own table, own migrations).
+  3. Build the UI in both dashboards.
+  4. Decide whether to reuse the notifications table
+     or create a parallel one.
+  5. Confirm the PII model to apply (reuse support's
+     or write its own).
+
+### What was NOT decided
+
+  - Exact feature name. Working names listed above.
+  - Whether notifications are shared or separate.
+  - Whether PII pattern detection applies at write
+    time to internal chat, or is deferred.
+  - Whether funded-phase features (group threads,
+    read receipts, editing) are in v1.
+  - Whether the feature is a single chat room per
+    organization or a list of broadcasts.
+
+  All of these are decisions for the future spec,
+  not this entry. This entry exists so the reasoning
+  is preserved.
+
+### Rule compliance for this session
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held.
+  - No frozen document amended. Support is a new
+    document, not an amendment to any existing
+    document. The sync architecture, the local
+    tables, and the multi-user model are untouched.
+  - The support spec is frozen but not implemented.
+    Implementation is parked until a phase is opened
+    for it.
+
+================================================================
+END OF SESSION ENTRY
+================================================================
+
+This entry records the freeze of GORKA-SUPPORT-SPEC.md
+v1.0.1 and the opening of the internal chat future
+workstream. No architecture reopened. No frozen
+document amended.
+
+End of entry.
