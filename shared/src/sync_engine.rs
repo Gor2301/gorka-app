@@ -74,6 +74,13 @@ pub const SYNC_ENGINE_HEARTBEAT_MS: u64 = 15_000;
 /// milliseconds.
 pub const SYNC_ENGINE_DISCOVERY_POLL_MS: u64 = 2_000;
 
+/// TEMPORARY: Batch 7 acceptance test hooks.
+/// Both are reset after one use. Removed in the revert commit.
+pub static TEST_CORRUPT_NEXT_FRAME: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+pub static TEST_REVERSE_NEXT_BATCH: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 // ---------------------------------------------------------------
 // Status
 // ---------------------------------------------------------------
@@ -622,20 +629,36 @@ fn run_session(
         }
 
         // 1. Compose and send undelivered events, if any.
-        let undelivered = compute_undelivered(
+        let mut undelivered = compute_undelivered(
             connection,
             local_device_id,
             &peer_device_id,
         )?;
+        // TEMPORARY: Batch 7 acceptance test hook.
+        if TEST_REVERSE_NEXT_BATCH.swap(
+            false,
+            std::sync::atomic::Ordering::SeqCst,
+        ) {
+            undelivered.reverse();
+        }
         if !undelivered.is_empty() {
             let nonce = random_nonce();
             let message_id = random_event_id();
-            let framed = build_sync_message(
+            let mut framed = build_sync_message(
                 &session_key,
                 &nonce,
                 &message_id,
                 &undelivered,
             )?;
+            // TEMPORARY: Batch 7 acceptance test hook.
+            if TEST_CORRUPT_NEXT_FRAME.swap(
+                false,
+                std::sync::atomic::Ordering::SeqCst,
+            ) {
+                if let Some(b) = framed.last_mut() {
+                    *b ^= 0xFF;
+                }
+            }
             session.send_frame(&framed)?;
         }
 
