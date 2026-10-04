@@ -655,10 +655,20 @@ fn run_session(
                 false,
                 std::sync::atomic::Ordering::SeqCst,
             ) {
+                eprintln!(
+                    "B7-PROBE: CORRUPTING outbound frame len={} events={}",
+                    framed.len(),
+                    undelivered.len()
+                );
                 if let Some(b) = framed.last_mut() {
                     *b ^= 0xFF;
                 }
             }
+            eprintln!(
+                "B7-PROBE: sending frame len={} events={}",
+                framed.len(),
+                undelivered.len()
+            );
             session.send_frame(&framed)?;
         }
 
