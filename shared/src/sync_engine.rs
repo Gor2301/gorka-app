@@ -719,6 +719,9 @@ fn handle_incoming(
         return Err("frame too short for message type".to_string());
     }
     let msg_type = u16::from_be_bytes([frame[0], frame[1]]);
+    if msg_type == MSG_SYNC_MESSAGE {
+        eprintln!("B7-PROBE: received SYNC_MESSAGE len={}", frame.len());
+    }
     match msg_type {
         MSG_SYNC_MESSAGE => {
             let result = process_sync_message(

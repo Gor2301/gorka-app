@@ -436,6 +436,10 @@ pub fn parse_sync_message(
     session_key: &[u8; 32],
     framed_message: &[u8],
 ) -> Result<Vec<u8>, String> {
+    eprintln!(
+        "B7-PROBE: parse_sync_message entered len={}",
+        framed_message.len()
+    );
     if framed_message.len() < 6 + 24 + 16 {
         return Err("SYNC_MESSAGE too short".to_string());
     }
@@ -466,7 +470,13 @@ pub fn parse_sync_message(
                 aad: outer_header,
             },
         )
-        .map_err(|_| "SYNC_MESSAGE: decryption failed".to_string())?;
+        .map_err(|_| {
+            eprintln!(
+                "B7-PROBE: AEAD FAILURE len={}",
+                framed_message.len()
+            );
+            "SYNC_MESSAGE: decryption failed".to_string()
+        })?;
 
     Ok(plaintext)
 }
