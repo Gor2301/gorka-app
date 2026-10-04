@@ -126,6 +126,10 @@ impl EngineHandle {
 
     /// Current status. Cheap; just a mutex read.
     pub fn status(&self) -> EngineStatus {
+        eprintln!(
+            "B7-PROBE: EngineHandle::status reading Arc {:p}",
+            std::sync::Arc::as_ptr(&self.status)
+        );
         self.status.lock().map(|g| g.clone()).unwrap_or(EngineStatus::Error(
             "status lock poisoned".to_string(),
         ))
@@ -1100,8 +1104,15 @@ fn read_local_device_id(connection: &Connection) -> Result<[u8; 16], String> {
 }
 
 fn set_status(status: &Arc<Mutex<EngineStatus>>, s: EngineStatus) {
+    eprintln!(
+        "B7-PROBE: set_status -> {:?} @ {:p}",
+        s,
+        Arc::as_ptr(status)
+    );
     if let Ok(mut g) = status.lock() {
         *g = s;
+    } else {
+        eprintln!("B7-PROBE: set_status LOCK FAILED");
     }
 }
 
