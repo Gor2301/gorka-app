@@ -113,51 +113,6 @@ fn is_enrolled(state: tauri::State<AppState>) -> Result<bool, String> {
     db::is_enrolled(conn)
 }
 
-// TEMPORARY: Batch 7 acceptance test hooks. Removed in the
-// revert commit after the acceptance test.
-
-/// Delete every sync_delivery row for this device's own origin.
-/// Forces the engine to re-send all locally-originated events to
-/// every peer on the next tick. Used to exercise criterion 6.
-#[command]
-fn test_force_resend_own_events(
-    state: tauri::State<AppState>,
-) -> Result<usize, String> {
-    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
-    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
-    let local_device_id: Vec<u8> = conn
-        .query_row(
-            "SELECT device_id FROM sync_state LIMIT 1",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|e| format!("read local device_id: {}", e))?;
-    let affected = conn
-        .execute(
-            "DELETE FROM sync_delivery
-             WHERE local_device_id = ?1 AND origin_device_id = ?1",
-            params![&local_device_id],
-        )
-        .map_err(|e| e.to_string())?;
-    Ok(affected)
-}
-
-/// Flip one byte of the next outbound SYNC_MESSAGE frame,
-/// corrupting the AEAD tag. Used to exercise criterion 10.
-#[command]
-fn test_corrupt_next_frame() {
-    sync_engine::TEST_CORRUPT_NEXT_FRAME
-        .store(true, std::sync::atomic::Ordering::SeqCst);
-}
-
-/// Reverse the order of events in the next outbound SYNC_MESSAGE
-/// batch. Used to exercise out-of-order arrival (§12.2).
-#[command]
-fn test_reverse_next_batch() {
-    sync_engine::TEST_REVERSE_NEXT_BATCH
-        .store(true, std::sync::atomic::Ordering::SeqCst);
-}
-
 #[command]
 fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     // 1. Stop the engine and wait for its thread to exit.
@@ -914,9 +869,6 @@ fn main() {
             start_sync_engine,
             stop_sync_engine,
             sync_engine_status,
-            test_force_resend_own_events,
-            test_corrupt_next_frame,
-            test_reverse_next_batch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

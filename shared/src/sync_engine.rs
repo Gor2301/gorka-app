@@ -74,13 +74,6 @@ pub const SYNC_ENGINE_HEARTBEAT_MS: u64 = 15_000;
 /// milliseconds.
 pub const SYNC_ENGINE_DISCOVERY_POLL_MS: u64 = 2_000;
 
-/// TEMPORARY: Batch 7 acceptance test hooks.
-/// Both are reset after one use. Removed in the revert commit.
-pub static TEST_CORRUPT_NEXT_FRAME: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-pub static TEST_REVERSE_NEXT_BATCH: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
 // ---------------------------------------------------------------
 // Status
 // ---------------------------------------------------------------
@@ -126,10 +119,6 @@ impl EngineHandle {
 
     /// Current status. Cheap; just a mutex read.
     pub fn status(&self) -> EngineStatus {
-        eprintln!(
-            "B7-PROBE: EngineHandle::status reading Arc {:p}",
-            std::sync::Arc::as_ptr(&self.status)
-        );
         self.status.lock().map(|g| g.clone()).unwrap_or(EngineStatus::Error(
             "status lock poisoned".to_string(),
         ))
@@ -351,7 +340,6 @@ fn run_engine(
         match session_result {
             Ok(()) => break, // stop requested
             Err(e) => {
-                eprintln!("B7-PROBE: OUTER ERROR: {}", e);
                 set_status(&status, EngineStatus::Error(e));
             }
         }
@@ -634,46 +622,20 @@ fn run_session(
         }
 
         // 1. Compose and send undelivered events, if any.
-        let mut undelivered = compute_undelivered(
+        let undelivered = compute_undelivered(
             connection,
             local_device_id,
             &peer_device_id,
         )?;
-        // TEMPORARY: Batch 7 acceptance test hook.
-        if TEST_REVERSE_NEXT_BATCH.swap(
-            false,
-            std::sync::atomic::Ordering::SeqCst,
-        ) {
-            undelivered.reverse();
-        }
         if !undelivered.is_empty() {
             let nonce = random_nonce();
             let message_id = random_event_id();
-            let mut framed = build_sync_message(
+            let framed = build_sync_message(
                 &session_key,
                 &nonce,
                 &message_id,
                 &undelivered,
             )?;
-            // TEMPORARY: Batch 7 acceptance test hook.
-            if TEST_CORRUPT_NEXT_FRAME.swap(
-                false,
-                std::sync::atomic::Ordering::SeqCst,
-            ) {
-                eprintln!(
-                    "B7-PROBE: CORRUPTING outbound frame len={} events={}",
-                    framed.len(),
-                    undelivered.len()
-                );
-                if let Some(b) = framed.last_mut() {
-                    *b ^= 0xFF;
-                }
-            }
-            eprintln!(
-                "B7-PROBE: sending frame len={} events={}",
-                framed.len(),
-                undelivered.len()
-            );
             session.send_frame(&framed)?;
         }
 
@@ -724,9 +686,6 @@ fn handle_incoming(
         return Err("frame too short for message type".to_string());
     }
     let msg_type = u16::from_be_bytes([frame[0], frame[1]]);
-    if msg_type == MSG_SYNC_MESSAGE {
-        eprintln!("B7-PROBE: received SYNC_MESSAGE len={}", frame.len());
-    }
     match msg_type {
         MSG_SYNC_MESSAGE => {
             let result = process_sync_message(
@@ -1104,15 +1063,8 @@ fn read_local_device_id(connection: &Connection) -> Result<[u8; 16], String> {
 }
 
 fn set_status(status: &Arc<Mutex<EngineStatus>>, s: EngineStatus) {
-    eprintln!(
-        "B7-PROBE: set_status -> {:?} @ {:p}",
-        s,
-        Arc::as_ptr(status)
-    );
     if let Ok(mut g) = status.lock() {
         *g = s;
-    } else {
-        eprintln!("B7-PROBE: set_status LOCK FAILED");
     }
 }
 
