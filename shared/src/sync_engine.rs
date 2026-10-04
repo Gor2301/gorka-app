@@ -347,6 +347,7 @@ fn run_engine(
         match session_result {
             Ok(()) => break, // stop requested
             Err(e) => {
+                eprintln!("B7-PROBE: OUTER ERROR: {}", e);
                 set_status(&status, EngineStatus::Error(e));
             }
         }
