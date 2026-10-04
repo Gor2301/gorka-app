@@ -74,6 +74,14 @@ pub const SYNC_ENGINE_HEARTBEAT_MS: u64 = 15_000;
 /// milliseconds.
 pub const SYNC_ENGINE_DISCOVERY_POLL_MS: u64 = 2_000;
 
+/// TEMPORARY: Batch 7 acceptance test hook.
+/// When true, the next outbound SYNC_MESSAGE frame has its last
+/// byte flipped before transmission, corrupting the AEAD tag.
+/// Used to exercise criterion 10 (corrupted message rejection).
+/// Removed after the acceptance test.
+pub static TEST_CORRUPT_NEXT_FRAME: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 // ---------------------------------------------------------------
 // Status
 // ---------------------------------------------------------------
@@ -630,12 +638,22 @@ fn run_session(
         if !undelivered.is_empty() {
             let nonce = random_nonce();
             let message_id = random_event_id();
-            let framed = build_sync_message(
+            let mut framed = build_sync_message(
                 &session_key,
                 &nonce,
                 &message_id,
                 &undelivered,
             )?;
+            // TEMPORARY: Batch 7 acceptance test hook. Removed
+            // after the test.
+            if TEST_CORRUPT_NEXT_FRAME.swap(
+                false,
+                std::sync::atomic::Ordering::SeqCst,
+            ) {
+                if let Some(b) = framed.last_mut() {
+                    *b ^= 0xFF;
+                }
+            }
             session.send_frame(&framed)?;
         }
 

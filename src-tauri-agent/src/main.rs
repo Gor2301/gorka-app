@@ -113,6 +113,53 @@ fn is_enrolled(state: tauri::State<AppState>) -> Result<bool, String> {
     db::is_enrolled(conn)
 }
 
+// TEMPORARY: Batch 7 acceptance test hooks. Removed after the
+// acceptance test in a single revert commit.
+
+/// Delete the sync_delivery row for (local, peer, origin),
+/// forcing the engine to re-send every event of that origin to
+/// the peer on the next tick. Used to exercise criterion 6
+/// (duplicate prevention).
+#[command]
+fn test_delete_sync_delivery(
+    peer_device_id_hex: String,
+    origin_device_id_hex: String,
+    state: tauri::State<AppState>,
+) -> Result<usize, String> {
+    let peer = hex::decode(&peer_device_id_hex)
+        .map_err(|e| format!("bad peer hex: {}", e))?;
+    let origin = hex::decode(&origin_device_id_hex)
+        .map_err(|e| format!("bad origin hex: {}", e))?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let local_device_id: Vec<u8> = conn
+        .query_row(
+            "SELECT device_id FROM sync_state LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("read local device_id: {}", e))?;
+    let affected = conn
+        .execute(
+            "DELETE FROM sync_delivery
+             WHERE local_device_id = ?1
+               AND peer_device_id = ?2
+               AND origin_device_id = ?3",
+            params![&local_device_id, &peer, &origin],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(affected)
+}
+
+/// Flip one byte of the next outbound SYNC_MESSAGE frame,
+/// corrupting the AEAD tag. Used to exercise criterion 10
+/// (corrupted message rejection).
+#[command]
+fn test_corrupt_next_frame() {
+    sync_engine::TEST_CORRUPT_NEXT_FRAME
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 #[command]
 fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     // 1. Stop the engine and wait for its thread to exit.
@@ -869,6 +916,8 @@ fn main() {
             start_sync_engine,
             stop_sync_engine,
             sync_engine_status,
+            test_delete_sync_delivery,
+            test_corrupt_next_frame,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
