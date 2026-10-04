@@ -116,20 +116,14 @@ fn is_enrolled(state: tauri::State<AppState>) -> Result<bool, String> {
 // TEMPORARY: Batch 7 acceptance test hooks. Removed after the
 // acceptance test in a single revert commit.
 
-/// Delete the sync_delivery row for (local, peer, origin),
-/// forcing the engine to re-send every event of that origin to
-/// the peer on the next tick. Used to exercise criterion 6
+/// Delete every sync_delivery row for this device's own origin.
+/// Forces the engine to re-send all locally-originated events to
+/// every peer on the next tick. Used to exercise criterion 6
 /// (duplicate prevention).
 #[command]
-fn test_delete_sync_delivery(
-    peer_device_id_hex: String,
-    origin_device_id_hex: String,
+fn test_force_resend_own_events(
     state: tauri::State<AppState>,
 ) -> Result<usize, String> {
-    let peer = hex::decode(&peer_device_id_hex)
-        .map_err(|e| format!("bad peer hex: {}", e))?;
-    let origin = hex::decode(&origin_device_id_hex)
-        .map_err(|e| format!("bad origin hex: {}", e))?;
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
     let local_device_id: Vec<u8> = conn
@@ -142,15 +136,12 @@ fn test_delete_sync_delivery(
     let affected = conn
         .execute(
             "DELETE FROM sync_delivery
-             WHERE local_device_id = ?1
-               AND peer_device_id = ?2
-               AND origin_device_id = ?3",
-            params![&local_device_id, &peer, &origin],
+             WHERE local_device_id = ?1 AND origin_device_id = ?1",
+            params![&local_device_id],
         )
         .map_err(|e| e.to_string())?;
     Ok(affected)
 }
-
 /// Flip one byte of the next outbound SYNC_MESSAGE frame,
 /// corrupting the AEAD tag. Used to exercise criterion 10
 /// (corrupted message rejection).
@@ -916,7 +907,7 @@ fn main() {
             start_sync_engine,
             stop_sync_engine,
             sync_engine_status,
-            test_delete_sync_delivery,
+            test_force_resend_own_events,
             test_corrupt_next_frame,
         ])
         .run(tauri::generate_context!())
