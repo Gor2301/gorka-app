@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import { apiService } from '../services/api.service';
+import SyncIndicator from './SyncIndicator';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -40,6 +41,7 @@ const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
             Dashboard
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <SyncIndicator />
             <span style={{ fontSize: '14px', color: '#6b7280' }}>
               {user?.name || 'Supervisor'}
             </span>
