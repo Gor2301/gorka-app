@@ -67,6 +67,11 @@ fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), St
 }
 
 #[command]
+fn get_organization_id(app: tauri::AppHandle) -> Result<String, String> {
+    auth::get_organization_id(app)
+}
+
+#[command]
 fn get_user_name(app: tauri::AppHandle) -> Result<String, String> {
     auth::get_user_name(app)
 }
