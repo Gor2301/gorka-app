@@ -9350,3 +9350,283 @@ Batch 6b-2b, Batch 7, the §12.2 extra tests, and the founder-requested tests A,
 End of entry.
 
 ---
+
+## Recovery Session — October 5, 2026 (9.6.10-A/B/C, header polish, Client entry-flow redesign)
+
+This entry closes three slices that landed on main without a recovery-notes entry: the sync-indicator work (9.6.10-A/B/C), the header polish, and the Client entry-flow redesign. It is one entry, three sections, in chronological order.
+
+The slices were recorded in commit messages but not in this document. Two of the three (9.6.10 and header polish) were written in a prior session whose full design decisions are not available to this one; their entries are honest summaries of what each commit did, sourced from the commit messages and the state of the repository. The third (the entry-flow redesign) is fully documented from this session.
+
+================================================================
+SECTION 1 — 9.6.10-A/B/C: SYNC INDICATOR AND ENTRY WORK
+================================================================
+
+Commits: d5d53b3, 357c361, 7beec24, a13a1f9, 89ab7fa.
+
+What landed:
+
+  d5d53b3 — auto-start on unlock (Client and Agent). The sync
+  engine starts automatically once the local database is
+  unlocked, rather than requiring a manual start.
+
+  357c361 — sync indicator in both apps. A shared SyncIndicator
+  component reads the engine status and renders the current
+  state. Shown in both the Client and the Agent.
+
+  7beec24 — wire SyncIndicator into the Client's real AppShell
+  header. The Client had its own TopHeader; the indicator is
+  placed there.
+
+  a13a1f9 — Agent SyncIndicator CSS import. Small fix to make the
+  Agent pick up the indicator's stylesheet.
+
+  89ab7fa — Agent logout moved to the sidebar. Logout is now a
+  sidebar item rather than a header control. This matches the
+  Client's layout.
+
+These five commits close the visible-sync-state work for Phase
+9.6. The static TopHeader placeholder named in the Phase 9.6
+closure list is now replaced by a functional reader in the
+Agent's case and in the Client's header.
+
+What is not in this session's record: the design discussion that
+produced the SyncIndicator's shape (which states map to which
+colors, how "Pending" is displayed, whether the indicator shows
+per-peer or aggregate). Those decisions are visible in the code
+and in the commit messages; they are not restated here because
+this session did not make them. A future session that needs
+them should read the code.
+
+================================================================
+SECTION 2 — HEADER POLISH: REAL NAME IN THE CLIENT HEADER
+================================================================
+
+Commits: f168d8e, 922f182, 56a674e, f8cdc75.
+
+What landed:
+
+  f168d8e — the Client header shows the user's real name.
+  Before this commit, the header showed a placeholder. The login
+  response already carried the user's name and email; it was not
+  being persisted or read back. This commit preserves those
+  values in settings.dat at login and exposes them via two new
+  Tauri commands, get_user_name and get_user_email.
+
+  922f182 — fix: closing brace in auth_http::login. The commit
+  that added the name and email fields to LoginResult removed
+  the function's closing brace, leaving the shared crate
+  uncompilable. One-line repair.
+
+  56a674e — fix: restore lost functions in auth.rs and main.rs.
+  The earlier repair had lost get_organization_id and
+  get_user_name in auth.rs and the get_organization_id wrapper
+  in main.rs, due to clipboard-overwrite errors during editing.
+  This commit restores all three.
+
+  f8cdc75 — cleanup: remove unused tauri::Manager import from
+  Client auth.rs. The import existed for the .path().app_data_dir()
+  calls inside the get_token debug block, which was dropped in an
+  earlier commit. Removing it restored the Client bin warning
+  baseline to 3.
+
+The header polish is functionally complete. The Client header
+shows the real name when it is present, falls back to the email
+when it is not, and derives avatar initials from the displayed
+name. The fallback avatar character is '?' when both the name and
+the email are empty.
+
+What is not in this session's record: the design decision to show
+the name rather than the email when both are present; the choice
+of '?' as the fallback character; the decision to keep the Agent
+header's placeholder until the agent account-creation flow is
+designed. These are visible in code and commit message; they are
+not restated here.
+
+================================================================
+SECTION 3 — CLIENT ENTRY-FLOW REDESIGN
+================================================================
+
+Commit: ffb3d56.
+
+This slice was executed in this session. It is documented fully.
+
+What this session did.
+
+Rewrote the Client's Login and Unlock screens to match the Agent's
+visual vocabulary. Added the Agent's primitives folder to the
+Client. Overwrote the Client's orphaned design-tokens.css with the
+Agent's. Imported the token file once. Built, committed, pushed.
+Pulled and verified on cloud.
+
+Why this slice exists.
+
+The Client's Login and Unlock screens came in from Tauri. They
+used inline styles: three different primary button colors across
+surfaces (Login red, Unlock blue, workspace purple), two radius
+conventions (6px vs 8px), two logo implementations, two header
+implementations, and a stale "Supervisor Dashboard" subtitle.
+AGENT-APP-SPEC.md section 11.3 named these six as inconsistencies
+not to be carried forward. The Agent had already resolved them.
+The Client had not.
+
+This slice brings the Client's two entry screens into the same
+visual vocabulary the Agent already uses, so there is one design
+system across both apps going forward.
+
+The decision on Q1.
+
+The open question at the start of the session was whether to copy
+the Agent's primitives folder into the Client, or to keep the
+Client's inline-style approach and restyle by hand.
+
+Decision: copy the primitives folder.
+
+Reasoning, confirmed by reconnaissance before the copy:
+
+  - The Agent's primitives folder is 25 files: 12 .tsx, 12 .css,
+    one index.ts. Every import is either React type imports,
+    lucide-react's X icon, or a relative .css. No Agent-only
+    paths. The folder is portable.
+
+  - The Client already depends on lucide-react ^1.31.0. The X
+    icon is already imported in seven Client components, so the
+    Modal primitive's import will work without any version
+    change.
+
+  - The Client had no primitives/ folder at all, so the copy was
+    purely additive. Nothing was overwritten.
+
+  - The Client's design-tokens.css was orphaned. A whole-tree
+    grep for "design-tokens" across supervisor-dashboard/src
+    returned zero matches. Nothing imported it. So overwriting
+    it with the Agent's token file could not change any existing
+    component's rendering.
+
+The alternative — keep the Client inline, restyle by hand — was
+rejected. It would have produced two vocabularies that match
+today and drift tomorrow. The primitives copy gives one
+vocabulary that can be maintained in one place.
+
+What was done, step by step.
+
+  1. Copied agent-dashboard/src/components/primitives/ to
+     supervisor-dashboard/src/components/primitives/.
+     Twenty-five files. Verified by directory listing.
+
+  2. Copied agent-dashboard/src/styles/design-tokens.css to
+     supervisor-dashboard/src/styles/design-tokens.css with
+     fc /b. Byte-identical. Verified before the import was added.
+
+  3. Added one import line to supervisor-dashboard/src/main.tsx,
+     immediately below the existing ./index.css import:
+       import './styles/design-tokens.css';
+
+  4. Rewrote supervisor-dashboard/src/pages/Login.tsx to use
+     EntryCard, GorkaLogo, ErrorBanner, Input, Label, and Button
+     variant="primary". Subtitle changed from
+     "Supervisor Dashboard" to "Client Dashboard".
+
+  5. Created supervisor-dashboard/src/pages/Login.css with the
+     two .form-field rules, local to the Client.
+
+  6. Rewrote supervisor-dashboard/src/components/UnlockScreen.tsx
+     to use the same primitives. Subtitle is dynamic, reading
+     "Set Local Encryption Password" or "Enter Local Encryption
+     Password" depending on the mode.
+
+  7. Created supervisor-dashboard/src/components/UnlockScreen.css
+     with the two .form-field rules and two helper classes
+     (unlock-hint, unlock-warning).
+
+  8. Built on main: npm run build passes (tsc + vite).
+     Committed as ffb3d56, pushed.
+
+  9. Pulled on cloud (ffb3d56). Ran npm run build there.
+     Launched the Client with backend running and Vite dev
+     server running. Confirmed visually: Login card renders
+     with red GORKA wordmark, "Client Dashboard" subtitle,
+     purple Sign In button, light-gray backdrop, white card.
+     Logged in, reached Unlock, reached Dashboard. Redesign
+     confirmed live.
+
+What was preserved.
+
+  - The Login screen's auth.login call, onLoginSuccess prop,
+    email/password state, loading flag, error handling.
+
+  - The Unlock screen's database_exists check, two-mode
+    set/enter logic, unlock_database call, onUnlocked callback,
+    password/confirmPassword state, minimum-length check,
+    password-match check, error fallback when
+    database_exists fails ("we must NOT fall back to set
+    password").
+
+  - App.tsx. The two-step state machine already matched the
+    Agent's shape. Two files changed, not three.
+
+  - Any Tauri command, any Rust file, the Agent.
+
+What was dropped.
+
+  - Three Tauri-heritage console.log / console.error lines in
+    Login.tsx. Errors now surface through ErrorBanner. The
+    console noise was local-only, never a boundary concern, but
+    it was also never useful in production.
+
+What was not carried forward.
+
+  - The Client's earlier design-tokens.css contents. Its own
+    token names (--color-sidebar, --color-background,
+    --color-text-primary, --color-accent-light, --color-border
+    with a different value, --header-height: 56px,
+    --font-family: 'Inter'). None of these were referenced by
+    any file on the Client. Overwriting was safe.
+
+Scope discipline.
+
+  - No Enroll screen on the Client. The Client is the admin; it
+    exports the enrollment package, it does not import one. The
+    two-step gate (Login → Unlock → Dashboard) is correct.
+
+  - No change to App.tsx.
+
+  - No change to any Rust source.
+
+  - No change to the Agent.
+
+  - No change to the Login → Unlock → Dashboard flow.
+
+Files changed.
+
+  Modified:
+    supervisor-dashboard/src/components/UnlockScreen.tsx
+    supervisor-dashboard/src/main.tsx
+    supervisor-dashboard/src/pages/Login.tsx
+    supervisor-dashboard/src/styles/design-tokens.css
+
+  Added:
+    supervisor-dashboard/src/components/UnlockScreen.css
+    supervisor-dashboard/src/components/primitives/  (25 files)
+    supervisor-dashboard/src/pages/Login.css
+
+  Total: 31 files, 877 insertions, 250 deletions. Commit ffb3d56.
+
+Rule compliance.
+
+  - No production touched.
+
+  - No cloud schema change.
+
+  - No CI/CD touched (release.yml unchanged).
+
+  - Invariant held. No debtor data crossed any boundary.
+
+  - No frozen document amended.
+
+  - The Agent was not modified.
+
+  - The extraction log gets two new entries for this session's
+    work (9.6.10 and header polish summarized; entry-flow
+    redesign recorded in full).
+
+End of entry.

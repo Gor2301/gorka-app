@@ -1678,3 +1678,59 @@ sections), DECISIONS.md (October 3-5 entry), and HANDOFF.md
 for full details.
 
 End of update.
+
+================================================================
+Update - October 5, 2026 (9.6.10-A/B/C, header polish, Client entry-flow redesign)
+================================================================
+
+Three slices were completed and this entry brings START-HERE
+current through October 5. The previous entry here was for
+Batch 6b-2b, Batch 7, and Test C closed with finding. Ten commits
+landed after that, across three slices, and they had not been
+recorded in these notes.
+
+Slice 1 — 9.6.10-A/B/C (five commits). Auto-start on unlock in
+both apps, functional sync indicator in both apps, SyncIndicator
+wired into the Client's real AppShell header, small CSS import
+fix on the Agent, Agent logout moved to the sidebar. The static
+TopHeader sync placeholder from the Phase 9.6 closure list is now
+a functional reader.
+
+Slice 2 — header polish (four commits). The Client header shows
+the user's real name, with email fallback and initials derived
+from the displayed name. Three intermediate fix commits (a
+missing closing brace in the shared crate, three lost functions
+restored, one unused-import cleanup) are recorded in DECISIONS.md.
+
+Slice 3 — Client entry-flow redesign (one commit, ffb3d56). The
+Client's Login and Unlock screens now use the Agent's visual
+vocabulary. The Agent's primitives/ folder (25 files) was copied
+into the Client, byte-identical. The Client's orphaned
+design-tokens.css was overwritten with the Agent's token file
+after a whole-tree grep confirmed zero importers. main.tsx
+imports the token file once. The two entry files use EntryCard,
+GorkaLogo, ErrorBanner, Input, Label, Button variant="primary".
+The stale "Supervisor Dashboard" subtitle became "Client
+Dashboard". Logic untouched. App.tsx unchanged. No Enroll screen
+on the Client.
+
+Verification: main build passes at every step. Cloud at ffb3d56,
+build passes, Login card visually confirmed, Login -> Unlock ->
+Dashboard walked.
+
+State at end of this batch:
+
+  Main machine:  ffb3d56, clean, pushed.
+  Cloud machine: ffb3d56, clean.
+  GitHub:        ffb3d56.
+
+What remains in Phase 9.6:
+
+  - CONNECTOR-MODEL.md.
+  - Then Phase 9.6 closes and Phase 9.7 (multi-user
+    demonstration) can begin planning.
+
+See DECISIONS.md (October 5 entry), HANDOFF.md, SESSION-LOG.md,
+and PHASE-9.6-EXTRACTION-LOG.md for full details.
+
+End of update.

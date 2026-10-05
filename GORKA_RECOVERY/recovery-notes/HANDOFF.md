@@ -3731,3 +3731,101 @@ See PHASE-9.6-EXTRACTION-LOG.md and DECISIONS.md for the full records.
   - No production logic change was made for any test.
 
 End of entry.
+
+## STATUS UPDATE — October 5, 2026 (9.6.10-A/B/C, header polish, Client entry-flow redesign)
+
+### What this session did
+
+Closed three slices that had landed on main without a HANDOFF entry: the sync-indicator work (9.6.10-A/B/C), the Client header polish, and the Client entry-flow redesign.
+
+Two of the three are recorded as honest summaries, sourced from commit messages and the repository state, because their full design sessions were not available. The third was executed this session and is fully documented.
+
+### Slice 1 — 9.6.10-A/B/C
+
+  d5d53b3  auto-start on unlock (Client + Agent)
+  357c361  sync indicator in both apps
+  7beec24  wire SyncIndicator into Client's real AppShell header
+  a13a1f9  Agent SyncIndicator CSS import
+  89ab7fa  Agent logout moved to sidebar
+
+The static TopHeader sync placeholder is replaced by a functional reader. The sync-indicator slice from the Phase 9.6 closure list is done.
+
+### Slice 2 — Header polish
+
+  f168d8e  header polish: real name in Client (initial)
+  922f182  fix: closing brace in auth_http::login
+  56a674e  fix: restore lost functions in auth.rs and main.rs
+  f8cdc75  cleanup: remove unused tauri::Manager import
+
+The Client header now shows the user's real name, with email fallback and initials derived from the displayed name. Three intermediate fix commits are recorded in DECISIONS.md.
+
+### Slice 3 — Client entry-flow redesign
+
+Commit ffb3d56.
+
+The Client's Login and Unlock screens now use the Agent's visual vocabulary: same primitives, same design tokens, one vocabulary across both apps.
+
+Concretely:
+  - The Agent's primitives/ folder (25 files) was copied into the Client. Byte-identical.
+  - The Client's orphaned design-tokens.css (zero importers, verified by grep) was overwritten with the Agent's token file. Byte-identical.
+  - main.tsx imports the token file once.
+  - Login.tsx and UnlockScreen.tsx were rewritten using EntryCard, GorkaLogo, ErrorBanner, Input, Label, Button variant="primary".
+  - The stale "Supervisor Dashboard" subtitle became "Client Dashboard".
+  - Login.css and UnlockScreen.css were created with local helper classes.
+  - The three Tauri-heritage console.log/console.error debug lines were dropped.
+
+Logic untouched. Same auth.login call, same database_exists check, same unlock_database call, same onUnlocked callback. App.tsx unchanged. No Enroll screen on the Client — the Client is the admin, it exports, it does not import.
+
+### What is verified
+
+Local:
+  npm run build passes on main at every step.
+
+Cloud:
+  Pulled ffb3d56. npm run build passes (18.69s).
+  Launched the Client with backend running and Vite dev server running.
+  Login renders with red GORKA wordmark, "Client Dashboard" subtitle, purple Sign In button, EntryCard shape. Logged in, reached Unlock, reached Dashboard. Redesign confirmed live.
+
+### What is unchanged
+
+  - App.tsx
+  - Any Rust source
+  - Any Tauri command
+  - The Agent
+  - Login → Unlock → Dashboard flow
+  - The invariant
+
+### Commits on main since f8cdc75
+
+  d5d53b3  9.6.10-A auto-start on unlock (Client + Agent)
+  357c361  9.6.10-B sync indicator in both apps
+  7beec24  wire SyncIndicator into Client's real AppShell header
+  a13a1f9  Agent SyncIndicator CSS import
+  89ab7fa  Agent logout moved to sidebar
+  f168d8e  header polish: real name in Client (initial)
+  922f182  fix: closing brace in auth_http::login
+  56a674e  fix: restore lost functions in auth.rs and main.rs
+  f8cdc75  cleanup: remove unused tauri::Manager import
+  ffb3d56  Client entry-flow redesign
+
+### State at end of session
+
+  Main machine:  ffb3d56, clean, pushed.
+  Cloud machine: ffb3d56, clean.
+  GitHub:        ffb3d56.
+
+### What remains in Phase 9.6
+
+  - CONNECTOR-MODEL.md.
+  - Then Phase 9.6 closes and Phase 9.7 (multi-user demonstration)
+    can begin planning.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched (release.yml unchanged).
+  - Invariant held. No debtor data crossed any boundary.
+  - No frozen document amended.
+
+End of entry.

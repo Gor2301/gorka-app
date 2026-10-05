@@ -3855,3 +3855,77 @@ RULE COMPLIANCE
   papered over.
 
 End of entry.
+
+---
+
+## Session Extension — October 5, 2026 (9.6.10-A/B/C, header polish, Client entry-flow redesign)
+
+### What this session did
+
+Closed three slices that had landed on main without a SESSION-LOG entry. The first two are recorded as summaries; the third was executed this session.
+
+### Slice 1 — 9.6.10-A/B/C
+
+Five commits:
+
+  d5d53b3  auto-start on unlock (Client + Agent)
+  357c361  sync indicator in both apps
+  7beec24  wire SyncIndicator into Client's real AppShell header
+  a13a1f9  Agent SyncIndicator CSS import
+  89ab7fa  Agent logout moved to sidebar
+
+The static header sync placeholder in the Phase 9.6 closure list is now a functional reader. Both apps show the engine's state. Agent logout is a sidebar item, matching the Client.
+
+### Slice 2 — Header polish
+
+Four commits:
+
+  f168d8e  header polish: real name in Client (initial)
+  922f182  fix: closing brace in auth_http::login
+  56a674e  fix: restore lost functions in auth.rs and main.rs
+  f8cdc75  cleanup: remove unused tauri::Manager import
+
+The Client header now shows the user's real name. The intermediate fix commits are documented in DECISIONS.md: a missing closing brace in the shared crate, then three lost functions restored after clipboard-overwrite errors during editing, then a small unused-import cleanup that restored the Client bin warning baseline to 3.
+
+### Slice 3 — Client entry-flow redesign
+
+Commit ffb3d56.
+
+The Client's Login and Unlock screens were rewritten to use the Agent's visual vocabulary. The Agent's primitives folder (25 files) was copied into the Client, byte-identical. The Client's orphaned design-tokens.css was overwritten with the Agent's token file after a whole-tree grep confirmed zero importers. main.tsx imports the token file once. The two entry files now use EntryCard, GorkaLogo, ErrorBanner, Input, Label, Button variant="primary".
+
+The stale "Supervisor Dashboard" subtitle became "Client Dashboard". Three Tauri-heritage debug console lines were dropped.
+
+Logic is untouched. Same auth.login call, same database_exists check, same unlock_database call, same onUnlocked callback. App.tsx unchanged. No Enroll screen on the Client.
+
+### Verification
+
+Main: npm run build passes at every step. Cloud: pulled ffb3d56, npm run build passes in 18.69s. Launched the Client with backend running and Vite dev server running. Confirmed the new Login screen visually. Walked Login → Unlock → Dashboard.
+
+### Commits on main
+
+  ffb3d56  Client entry-flow redesign
+  f8cdc75  remove unused tauri::Manager import
+  56a674e  restore lost functions in auth.rs and main.rs
+  922f182  fix: closing brace in auth_http::login
+  f168d8e  header polish: real name in Client
+  89ab7fa  Agent logout moved to sidebar
+  a13a1f9  Agent SyncIndicator CSS import
+  7beec24  wire SyncIndicator into Client's AppShell header
+  357c361  sync indicator in both apps
+  d5d53b3  auto-start on unlock (Client + Agent)
+
+### State at end of session
+
+  Main machine:  ffb3d56, clean, pushed.
+  Cloud machine: ffb3d56, clean.
+  GitHub:        ffb3d56.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held.
+  - No frozen document amended.
+
+End of entry.

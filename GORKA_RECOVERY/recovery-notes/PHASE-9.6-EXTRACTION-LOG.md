@@ -1368,3 +1368,160 @@ item.
 END OF DOCUMENT
 
 ================================================================
+
+================================================================
+SLICE 9.6.10-A/B/C — SYNC INDICATOR AND ENTRY WORK
+================================================================
+
+Date: October 5, 2026.
+Commits: d5d53b3, 357c361, 7beec24, a13a1f9, 89ab7fa.
+
+Files changed: multiple. See the individual commit messages.
+
+What landed:
+
+  d5d53b3  auto-start on unlock (Client and Agent). The sync
+           engine starts automatically after the database is
+           unlocked.
+  357c361  sync indicator in both apps. A shared SyncIndicator
+           component reads engine status and renders the current
+           state.
+  7beec24  wire SyncIndicator into the Client's real AppShell
+           header.
+  a13a1f9  Agent SyncIndicator CSS import.
+  89ab7fa  Agent logout moved to sidebar.
+
+The static TopHeader sync placeholder from the Phase 9.6 closure
+list is now a functional reader.
+
+This slice was not executed in this session. It is recorded here
+from the commit messages and the repository state, so that the
+log matches the current state. Design decisions for the
+SyncIndicator's visual shape (colors, per-peer vs aggregate,
+which states map to which labels) are visible in code, not
+restated here.
+
+================================================================
+SLICE HEADER POLISH — REAL NAME IN THE CLIENT HEADER
+================================================================
+
+Date: October 5, 2026.
+Commits: f168d8e, 922f182, 56a674e, f8cdc75.
+
+What landed:
+
+  f168d8e  header polish. The login flow now preserves the
+           name and email the backend already returns. The
+           shared::auth_http::LoginResult gains name and email
+           fields. The Client's auth.rs stores user_name and
+           user_email in settings.dat at login and exposes
+           get_user_name and get_user_email. The Client's
+           main.rs registers both as Tauri commands. The
+           Client's services/local.db.ts adds getUserName() and
+           getUserEmail() wrappers on the auth object.
+           AppShell.tsx replaces the broken
+           apiService.get('/auth/me') call with
+           auth.getUserName(), falling back to
+           auth.getUserEmail() when the name is empty.
+
+  922f182  fix: closing brace in auth_http::login. The commit
+           that added name and email to LoginResult removed the
+           function's closing brace, leaving the shared crate
+           uncompilable. One-line repair.
+
+  56a674e  fix: restore lost functions in auth.rs and main.rs.
+           The earlier repair lost get_organization_id and
+           get_user_name in auth.rs and the get_organization_id
+           wrapper in main.rs, due to clipboard-overwrite errors
+           during editing. All three restored.
+
+  f8cdc75  cleanup: remove unused tauri::Manager import from
+           Client auth.rs. The import existed for the
+           .path().app_data_dir() calls inside the get_token
+           debug block, which was dropped in an earlier commit.
+           Removing it restored the Client bin warning baseline
+           to 3.
+
+The Client header now shows the user's real name. Fallback is
+the email. Avatar initials are derived from the displayed name.
+Fallback avatar character is '?' when both are empty.
+
+This slice was not executed in this session. It is recorded here
+from the commit messages and the repository state.
+
+================================================================
+SLICE CLIENT ENTRY-FLOW REDESIGN
+================================================================
+
+Date: October 5, 2026. Executed in this session.
+Commit: ffb3d56.
+
+Purpose:
+  Bring the Client's Login and Unlock screens into the Agent's
+  visual vocabulary, so both apps share one design system.
+
+What was done:
+  1. Copied agent-dashboard/src/components/primitives/ to
+     supervisor-dashboard/src/components/primitives/.
+     Twenty-five files, byte-identical.
+
+  2. Copied agent-dashboard/src/styles/design-tokens.css to
+     supervisor-dashboard/src/styles/design-tokens.css.
+     Byte-identical. Verified with fc /b.
+
+  3. Added one import line to supervisor-dashboard/src/main.tsx:
+       import './styles/design-tokens.css';
+     Immediately below the existing './index.css' import.
+
+  4. Rewrote supervisor-dashboard/src/pages/Login.tsx to use
+     EntryCard, GorkaLogo, ErrorBanner, Input, Label, and
+     Button variant="primary". Subtitle changed from
+     "Supervisor Dashboard" to "Client Dashboard".
+
+  5. Created supervisor-dashboard/src/pages/Login.css.
+
+  6. Rewrote supervisor-dashboard/src/components/UnlockScreen.tsx
+     using the same primitives.
+
+  7. Created supervisor-dashboard/src/components/UnlockScreen.css.
+
+DATA PRESERVATION
+  Same auth.login call.
+  Same onLoginSuccess and onUnlocked callbacks.
+  Same database_exists check.
+  Same two-mode set/enter logic.
+  Same unlock_database invocation.
+  Same password-match and minimum-length validation.
+  Same error fallback when database_exists fails.
+
+BEHAVIOR PRESERVATION
+  Same Login -> Unlock -> Dashboard flow.
+  Same App.tsx state machine, unchanged.
+  Same Tauri commands invoked.
+  Same settings.dat behavior.
+
+WARNING DELTA
+  None. Client bin warning baseline unchanged at 3.
+
+VERIFICATION
+  Main: npm run build passes at every step.
+  Cloud: pulled ffb3d56, npm run build passes in 18.69s.
+         Launched Client with backend and Vite dev server.
+         Login card visually confirmed (red GORKA wordmark,
+         "Client Dashboard" subtitle, purple Sign In button,
+         EntryCard shape). Login -> Unlock -> Dashboard walked.
+
+EXPLICIT NON-CHANGES
+  No schema change.
+  No Rust change.
+  No App.tsx change.
+  No Agent change.
+  No new dependency.
+  No change to the Login -> Unlock -> Dashboard flow.
+
+DEVIATIONS
+  None.
+
+================================================================
+END OF ADDENDUM
+================================================================
