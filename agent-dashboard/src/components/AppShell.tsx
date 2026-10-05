@@ -10,9 +10,9 @@ interface AppShellProps {
 export default function AppShell({ onLogout }: AppShellProps) {
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar onLogout={onLogout} />
       <div className="app-shell__main">
-        <TopHeader onLogout={onLogout} />
+        <TopHeader />
         <main className="app-shell__content">
           <Outlet />
         </main>

@@ -84,3 +84,26 @@
   padding: 2px 6px;
   border-radius: 4px;
 }
+
+.sidebar__logout {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 20px;
+  background: transparent;
+  color: var(--color-text-sidebar);
+  border: none;
+  border-top: 1px solid var(--color-border-sidebar);
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: var(--font-size-nav);
+  font-weight: var(--font-weight-regular);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar__logout:hover {
+  color: var(--color-accent);
+  background: var(--color-accent-tint);
+}

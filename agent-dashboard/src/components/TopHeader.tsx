@@ -1,5 +1,4 @@
 import { useLocation } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
 import { Avatar } from './primitives';
 import './TopHeader.css';
 import SyncIndicator from './SyncIndicator';
@@ -16,11 +15,7 @@ const TITLES: Record<string, string> = {
   '/settings': 'Settings',
 };
 
-interface TopHeaderProps {
-  onLogout: () => void;
-}
-
-export default function TopHeader({ onLogout }: TopHeaderProps) {
+export default function TopHeader() {
   const location = useLocation();
   const title =
     TITLES[location.pathname] ??
@@ -34,16 +29,6 @@ export default function TopHeader({ onLogout }: TopHeaderProps) {
         <SyncIndicator />
 
         <Avatar name="Agent" size={28} />
-
-        <button
-          type="button"
-          className="top-header__logout"
-          onClick={onLogout}
-          aria-label="Log out"
-          title="Log out"
-        >
-          <LogOut size={18} strokeWidth={1.7} />
-        </button>
       </div>
     </header>
   );

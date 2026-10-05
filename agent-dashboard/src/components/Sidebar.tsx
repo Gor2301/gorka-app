@@ -8,6 +8,7 @@ import {
   FileText,
   Sparkles,
   LifeBuoy,
+  LogOut,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -33,7 +34,11 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  onLogout: () => void;
+}
+
+export default function Sidebar({ onLogout }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
@@ -72,6 +77,15 @@ export default function Sidebar() {
           );
         })}
       </nav>
+
+      <button
+        type="button"
+        className="sidebar__logout"
+        onClick={onLogout}
+      >
+        <LogOut size={16} strokeWidth={1.7} />
+        <span>Logout</span>
+      </button>
     </aside>
   );
 }
