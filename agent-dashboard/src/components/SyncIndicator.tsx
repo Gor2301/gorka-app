@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { localDB } from '../services/local.db';
+import './SyncIndicator.css';
 
 type Display = {
   label: string;
