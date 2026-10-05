@@ -169,6 +169,22 @@ fn unlock_database(password: String, app: tauri::AppHandle, storage: tauri::Stat
     println!("✅ [RUST] unlock_database COMPLETE");
     println!("========================================");
 
+    // Auto-start the sync engine when the device is enrolled.
+    // Founder decision 2026-10-05: auto-start on unlock. No manual
+    // Settings toggle for MVP. Failure is logged and ignored; the
+    // user still reaches the shell and the sync indicator reports
+    // whatever state the engine is actually in.
+    let enrolled = {
+        let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+        db::is_enrolled(conn).unwrap_or(false)
+    };
+    if enrolled {
+        if let Err(e) = start_engine_inner(0, &app, &storage) {
+            eprintln!("auto-start sync engine: {}", e);
+        }
+    }
+
     Ok(())
 }
 
@@ -484,13 +500,13 @@ fn delete_document(
     documents::delete_document(conn, &id)
 }
 
-#[command]
-fn start_sync_engine(
+fn start_engine_inner(
     listen_port: u16,
-    app: tauri::AppHandle,
-    state: tauri::State<AppState>,
-    storage: tauri::State<AppStorage>,
+    app: &tauri::AppHandle,
+    storage: &AppStorage,
 ) -> Result<(), String> {
+    let state = app.state::<AppState>();
+
     let db_key: String = {
         let guard = state.db_key.lock().map_err(|e| e.to_string())?;
         guard.clone().ok_or("Database not unlocked")?
@@ -508,16 +524,16 @@ fn start_sync_engine(
     // port the listener actually bound to.
     const DEFAULT_LISTEN_PORT: u16 = 54321;
     let port = if listen_port == 0 {
-        auth::get_listen_port(&app)?.unwrap_or(DEFAULT_LISTEN_PORT)
+        auth::get_listen_port(app)?.unwrap_or(DEFAULT_LISTEN_PORT)
     } else {
-        auth::set_listen_port(&app, listen_port)?;
+        auth::set_listen_port(app, listen_port)?;
         listen_port
     };
 
     let jwt = auth::get_token(app.clone())?;
-    let organization_id = get_trusted_organization_id(&app)?;
+    let organization_id = get_trusted_organization_id(app)?;
 
-    let mut engine_conn = db::init_db(&storage, &db_key)?;
+    let mut engine_conn = db::init_db(storage, &db_key)?;
 
     let device_id = {
         let tx = engine_conn.transaction().map_err(|e| e.to_string())?;
@@ -560,6 +576,18 @@ fn start_sync_engine(
 
     Ok(())
 }
+
+#[command]
+fn start_sync_engine(
+    listen_port: u16,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
+) -> Result<(), String> {
+    let _ = &state;
+    start_engine_inner(listen_port, &app, &storage)
+}
+
 #[command]
 fn stop_sync_engine(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     let mut guard = state.engine.lock().map_err(|e| e.to_string())?;

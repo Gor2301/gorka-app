@@ -97,6 +97,22 @@ fn unlock_database(
 
     auth::set_unlocked(&app, true)?;
 
+    // Auto-start the sync engine when the device is enrolled.
+    // Founder decision 2026-10-05: auto-start on unlock. No manual
+    // Settings toggle for MVP. Failure is logged and ignored; the
+    // user still reaches the shell and the sync indicator reports
+    // whatever state the engine is actually in.
+    let enrolled = {
+        let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+        let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+        db::is_enrolled(conn).unwrap_or(false)
+    };
+    if enrolled {
+        if let Err(e) = start_engine_inner(None, &app, &storage) {
+            eprintln!("auto-start sync engine: {}", e);
+        }
+    }
+
     Ok(())
 }
 
@@ -621,13 +637,13 @@ fn delete_debtor_relation(
     relations::delete_debtor_relation(conn, &storage, &organization_id, &id)
 }
 
-#[command]
-fn start_sync_engine(
+fn start_engine_inner(
     manual_override: Option<String>,
-    app: tauri::AppHandle,
-    state: tauri::State<AppState>,
-    storage: tauri::State<AppStorage>,
+    app: &tauri::AppHandle,
+    storage: &AppStorage,
 ) -> Result<(), String> {
+    let state = app.state::<AppState>();
+
     let db_key: String = {
         let guard = state.db_key.lock().map_err(|e| e.to_string())?;
         guard.clone().ok_or("Database not unlocked")?
@@ -641,9 +657,9 @@ fn start_sync_engine(
     }
 
     let jwt = auth::get_token(app.clone())?;
-    let organization_id = get_trusted_organization_id(&app)?;
+    let organization_id = get_trusted_organization_id(app)?;
 
-    let mut engine_conn = db::init_db(&storage, &db_key)?;
+    let mut engine_conn = db::init_db(storage, &db_key)?;
 
     let device_id = {
         let tx = engine_conn.transaction().map_err(|e| e.to_string())?;
@@ -690,6 +706,18 @@ fn start_sync_engine(
 
     Ok(())
 }
+
+#[command]
+fn start_sync_engine(
+    manual_override: Option<String>,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    storage: tauri::State<AppStorage>,
+) -> Result<(), String> {
+    let _ = &state;
+    start_engine_inner(manual_override, &app, &storage)
+}
+
 #[command]
 fn stop_sync_engine(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     let mut guard = state.engine.lock().map_err(|e| e.to_string())?;
