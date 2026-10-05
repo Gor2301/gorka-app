@@ -67,8 +67,13 @@ fn logout(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), St
 }
 
 #[command]
-fn get_organization_id(app: tauri::AppHandle) -> Result<String, String> {
-    auth::get_organization_id(app)
+fn get_user_name(app: tauri::AppHandle) -> Result<String, String> {
+    auth::get_user_name(app)
+}
+
+#[command]
+fn get_user_email(app: tauri::AppHandle) -> Result<String, String> {
+    auth::get_user_email(app)
 }
 
 #[command]
@@ -762,6 +767,8 @@ fn main() {
             database_exists,
             logout,
             get_organization_id,
+            get_user_name,
+            get_user_email,
             unlock_database,
             is_database_unlocked,
             enable_sync,

@@ -46,6 +46,8 @@ struct UserData {
 pub struct LoginResult {
     pub token: String,
     pub organization_id: String,
+    pub name: String,
+    pub email: String,
 }
 
 pub async fn login(email: &str, password: &str) -> Result<LoginResult, String> {
@@ -78,5 +80,6 @@ pub async fn login(email: &str, password: &str) -> Result<LoginResult, String> {
     Ok(LoginResult {
         token: login_data.token,
         organization_id: login_data.user.organization_id,
+        name: login_data.user.name,
+        email: login_data.user.email,
     })
-}

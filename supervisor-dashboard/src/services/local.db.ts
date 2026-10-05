@@ -46,6 +46,22 @@ async getSalt(): Promise<string | null> {
   }
 },
 
+  async getUserName(): Promise<string | null> {
+    try {
+      return await invoke<string>('get_user_name');
+    } catch {
+      return null;
+    }
+  },
+
+  async getUserEmail(): Promise<string | null> {
+    try {
+      return await invoke<string>('get_user_email');
+    } catch {
+      return null;
+    }
+  },
+
   async isUnlocked(): Promise<boolean> {
     console.log('🔍 [FRONTEND] isUnlocked called');
     try {

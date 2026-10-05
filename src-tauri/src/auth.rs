@@ -16,6 +16,8 @@ pub async fn login(email: String, password: String, app: tauri::AppHandle) -> Re
 
     store.set("auth_token", Value::String(result.token.clone()));
     store.set("organization_id", Value::String(result.organization_id));
+    store.set("user_name", Value::String(result.name));
+    store.set("user_email", Value::String(result.email));
     store.save().map_err(|e| e.to_string())?;
 
     let salt_exists = store.get("salt").is_some();
@@ -88,16 +90,16 @@ pub fn get_token(app: tauri::AppHandle) -> Result<String, String> {
     }
 }
 
-pub fn get_organization_id(app: tauri::AppHandle) -> Result<String, String> {
+pub fn get_user_email(app: tauri::AppHandle) -> Result<String, String> {
     let store = StoreBuilder::new(&app, "settings.dat")
         .build()
         .map_err(|e| e.to_string())?;
-    
-    let org_id = store.get("organization_id")
+
+    let email = store.get("user_email")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .ok_or("No organization ID found")?;
-    
-    Ok(org_id)
+        .unwrap_or_default();
+
+    Ok(email)
 }
 
 pub fn get_salt(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {

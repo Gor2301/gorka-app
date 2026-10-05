@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import { apiService } from '../services/api.service';
+import { auth } from '../services/local.db';
 import SyncIndicator from './SyncIndicator';
 
 interface AppShellProps {
@@ -9,16 +9,28 @@ interface AppShellProps {
 }
 
 const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
-  const [user, setUser] = useState<{ name: string } | null>(null);
+  const [displayName, setDisplayName] = useState<string>('');
 
   useEffect(() => {
-    apiService.get('/auth/me')
-      .then((data) => {
-        if (data.success) {
-          setUser(data.data);
+    let cancelled = false;
+    (async () => {
+      try {
+        const name = await auth.getUserName();
+        if (cancelled) return;
+        if (name && name.trim()) {
+          setDisplayName(name);
+          return;
         }
-      })
-      .catch(() => {});
+        const email = await auth.getUserEmail();
+        if (cancelled) return;
+        setDisplayName(email ?? '');
+      } catch {
+        // no-op; displayName stays empty
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -43,7 +55,7 @@ const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <SyncIndicator />
             <span style={{ fontSize: '14px', color: '#6b7280' }}>
-              {user?.name || 'Supervisor'}
+              {displayName}
             </span>
             <div style={{
               width: '32px',
@@ -57,9 +69,14 @@ const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
               fontWeight: '600',
               fontSize: '14px'
             }}>
-              {user?.name
-                ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
-                : 'S'}
+              {displayName
+                ? displayName
+                    .split(' ')
+                    .map((n: string) => n[0])
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2)
+                : '?'}
             </div>
           </div>
         </header>
