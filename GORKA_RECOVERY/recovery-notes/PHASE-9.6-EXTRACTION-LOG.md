@@ -1074,4 +1074,297 @@ Batch 7 is the full ten-criterion acceptance.
 
 END OF DOCUMENT
 
+Batch 7 is the full ten-criterion acceptance.
+
+================================================================
+BATCH 6B-2B - CLIENT RELAY FALLBACK
+================================================================
+
+Commits:
+  da8ec6d  connector side
+  bbe28dd  test fix (DiscoveryConfig gains two new fields)
+  096ff0f  listener side (RelayPairingWaiter, no self-reconnect)
+  bcf6624  temporary test change (force relay path on loopback)
+  7cdac88  revert of the temporary test change
+  04bc5db  post-hoc Cargo.lock alignment (tungstenite 0.21.0)
+
+Files added / changed (connector side):
+  shared/src/sync_transport.rs   SessionTransport and
+                                 HandshakeTransport traits
+  shared/src/sync_session.rs     Session holds Box<dyn SessionTransport>;
+                                 drops TcpStream-specific recv_frame
+                                 and set_read_timeout
+  shared/src/sync_relay.rs       NEW: RelayTransport, opens WebSocket
+                                 to ws://<backend>/api/sync/relay,
+                                 sends open frame (jwt, wireDeviceId,
+                                 targetWireDeviceId), waits for paired
+  shared/src/sync_engine.rs      Connect branch: try_tcp_session with
+                                 5 s connect_timeout, then fall back to
+                                 RelayTransport when TCP fails.
+                                 DiscoveryConfig gains
+                                 local_wire_device_id_hex and
+                                 backend_base_url
+  src-tauri-agent/src/main.rs    start_sync_engine supplies both fields
+  shared/tests/sync_engine.rs    DiscoveryConfig gains the two fields;
+                                 test uses manual_override path
+
+Files added / changed (listener side, 096ff0f):
+  shared/src/sync_relay.rs       open_pairing_websocket (no-target
+                                 open, non-blocking);
+                                 RelayPairingWaiter (one socket,
+                                 no self-reconnect);
+                                 RelayTransport::from_paired_websocket
+  shared/src/sync_engine.rs      PeerMode::Listen becomes a struct
+                                 variant carrying backend_base_url and
+                                 local_wire_device_id_hex. Listen
+                                 branch polls TCP and the relay waiter
+                                 with a 2-second reopen throttle.
+                                 Retry ownership stays in the Listen
+                                 loop, not in the waiter.
+  ListenerConfig, both Tauri binaries, and the backend: untouched.
+
+What was added:
+  Transport generalization. A session is no longer tied to a TCP
+  stream. The SessionTransport and HandshakeTransport traits let
+  the engine pick direct or relay at session setup. The wire
+  framing and buffered try_recv_frame are preserved.
+
+  Client relay fallback. When a direct TCP connect fails, the Agent
+  falls back to opening a WebSocket to the Control Plane relay.
+
+  Parallel relay presence for the listener. The Client listener
+  opens a pairing WebSocket to the relay alongside its TCP listener
+  and polls both in the same loop. Whichever yields a session first
+  wins. Without this, the Agent's relay fallback had nobody to pair
+  with.
+
+No protocol, event, reconciliation, schema, or encryption changes.
+
+Windows Firewall loopback finding (recorded during this batch):
+  Inbound and outbound netsh advfirewall rules have no effect on
+  127.0.0.1 connections. To force the relay path on the same
+  machine, the listener registered 127.0.0.1:<port+1> so the
+  Agent's TCP connect to the bound port failed. This is the
+  temporary change at bcf6624, reverted at 7cdac88.
+
+Criterion 9 proof (over the relay):
+  relay_sessions row cmusrkd4t0005uvh4vtnsiqji, 1898 bytes,
+  sessionStatus ENDED, closeReason normal-close, recorded during
+  the temporary window. Bidirectional propagation while the relay
+  was on the path. Direct TCP preference also proven.
+
+Post-hoc lockfile alignment:
+  04bc5db - Cargo.lock sync after 6b-2b; tungstenite 0.21.0 and
+  transitive dependency resolution (data-encoding, sha1, utf-8).
+  Committed 2026-10-04. No source or protocol change. Listed here
+  so a future reader sees why a dependency-lock commit appears
+  after the 6b-2b implementation commit.
+
+Fix during the batch: none.
+
+================================================================
+BATCH 7 - FULL TEN-CRITERION ACCEPTANCE
+================================================================
+
+Purpose:
+  Run every MVP acceptance criterion live and capture direct
+  evidence. Plus the §12.2 extra tests. Plus three founder-requested
+  tests (A, B, C). The founder's reasoning, on the record: this sync
+  engine is a core pillar. If it does not work properly, everything
+  else is useless. Time authorized accordingly.
+
+The ten MVP acceptance criteria (§12.1), all proven live:
+
+  #   Criterion                                    Status
+  --  -------------------------------------------  -----------------
+  1   Initial sync between two machines            PROVEN
+  2   New debtor propagation                       PROVEN
+  3   State update propagation                     PROVEN
+  4   Event propagation, append-only               PROVEN
+  5   Offline, reconnect, reconcile                PROVEN
+  6   Duplicate prevention                         PROVEN
+  7   No data loss under normal operation          PROVEN
+  8   Direct connection path                       PROVEN
+  9   Relay fallback path                          PROVEN (6b-2b)
+  10  Corrupted message rejection                  PASS (see below)
+
+The §12.2 extra tests, both run live in this session:
+
+  Out-of-order arrival                            PASS
+  Connection-drop-mid-sync                        PASS
+
+Founder-requested extra tests A, B, C:
+
+  Test A - Agent killed mid-sync, catches up      PASS (prior session)
+  Test B - Client killed mid-receive, catches up  PASS (prior session)
+  Test C - AEAD rejection observability           CLOSED WITH FINDING
+                                                   (see below)
+
+Test A (prior session):
+  Client inserted 300 debtors while Agent offline. Client
+  reached 316. Agent's engine started, then taskkill /F on
+  gorka-agent.exe mid-transfer. Agent relaunched, engine
+  started, caught up to 316. No loss, no duplicates.
+
+Test B (prior session):
+  Agent inserted 200 debtors while both offline. Agent reached
+  516. Both engines started, then taskkill /F on
+  gorka-client.exe mid-receive. Client relaunched, engine
+  started, caught up to 516. No loss, no duplicates.
+
+Out-of-order arrival test (this session):
+  Reorder hook (test_reverse_next_batch) armed on Agent. Three
+  debtors inserted on Agent in a tight burst, so a single
+  outbound SYNC_MESSAGE carried all three events with their
+  order reversed on the wire. Client search returned exactly
+  three rows (OOO-1, OOO-2, OOO-3), no duplicates, no missing.
+  Convergence held.
+
+Connection-drop-mid-sync test (this session):
+  Twenty debtors inserted on Agent in one burst. Client killed
+  with taskkill /F mid-transfer, before the burst finished
+  pushing to the peer. Client relaunched, engine restarted,
+  Agent reconnected, unacknowledged events re-sent, duplicate
+  detection prevented double-apply. Client search returned
+  exactly 20 rows, no duplicates, no missing. Directly observed,
+  not inferred.
+
+Criterion 10 - PASS:
+  Corrupted-frame rejection, session termination, retry,
+  successful recovery, and data preservation are proven.
+  The rejecting engine records the internal Error and enters
+  the normal recovery state sequence. No data loss, no duplicate
+  effect. Verified by direct observation of the wire, across
+  multiple runs, with probes on both binaries.
+
+Test C - CLOSED WITH FINDING:
+  The corrupted-frame rejection and recovery behavior is proven.
+  The rejecting engine writes Error(...) internally, but the UI
+  does not expose that transient state because it is immediately
+  replaced by Offline. The UI-visible recovery sequence
+  Offline -> Connecting -> Pending -> Synced was directly
+  observed under a 60-second polling window. No production defect
+  was identified. The remaining question of whether transient
+  cryptographic/session failures should have a separately
+  visible error indication is deferred as a future status/UX
+  design decision.
+
+  Supporting evidence, Client terminal:
+
+    AEAD FAILURE len=283
+    OUTER ERROR: SYNC_MESSAGE: decryption failed
+    set_status -> Error("SYNC_MESSAGE: decryption failed") @ 0x1f17aa4d2a0
+    set_status -> Offline @ 0x1f17aa4d2a0
+    set_status -> Connecting @ 0x1f17aa4d2a0
+    ...
+    set_status -> Pending @ 0x1f17aa4d2a0
+    set_status -> Synced @ 0x1f17aa4d2a0
+
+  Supporting evidence, Client poll (100 ms cadence, 60-second
+  window, 544 reads):
+
+    [{ "dt": 12,     "s": "synced"     },
+     { "dt": 15692,  "s": "offline"    },
+     { "dt": 16768,  "s": "connecting" },
+     { "dt": 33047,  "s": "pending"    },
+     { "dt": 33159,  "s": "synced"     }]
+
+  Supporting evidence, Arc comparison: on Client, every write and
+  every read used Arc 0x1f17aa4d2a0. On Agent, every write and
+  every read used Arc 0x23296070070. There is no second Arc.
+  No set_status LOCK FAILED line was observed.
+
+  Architectural interpretation:
+    Internal diagnostic event: AEAD failure -> Error(...)
+    Stable operational state: session failed -> Offline ->
+                              Connecting -> Pending -> Synced
+
+  The distinction makes sense for GORKA. An AEAD failure is
+  important from a security/diagnostic perspective, but it does
+  not mean the replica should remain in a persistent Error
+  state. Section 26.2 defines Error for persistent conditions
+  (repeated session failures, version mismatch, internal errors,
+  persistent transport failure). A one-shot AEAD rejection that
+  immediately terminates the session and enters recovery is not
+  by itself a persistent condition. Under that interpretation,
+  Offline is the correct user-facing state, and the Error write
+  is close to dead code for this specific path.
+
+  No production code was changed to make Test C's original
+  wording pass. No artificial Error display window was
+  introduced. The question of whether transient security or
+  session failures should have a visible error indicator is
+  recorded as a future UX/status design decision, not a Batch 7
+  blocker.
+
+Temporary diagnostic machinery used during Batch 7:
+
+  9918e5f  Batch 7 acceptance test hooks (corruption + reorder)
+  867f846  Batch 7 Test C diagnostic probes (CORRUPTING + sending)
+  9bb7db8  Batch 7 Test C Client-side probes (received + parse +
+           AEAD FAILURE)
+  24c1035  Batch 7 Test C localization probe (OUTER ERROR)
+  125e1f2  Batch 7 Test C status-path probes (set_status write-side,
+           EngineHandle::status read-side)
+
+  All temporary. No control-flow change. Removed in one revert
+  commit.
+
+Revert commit:
+  4e090e0 - Revert every Batch 7 Test C diagnostic probe and
+  hook. Restores shared/src/sync_engine.rs, shared/src/sync.rs,
+  and src-tauri-agent/src/main.rs to their pre-probe state
+  (224bd79). Diff against 224bd79 for the three files is empty.
+
+Post-revert verification (cloud, 4e090e0):
+  gorka-agent build   PASS, 2 warnings
+  gorka-client build  PASS, 3 warnings
+  gorka-shared        PASS, 6 warnings
+  shared tests        39/39 PASS
+                      (6 enrollment + 9 sync + 1 engine
+                       integration + 6 wire roundtrip
+                       + 2 pipeline + 15 session)
+
+Deviations:
+  None. No production logic change was made for any test.
+  Test C's original wording was not satisfied by adding an
+  artificial Error display window. The finding is documented
+  rather than papered over.
+
+================================================================
+           STATE AT END OF BATCH 7
+================================================================
+
+  Main machine:  4e090e0, clean, pushed.
+  Cloud machine: 4e090e0, clean except known untracked scratch
+                 files (b7-meta-check.cjs, build-6b2b*.txt,
+                 check-columns.ts, relay-check.cjs,
+                 test-6b2b*.txt, test-output.txt).
+  GitHub:        4e090e0.
+
+All ten MVP sync-engine acceptance criteria proven live. §12.2
+extra tests both passed. Founder-requested tests A, B passed;
+Test C closed with finding. Criterion 10 pass. All temporary
+diagnostic machinery reverted. Builds clean at baseline
+warnings. 39 shared tests pass.
+
+What remains in Phase 9.6 after Batch 7:
+
+  - The sync indicator slice (replace the static TopHeader
+    placeholder with a functional status reader).
+  - CONNECTOR-MODEL.md.
+  - Then Phase 9.6 closes and Phase 9.7 (multi-user
+    demonstration) can begin planning.
+
+Claim D (the boundary-test multi-machine relay claim from
+BOUNDARY-TEST-PLAN.md §2.4) was not folded into this batch.
+Reason: forcing the relay path on loopback needs a temporary
+code change, and the reviewer's ruling for this batch was no
+production changes during diagnosis. Claim D remains a Phase 15
+item.
+
+================================================================
+
+END OF DOCUMENT
+
 ================================================================

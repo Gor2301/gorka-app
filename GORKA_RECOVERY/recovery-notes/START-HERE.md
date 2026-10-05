@@ -1582,3 +1582,99 @@ See PHASE-9.6-EXTRACTION-LOG.md (new), DECISIONS.md, and
 HANDOFF.md for full details.
 
 End of update.
+
+
+================================================================
+Update - October 3-5, 2026 (Batch 6b-2b closed, Batch 7 acceptance, Test C closed with finding)
+================================================================
+
+The sync engine's ten MVP acceptance criteria are now all
+proven live. Batch 6b-2b, Batch 7, the two §12.2 extra tests,
+and the three founder-requested tests (A, B, C) are all closed.
+All temporary diagnostic machinery is reverted. Both binaries
+rebuild clean at baseline warnings.
+
+Sequence executed this session:
+
+  Batch 6b-2b client relay fallback   da8ec6d, bbe28dd, 096ff0f,
+                                      bcf6624, 7cdac88
+  Cargo.lock alignment (post-hoc)     04bc5db
+  Batch 7 diagnostic probes           9918e5f, 867f846, 9bb7db8,
+                                      24c1035, 125e1f2
+  Revert of all probes                4e090e0
+
+What is now working:
+
+  - All ten MVP sync-engine acceptance criteria proven live:
+    1  Initial sync               PROVEN
+    2  New debtor propagation     PROVEN
+    3  State update propagation   PROVEN
+    4  Event propagation          PROVEN
+    5  Offline/reconnect          PROVEN
+    6  Duplicate prevention       PROVEN
+    7  No data loss               PROVEN
+    8  Direct connection          PROVEN
+    9  Relay fallback             PROVEN
+    10 Corrupted message          PASS
+
+  - §12.2 extra tests both passed live: out-of-order arrival,
+    connection-drop-mid-sync.
+
+  - Founder-requested tests A and B passed (prior session):
+    process-kill mid-flight and queue persistence.
+
+  - Test C closed with finding. The engine writes Error(...)
+    internally; the UI does not expose it because it is
+    immediately replaced by Offline. UI-visible sequence
+    Offline -> Connecting -> Pending -> Synced observed under
+    a 60-second polling window. No production defect. The
+    question of whether transient cryptographic/session
+    failures should have a separately visible error indication
+    is deferred as a future status/UX design decision.
+
+  - Production code unchanged. No artificial Error display
+    window was introduced.
+
+Criterion 9 proof (relay fallback, from Batch 6b-2b):
+  relay_sessions row cmusrkd4t0005uvh4vtnsiqji, 1898 bytes,
+  sessionStatus ENDED, closeReason normal-close.
+
+Windows Firewall loopback finding (recorded during 6b-2b):
+  netsh advfirewall rules do not filter 127.0.0.1 connections.
+  Forcing the relay path on the same machine required a
+  temporary listener-port change (bcf6624, reverted at
+  7cdac88).
+
+Post-revert verification (cloud, 4e090e0):
+
+  gorka-agent build   PASS, 2 warnings
+  gorka-client build  PASS, 3 warnings
+  gorka-shared        PASS, 6 warnings
+  shared tests        39/39 PASS
+
+Claim D (boundary-test multi-machine relay claim) not folded
+into this batch. Reason: forcing the relay path on loopback
+needs a temporary code change, and the reviewer's ruling for
+this batch was no production changes during diagnosis. Claim D
+remains a Phase 15 item.
+
+What remains in Phase 9.6 after Batch 7:
+
+  1. The sync indicator slice - replace the static TopHeader
+     placeholder with a functional status reader.
+  2. CONNECTOR-MODEL.md.
+  3. Then Phase 9.6 closes and Phase 9.7 (multi-user
+     demonstration) can begin planning.
+
+Repository state:
+
+  Main machine:  4e090e0, clean, pushed.
+  Cloud machine: 4e090e0, clean except known untracked scratch
+                 files.
+  GitHub:        4e090e0.
+
+See PHASE-9.6-EXTRACTION-LOG.md (Batch 6b-2b and Batch 7
+sections), DECISIONS.md (October 3-5 entry), and HANDOFF.md
+for full details.
+
+End of update.

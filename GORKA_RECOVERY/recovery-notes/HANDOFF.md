@@ -3614,3 +3614,120 @@ records.
   - No frozen document amended.
 
 End of entry.
+
+
+## STATUS UPDATE - October 3-5, 2026 (Batch 6b-2b, Batch 7 acceptance, Test C closed with finding)
+
+### What this session did
+
+Closed Batch 6b-2b (client relay fallback). Ran Batch 7 - the full ten-criterion sync-engine acceptance - live. Ran the two §12.2 extra tests. Confirmed the two founder-requested extra tests already recorded (A, B). Diagnosed and closed Test C. Reverted all diagnostic machinery. Rebuilt clean at both warning baselines.
+
+### Batch 6b-2b - client relay fallback
+
+Commit chain:
+
+  da8ec6d  connector side
+  bbe28dd  test fix
+  096ff0f  listener side
+  bcf6624  temporary test change (force relay path on loopback)
+  7cdac88  revert of the temporary test change
+  04bc5db  post-hoc Cargo.lock alignment (tungstenite 0.21.0)
+
+Transport generalization: SessionTransport and HandshakeTransport traits. Session holds Box<dyn SessionTransport>. Direct TCP preferred, relay fallback when TCP fails. Listener side opens a parallel pairing WebSocket. Criterion 9 proven over the relay: relay_sessions row cmusrkd4t0005uvh4vtnsiqji, 1898 bytes, ENDED, normal-close.
+
+Windows Firewall loopback finding recorded: netsh advfirewall rules do not filter 127.0.0.1 connections. Forcing the relay path on the same machine required a temporary listener-port change (bcf6624, reverted at 7cdac88).
+
+### Batch 7 - full ten-criterion acceptance
+
+All ten MVP sync-engine acceptance criteria proven live:
+
+  1  Initial sync between two machines       PROVEN
+  2  New debtor propagation                  PROVEN
+  3  State update propagation                PROVEN
+  4  Event propagation, append-only          PROVEN
+  5  Offline, reconnect, reconcile           PROVEN
+  6  Duplicate prevention                    PROVEN
+  7  No data loss under normal operation     PROVEN
+  8  Direct connection path                  PROVEN
+  9  Relay fallback path                     PROVEN (6b-2b)
+  10 Corrupted message rejection             PASS
+
+### §12.2 extra tests
+
+Out-of-order arrival: PASS. Three debtors in a tight burst, batch reversed on the wire, Client converged to three rows, no duplicates, no missing.
+
+Connection-drop-mid-sync: PASS. Twenty debtors inserted on Agent, Client killed with taskkill /F mid-transfer, relaunched, engine restarted, Agent reconnected, unacknowledged events re-sent. Client converged to twenty rows, no duplicates, no missing.
+
+### Founder-requested extra tests A and B - PASSED (prior session)
+
+Test A - Agent killed mid-sync, catches up. 300 debtors inserted while Agent offline; Client reached 316; taskkill /F on gorka-agent.exe mid-transfer; Agent relaunched and caught up to 316. No loss, no duplicates.
+
+Test B - Client killed mid-receive, catches up. 200 debtors inserted while both offline; Agent reached 516; taskkill /F on gorka-client.exe mid-receive; Client relaunched and caught up to 516. No loss, no duplicates.
+
+### Criterion 10 - PASS
+
+Corrupted-frame rejection, session termination, retry, successful recovery, and data preservation are proven. The rejecting engine records the internal error and enters the normal recovery state sequence. No data loss, no duplicate effect.
+
+### Test C - CLOSED WITH FINDING
+
+The corrupted-frame rejection and recovery behavior is proven. The rejecting engine writes Error(...) internally, but the UI does not expose that transient state because it is immediately replaced by Offline. The UI-visible recovery sequence Offline -> Connecting -> Pending -> Synced was directly observed under a 60-second polling window. No production defect was identified. The remaining question of whether transient cryptographic/session failures should have a separately visible error indication is deferred as a future status/UX design decision.
+
+The reviewer's ruling: GO with Option A - do not modify production code. Close Test C with a documented finding. Treat visible transient Error as a future design decision rather than an MVP defect. Full reasoning recorded in DECISIONS.md.
+
+No production code was changed to make Test C's original wording pass. No artificial Error display window was introduced.
+
+### Diagnostic machinery - all reverted
+
+Five temporary commits added probes and hooks during Batch 7. All reverted in one commit at the end:
+
+  4e090e0 - Revert every Batch 7 Test C diagnostic probe and hook.
+  Diff of shared/src/sync_engine.rs, shared/src/sync.rs, and
+  src-tauri-agent/src/main.rs against the pre-probe state 224bd79
+  is empty.
+
+### Verification after revert (cloud, 4e090e0)
+
+  gorka-agent build   PASS, 2 warnings
+  gorka-client build  PASS, 3 warnings
+  gorka-shared        PASS, 6 warnings
+  shared tests        39/39 PASS
+
+### The one Cargo.lock commit
+
+04bc5db. Cargo.lock sync after 6b-2b. Tungstenite 0.21.0 plus transitive deps. Committed 2026-10-04. Documented in the extraction log under 6b-2b. No source or protocol change.
+
+### Claim D - not folded into this batch
+
+The boundary-test multi-machine relay claim (BOUNDARY-TEST-PLAN.md §2.4) was not folded into Batch 7. Reason: forcing the relay path on loopback needs a temporary code change, and the reviewer's ruling for this batch was no production changes during diagnosis. Claim D remains a Phase 15 item.
+
+### What remains in Phase 9.6 after Batch 7
+
+  - The sync indicator slice (replace the static TopHeader
+    placeholder with a functional status reader).
+  - CONNECTOR-MODEL.md.
+  - Then Phase 9.6 closes and Phase 9.7 (multi-user
+    demonstration) can begin planning.
+
+### State at end of session
+
+  Main machine:  4e090e0, clean, pushed.
+  Cloud machine: 4e090e0, clean except known untracked scratch
+                 files (b7-meta-check.cjs, build-6b2b*.txt,
+                 check-columns.ts, relay-check.cjs,
+                 test-6b2b*.txt, test-output.txt).
+  GitHub:        4e090e0.
+
+39 shared tests pass. Agent 2 warnings, Client 3 warnings, shared 6 warnings.
+
+See PHASE-9.6-EXTRACTION-LOG.md and DECISIONS.md for the full records.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held.
+  - No frozen document amended.
+  - No production logic change was made for any test.
+
+End of entry.

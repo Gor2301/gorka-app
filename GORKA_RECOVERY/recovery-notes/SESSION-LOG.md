@@ -3665,3 +3665,193 @@ RULE COMPLIANCE
   3.7 amendment recorded earlier in Phase 9.5.
 
 End of entry.
+
+
+================================================================
+SESSION - October 3-5, 2026 (Batch 6b-2b close, Batch 7 acceptance, Test C closed with finding)
+================================================================
+
+WHAT THIS SESSION DID
+
+Closed Batch 6b-2b (client relay fallback). Ran Batch 7 - the
+full ten-criterion sync-engine acceptance - live. Ran the two
+§12.2 extra tests. Confirmed the two founder-requested extra
+tests already recorded (A, B). Diagnosed Test C. Reverted all
+diagnostic machinery in one commit. Rebuilt clean at both
+warning baselines on cloud.
+
+Technical details of each slice are in
+PHASE-9.6-EXTRACTION-LOG.md. The HOW decisions are in
+DECISIONS.md (October 3-5 entry). Status is in HANDOFF.md.
+
+THE SESSION IN ORDER
+
+Batch 6b-2b - client relay fallback. Commits da8ec6d, bbe28dd,
+096ff0f, bcf6624, 7cdac88. Transport generalization:
+SessionTransport and HandshakeTransport traits, Session holds
+Box<dyn SessionTransport>. Connector side: Agent falls back to
+WebSocket relay when direct TCP fails. Listener side: Client
+opens a parallel pairing WebSocket alongside its TCP listener.
+Windows Firewall loopback finding recorded: netsh advfirewall
+rules do not filter 127.0.0.1. Forcing the relay path on the
+same machine required a temporary listener-port change at
+bcf6624, reverted at 7cdac88. Criterion 9 proven over the relay:
+relay_sessions row cmusrkd4t0005uvh4vtnsiqji, 1898 bytes, ENDED,
+normal-close. Post-hoc Cargo.lock alignment committed separately
+as 04bc5db (tungstenite 0.21.0 plus transitive deps).
+
+Batch 7 - ten-criterion acceptance. All ten MVP sync-engine
+acceptance criteria from GORKA-MVP-SCOPE.md §12.1 proven live.
+Criteria 1, 2, 4, 7, 8 were proven in prior sessions; criteria
+3, 5, 6, 10 proven in this session; criterion 9 proven by
+6b-2b.
+
+The two §12.2 extra tests. Out-of-order arrival PASS: three
+debtors inserted on Agent in a tight burst, batch reversed on
+the wire by test_reverse_next_batch, Client converged to three
+rows, no duplicates, no missing. Connection-drop-mid-sync PASS:
+twenty debtors inserted on Agent, Client killed with
+taskkill /F mid-transfer, relaunched, engine restarted, Agent
+reconnected and re-sent unacknowledged events. Client converged
+to twenty rows, no duplicates, no missing. Both directly
+observed.
+
+Founder-requested extra tests A and B, already recorded from
+prior sessions. Confirmed as PASS: A (Agent killed mid-sync,
+caught up from 316 to 316 after 300 inserts on Client). B
+(Client killed mid-receive, caught up from 516 to 516 after
+200 inserts on Agent). Both prove the mid-flight process-kill
+and queue-persistence property.
+
+Test C diagnostic investigation. Test C asked: does the
+rejecting machine visibly transition through Error(...) before
+returning to synced, when it receives an AEAD-corrupted frame.
+
+The functional half was already proven. The observability half
+was not. Three diagnostic runs across this session:
+
+  Run 1: poll at 100 ms for 12 s, corruption fired after the
+  poll window closed. Poll result: reads 109, changes
+  [{dt: 11, s: "synced"}]. Timing failure, not engine failure.
+
+  Run 2: corruption armed before poll start, poll extended to
+  60 s. Client terminal showed:
+    AEAD FAILURE
+    OUTER ERROR: SYNC_MESSAGE: decryption failed
+    set_status -> Error("SYNC_MESSAGE: decryption failed") @ 0x1f17aa4d2a0
+    set_status -> Offline @ 0x1f17aa4d2a0
+    set_status -> Connecting @ 0x1f17aa4d2a0
+    ...
+    set_status -> Pending @ 0x1f17aa4d2a0
+    set_status -> Synced @ 0x1f17aa4d2a0
+  Client poll: reads 544, changes synced (dt=12), offline
+  (dt=15692), connecting (dt=16768), pending (dt=33047), synced
+  (dt=33159). Note: error was not in the poll. It was written
+  microseconds before offline in the same outer-loop iteration.
+
+  Arc comparison: on Client, every write and every read used
+  Arc 0x1f17aa4d2a0. On Agent, every write and every read used
+  Arc 0x23296070070. No second Arc. No LOCK FAILED. No mutex
+  poisoning.
+
+The diagnostic established the engine's status layer is
+correct end to end. The Error write happens, the write and read
+share the same Arc, and the UI-visible state passes through
+Offline, Connecting, Pending, and back to Synced.
+
+Test C ruling. The founder's external reviewer reviewed the
+evidence and ruled: GO with Option A - do not modify production
+code. Close Test C with a documented finding. The evidence
+establishes something stronger and cleaner than the original
+wording asked for: the cryptographic rejection works
+correctly, the engine records Error(...) internally, the
+UI-visible state transitions Offline -> Connecting -> Pending
+-> Synced, and the Error state is intentionally non-observable
+because it is immediately replaced by Offline. Option B (adding
+an artificial sleep before the Offline write) would be
+test-driven production behavior, and would make the status
+machine slightly misleading. The correct distinction is
+between an internal diagnostic event and a stable operational
+state. Recorded as:
+
+  Test C - CLOSED WITH FINDING
+  Criterion 10 - PASS
+
+No production code was changed. The question of whether
+transient cryptographic/session failures should have a
+separately visible error indication is deferred as a future
+status/UX design decision.
+
+Revert of temporary diagnostic machinery. Five temporary
+commits added probes and hooks during Batch 7:
+
+  9918e5f  Batch 7 acceptance test hooks (corruption + reorder)
+  867f846  Batch 7 Test C diagnostic probes (CORRUPTING + sending)
+  9bb7db8  Batch 7 Test C Client-side probes (received + parse + AEAD FAILURE)
+  24c1035  Batch 7 Test C localization probe (OUTER ERROR)
+  125e1f2  Batch 7 Test C status-path probes (set_status write-side, EngineHandle::status read-side)
+
+All reverted in one commit:
+
+  4e090e0  Revert every Batch 7 Test C diagnostic probe and hook.
+
+Diff of shared/src/sync_engine.rs, shared/src/sync.rs, and
+src-tauri-agent/src/main.rs against the pre-probe state 224bd79
+is empty.
+
+VERIFICATION AFTER REVERT (cloud, 4e090e0)
+
+  gorka-agent build   PASS, 2 warnings
+  gorka-client build  PASS, 3 warnings
+  gorka-shared        PASS, 6 warnings
+  shared tests        39/39 PASS
+                      (6 enrollment + 9 sync + 1 engine
+                       integration + 6 wire roundtrip
+                       + 2 pipeline + 15 session)
+
+DOCUMENTATION WRITTEN THIS SESSION
+
+  PHASE-9.6-EXTRACTION-LOG.md - Batch 6b-2b section and Batch 7
+  section appended. 04bc5db recorded under 6b-2b as post-hoc
+  lockfile alignment. Footer replaced with STATE AT END OF
+  BATCH 7.
+
+  DECISIONS.md - new session entry. Reviewer's ruling recorded
+  verbatim. Architectural interpretation recorded. Claim D
+  deferral recorded.
+
+  HANDOFF.md - status update appended.
+
+  SESSION-LOG.md - this entry.
+
+  START-HERE.md - update subsection to follow.
+
+STATE AT END OF SESSION
+
+  Main machine:  4e090e0, clean, pushed.
+  Cloud machine: 4e090e0, clean except known untracked scratch
+                 files.
+  GitHub:        4e090e0.
+
+NEXT WORK
+
+  1. Documentation batch continues: START-HERE.md update, then
+     commit and push the documentation batch.
+  2. The sync indicator slice (replace the static TopHeader
+     placeholder with a functional status reader).
+  3. CONNECTOR-MODEL.md.
+  4. Then Phase 9.6 closes and Phase 9.7 can begin planning.
+
+RULE COMPLIANCE
+
+  No production touched.
+  No cloud schema change.
+  No CI/CD touched (release.yml unchanged).
+  Invariant held.
+  No frozen document amended.
+  No production logic change was made for any test. Test C's
+  original wording was not satisfied by adding an artificial
+  Error display window. The finding is documented rather than
+  papered over.
+
+End of entry.

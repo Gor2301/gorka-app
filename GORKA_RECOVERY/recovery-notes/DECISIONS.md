@@ -9179,3 +9179,174 @@ The backend half of criterion 9. The client-side fallback
 remains: Batch 6b-2b.
 
 End of entry.
+
+
+---
+
+## Recovery Session - October 3-5, 2026 (Batch 6b-2b close, Batch 7 acceptance, Test C closed with finding)
+
+This entry records the session that closed Batch 6b-2b, ran the full ten-criterion acceptance as Batch 7, ran the two §12.2 extra tests, ran the two founder-requested extra tests that were already recorded (A, B), and closed Test C with a documented finding. Technical detail is in PHASE-9.6-EXTRACTION-LOG.md. This entry records what was decided and why.
+
+### The phase
+
+Phase 9.6 is the sync engine. Two client-owned machines synchronize debtor data directly, end-to-end encrypted, with GORKA's Control Plane providing discovery and an encrypted relay fallback. Ten acceptance criteria (GORKA-MVP-SCOPE.md §12.1). Two extra §12.2 tests. Three founder-requested tests (A, B, C).
+
+### Batch 6b-2b - client relay fallback
+
+Completed. The commit chain:
+
+  da8ec6d  connector side
+  bbe28dd  test fix (DiscoveryConfig gains two new fields)
+  096ff0f  listener side (RelayPairingWaiter, no self-reconnect)
+  bcf6624  temporary test change (force relay path on loopback)
+  7cdac88  revert of the temporary test change
+  04bc5db  post-hoc Cargo.lock alignment (tungstenite 0.21.0)
+
+Transport generalization. SessionTransport and HandshakeTransport traits let the engine pick direct or relay at session setup. Session holds Box<dyn SessionTransport>. The TcpStream-specific recv_frame and set_read_timeout were removed. Wire framing and buffered try_recv_frame are preserved.
+
+Connector side. When direct TCP connect fails, the Agent falls back to a WebSocket to the Control Plane relay.
+
+Listener side. The Client listener opens a pairing WebSocket to the relay alongside its TCP listener and polls both in the same loop. Whichever yields a session first wins. Retry ownership stays in the Listen loop, not in the pairing waiter. Without this, the Agent's relay fallback had nobody to pair with.
+
+Windows Firewall loopback finding, recorded during this batch: inbound and outbound netsh advfirewall rules have no effect on 127.0.0.1 connections. To force the relay path on the same machine, the listener registered 127.0.0.1:<port+1> so the Agent's TCP connect to the bound port failed. That is bcf6624; reverted at 7cdac88.
+
+Criterion 9 proof (over the relay): relay_sessions row cmusrkd4t0005uvh4vtnsiqji, 1898 bytes, sessionStatus ENDED, closeReason normal-close, recorded during the temporary window. Bidirectional propagation while the relay was on the path. Direct TCP preference also proven.
+
+Post-hoc lockfile alignment: 04bc5db. Cargo.lock sync after 6b-2b; tungstenite 0.21.0 plus transitive dependencies (data-encoding, sha1, utf-8). Committed 2026-10-04. No source or protocol change. Recorded in the extraction log under 6b-2b so a future reader sees why a dependency-lock commit appears after the 6b-2b implementation commit.
+
+### Batch 7 - the full ten-criterion acceptance
+
+All ten MVP acceptance criteria proven live:
+
+  1  Initial sync between two machines       PROVEN
+  2  New debtor propagation                  PROVEN
+  3  State update propagation                PROVEN
+  4  Event propagation, append-only          PROVEN
+  5  Offline, reconnect, reconcile           PROVEN
+  6  Duplicate prevention                    PROVEN
+  7  No data loss under normal operation     PROVEN
+  8  Direct connection path                  PROVEN
+  9  Relay fallback path                     PROVEN (6b-2b)
+  10 Corrupted message rejection             PASS (see Test C)
+
+### The two §12.2 extra tests
+
+Both run live this session. Both passed.
+
+Out-of-order arrival. Reorder hook armed on Agent. Three debtors inserted in a tight burst, so a single outbound SYNC_MESSAGE carried all three events with their order reversed on the wire. Client search returned exactly three rows, no duplicates, no missing. Convergence held.
+
+Connection-drop-mid-sync. Twenty debtors inserted on Agent in one burst. Client killed with taskkill /F mid-transfer, before the burst finished pushing to the peer. Client relaunched, engine restarted, Agent reconnected, unacknowledged events re-sent, duplicate detection prevented double-apply. Client search returned exactly 20 rows, no duplicates, no missing. Directly observed, not inferred.
+
+### Founder-requested extra tests A and B - PASSED (prior session)
+
+Test A. Agent killed mid-sync, restarts, catches up. Client inserted 300 debtors while Agent offline. Client reached 316. Agent's engine started, then taskkill /F on gorka-agent.exe mid-transfer. Agent relaunched, engine started, caught up to 316. No loss, no duplicates.
+
+Test B. Client killed mid-receive, restarts, catches up. Agent inserted 200 debtors while both offline. Agent reached 516. Both engines started, then taskkill /F on gorka-client.exe mid-receive. Client relaunched, engine started, caught up to 516. No loss, no duplicates.
+
+These prove the mid-flight process-kill and queue-persistence property.
+
+### Criterion 10 - PASS
+
+Corrupted-frame rejection, session termination, retry, successful recovery, and data preservation are proven. The rejecting engine records the internal Error and enters the normal recovery state sequence. No data loss, no duplicate effect. Verified by direct observation of the wire, across multiple runs, with probes on both binaries.
+
+### Test C - CLOSED WITH FINDING
+
+The corrupted-frame rejection and recovery behavior is proven. The rejecting engine writes Error(...) internally, but the UI does not expose that transient state because it is immediately replaced by Offline. The UI-visible recovery sequence Offline -> Connecting -> Pending -> Synced was directly observed under a 60-second polling window. No production defect was identified. The remaining question of whether transient cryptographic/session failures should have a separately visible error indication is deferred as a future status/UX design decision.
+
+Supporting evidence, Client terminal:
+
+  AEAD FAILURE len=283
+  OUTER ERROR: SYNC_MESSAGE: decryption failed
+  set_status -> Error("SYNC_MESSAGE: decryption failed") @ 0x1f17aa4d2a0
+  set_status -> Offline @ 0x1f17aa4d2a0
+  set_status -> Connecting @ 0x1f17aa4d2a0
+  ...
+  set_status -> Pending @ 0x1f17aa4d2a0
+  set_status -> Synced @ 0x1f17aa4d2a0
+
+Supporting evidence, Client poll (100 ms cadence, 60-second window, 544 reads):
+
+  [{ "dt": 12,     "s": "synced"     },
+   { "dt": 15692,  "s": "offline"    },
+   { "dt": 16768,  "s": "connecting" },
+   { "dt": 33047,  "s": "pending"    },
+   { "dt": 33159,  "s": "synced"     }]
+
+Supporting evidence, Arc comparison: on Client, every write and every read used Arc 0x1f17aa4d2a0. On Agent, every write and every read used Arc 0x23296070070. There is no second Arc. No set_status LOCK FAILED line was observed.
+
+### The architectural interpretation
+
+The distinction that resolves the finding:
+
+  Internal diagnostic event: AEAD failure -> Error(...)
+  Stable operational state: session failed -> Offline ->
+                            Connecting -> Pending -> Synced
+
+Section 26.2 defines Error for persistent conditions: repeated session failures, version mismatch, internal errors, persistent transport failure. A one-shot AEAD rejection that immediately terminates the session and enters recovery is not by itself a persistent condition. Under that interpretation, Offline is the correct user-facing state, and the Error write is close to dead code for this specific path.
+
+That is a design observation, not a defect.
+
+### The ruling
+
+Reviewed by the founder's external reviewer. Ruling: GO with Option A - do not modify production code. Close Test C with a documented finding. Treat visible transient Error as a future design decision rather than an MVP defect.
+
+The reviewer's reasoning, recorded here because it is the authoritative basis for the ruling:
+
+- Do not change production code merely to make Test C's original wording pass.
+- The evidence establishes something stronger and cleaner than the original wording asked for: the cryptographic rejection works correctly, the engine records Error(...), the UI-visible state transitions Offline -> Connecting -> Pending -> Synced, and the Error state is intentionally non-observable because it is immediately replaced by Offline.
+- Option B (set_status(Error(e)); sleep(...); set_status(Offline);) would be test-driven production behavior rather than behavior justified by the architecture. It would also make the status machine slightly misleading: Error would appear to mean "the system is currently in an error condition," but in this path the engine already knows the session has failed and is immediately entering its reconnect/offline cycle. The artificial delay would exist primarily so humans and UI polling can observe a transient implementation detail.
+- The correct distinction is between an internal diagnostic event (AEAD failure -> Error(...)) and a stable operational state (session failed -> Offline -> Connecting -> Pending -> Synced).
+
+Recorded verbatim in the reviewer's own words, since the ruling is the one that will be cited in future sessions:
+
+> Test C — CLOSED WITH FINDING
+>
+> The corrupted-frame rejection and recovery behavior is proven. The rejecting engine writes Error(...) internally, but the UI does not expose that transient state because it is immediately replaced by Offline. The UI-visible recovery sequence Offline -> Connecting -> Pending -> Synced was directly observed under a 60-second polling window. No production defect was identified. The remaining question of whether transient cryptographic/session failures should have a separately visible error indication is deferred as a future status/UX design decision.
+
+> Criterion 10 — PASS
+>
+> Corrupted-frame rejection, session termination, retry, successful recovery, and data preservation are proven. The rejecting engine records the internal error and enters the normal recovery state sequence. No data loss or duplicate effect was observed.
+
+### Temporary diagnostic machinery
+
+Used during Batch 7, all reverted in one commit:
+
+  9918e5f  Batch 7 acceptance test hooks (corruption + reorder)
+  867f846  Batch 7 Test C diagnostic probes (CORRUPTING + sending)
+  9bb7db8  Batch 7 Test C Client-side probes (received + parse + AEAD FAILURE)
+  24c1035  Batch 7 Test C localization probe (OUTER ERROR)
+  125e1f2  Batch 7 Test C status-path probes (set_status write-side, EngineHandle::status read-side)
+  4e090e0  Revert every Batch 7 Test C diagnostic probe and hook
+
+Diff of shared/src/sync_engine.rs, shared/src/sync.rs, and src-tauri-agent/src/main.rs against the pre-probe state 224bd79 is empty after the revert.
+
+### The one Cargo.lock commit
+
+04bc5db. Cargo.lock sync after 6b-2b. Committed 2026-10-04. Documented in the extraction log under 6b-2b. No source or protocol change.
+
+### Claim D - not folded into this batch
+
+The boundary-test multi-machine relay claim (BOUNDARY-TEST-PLAN.md §2.4) was not folded into Batch 7. Reason: forcing the relay path on loopback needs a temporary code change, and the reviewer's ruling for this batch was no production changes during diagnosis. Claim D remains a Phase 15 item.
+
+### What this entry closes
+
+Batch 6b-2b, Batch 7, the §12.2 extra tests, and the founder-requested tests A, B, C. Criterion 10 is PASS. Test C is CLOSED WITH FINDING, per the reviewer's ruling.
+
+### What remains in Phase 9.6 after Batch 7
+
+- The sync indicator slice (replace the static TopHeader placeholder with a functional status reader).
+- CONNECTOR-MODEL.md.
+- Then Phase 9.6 closes and Phase 9.7 (multi-user demonstration) can begin planning.
+
+### Rule compliance
+
+- No production touched.
+- No cloud schema change.
+- No CI/CD touched.
+- Invariant held. No debtor data reached GORKA cloud in readable form at any point.
+- No frozen document amended. Section 3.7 of AGENT-APP-SPEC.md was amended in Phase 9.5, before 9.6. Nothing in 9.6 amended a frozen document.
+- No production logic change was made for any test. Test C's original wording was not satisfied by adding an artificial Error display window. The finding is documented rather than papered over.
+
+End of entry.
+
+---
