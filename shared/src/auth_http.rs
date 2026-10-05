@@ -83,3 +83,4 @@ pub async fn login(email: &str, password: &str) -> Result<LoginResult, String> {
         name: login_data.user.name,
         email: login_data.user.email,
     })
+}
