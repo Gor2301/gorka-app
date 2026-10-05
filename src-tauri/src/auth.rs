@@ -1,6 +1,5 @@
 // src-tauri/src/auth.rs
 
-use tauri::Manager;
 use tauri_plugin_store::StoreBuilder;
 use serde_json::Value;
 use rand::RngCore;
