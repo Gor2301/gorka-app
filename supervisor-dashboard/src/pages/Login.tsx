@@ -1,140 +1,85 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { auth } from '../services/local.db';
+import {
+  Button,
+  EntryCard,
+  ErrorBanner,
+  GorkaLogo,
+  Input,
+  Label,
+} from '@/components/primitives';
+import './Login.css';
 
 interface LoginProps {
   onLoginSuccess: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
+export default function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
-  console.log('🔑 [LOGIN] handleSubmit called');
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
-  try {
-    console.log('🔑 [LOGIN] calling auth.login');
-    await auth.login(email, password);
-    console.log('✅ [LOGIN] login success, calling onLoginSuccess');
-    onLoginSuccess();
-  } catch (err: any) {
-    console.error('❌ [LOGIN] login error:', err);
-    setError(err.message || 'Invalid email or password');
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      await auth.login(email, password);
+      onLoginSuccess();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Invalid email or password',
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#f5f5f5'
-    }}>
-      <div style={{
-        background: 'white',
-        padding: '40px',
-        borderRadius: '12px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        width: '100%',
-        maxWidth: '400px'
-      }}>
-        <h1 style={{
-          color: '#DC2626',
-          fontSize: '28px',
-          marginBottom: '8px',
-          textAlign: 'center'
-        }}>
-          GORKA
-        </h1>
-        <p style={{
-          color: '#666',
-          textAlign: 'center',
-          marginBottom: '32px'
-        }}>
-          Supervisor Dashboard
-        </p>
+    <EntryCard>
+      <GorkaLogo subtitle="Client Dashboard" />
 
-        {error && (
-          <div style={{
-            background: '#fee',
-            color: '#c00',
-            padding: '12px',
-            borderRadius: '6px',
-            marginBottom: '16px'
-          }}>
-            {error}
-          </div>
-        )}
+      {error && <ErrorBanner message={error} />}
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-              required
-            />
-          </div>
-
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
+      <form onSubmit={handleSubmit}>
+        <div className="form-field">
+          <Label htmlFor="login-email">Email</Label>
+          <Input
+            id="login-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
+            autoFocus
             disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: '#DC2626',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              opacity: loading ? 0.7 : 1
-            }}
-          >
-            {loading ? 'Logging in...' : 'Sign In'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-};
+          />
+        </div>
 
-export default Login;
+        <div className="form-field--last">
+          <Label htmlFor="login-password">Password</Label>
+          <Input
+            id="login-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Your account password"
+            required
+            disabled={loading}
+          />
+        </div>
+
+        <Button type="submit" variant="primary" fullWidth loading={loading}>
+          {loading ? 'Signing in...' : 'Sign In'}
+        </Button>
+      </form>
+    </EntryCard>
+  );
+}

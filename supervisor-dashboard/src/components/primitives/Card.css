@@ -1,0 +1,20 @@
+.card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-card-padding);
+}
+
+.card__title {
+  font-family: var(--font-family);
+  font-size: var(--font-size-card-title);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+.card__body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--color-text-strong);
+}

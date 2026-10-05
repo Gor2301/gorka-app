@@ -1,0 +1,22 @@
+/* UnlockScreen uses primitives and a few local utility classes. */
+
+.form-field {
+  margin-bottom: 16px;
+}
+
+.form-field--last {
+  margin-bottom: 0;
+}
+
+.unlock-hint {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  margin: 0 0 24px 0;
+}
+
+.unlock-warning {
+  font-size: var(--font-size-label-sm);
+  color: var(--color-text-dim);
+  margin: 6px 0 0 0;
+}

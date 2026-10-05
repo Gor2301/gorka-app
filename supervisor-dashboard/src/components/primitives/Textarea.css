@@ -1,0 +1,29 @@
+.textarea {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--color-text-strong);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+  resize: vertical;
+  min-height: 90px;
+}
+
+.textarea::placeholder {
+  color: var(--color-text-dim);
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

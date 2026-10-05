@@ -1,0 +1,16 @@
+.entry-backdrop {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-entry);
+}
+
+.entry-card {
+  background: var(--color-bg-card);
+  padding: 40px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-entry-card);
+  width: 100%;
+  max-width: var(--entry-card-width);
+}
