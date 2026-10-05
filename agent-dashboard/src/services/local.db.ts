@@ -558,4 +558,10 @@ export const localDB = {
       endDate,
     });
   },
+
+  // --- Sync engine -------------------------------------------------
+
+  async syncEngineStatus(): Promise<string> {
+    return await invoke<string>('sync_engine_status');
+  },
 };

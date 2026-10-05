@@ -1,0 +1,55 @@
+/* agent-dashboard/src/components/SyncIndicator.css */
+
+.sync {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.sync__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-dim);
+}
+
+.sync--synced .sync__dot {
+  background: #16a34a;
+}
+
+.sync--pending .sync__dot {
+  background: #ea580c;
+}
+
+.sync--connecting .sync__dot {
+  background: var(--color-text-dim);
+}
+
+.sync--offline .sync__dot {
+  background: var(--color-text-dim);
+}
+
+.sync--disabled .sync__dot {
+  background: var(--color-text-dim);
+}
+
+.sync--error .sync__dot {
+  background: #dc2626;
+}
+
+.sync--synced .sync__label {
+  color: var(--color-text-normal);
+}
+
+.sync--pending .sync__label {
+  color: #ea580c;
+}
+
+.sync--error .sync__label {
+  color: #dc2626;
+}

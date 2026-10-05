@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, Bell } from 'lucide-react';
+import SyncIndicator from './SyncIndicator';
 
 const TopHeader: React.FC = () => {
   return (
@@ -21,6 +22,7 @@ const TopHeader: React.FC = () => {
         Workspace / Dashboard
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <SyncIndicator />
         <Search size={18} strokeWidth={1.7} color="#8A8A8A" style={{ cursor: 'pointer' }} />
         <Bell size={18} strokeWidth={1.7} color="#8A8A8A" style={{ cursor: 'pointer' }} />
         <div style={{

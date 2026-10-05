@@ -276,9 +276,12 @@ export const localDB = {
     return await invoke<boolean>('delete_action', { id });
   },
 
+  // --- Sync engine -------------------------------------------------
+
+  async syncEngineStatus(): Promise<string> {
+    return await invoke<string>('sync_engine_status');
+  },
 };
-
-
 
 // ─── DOCUMENT TYPES ───────────────────────────────────────────────────
 // Mirror of the Rust Document struct in src-tauri/src/main.rs.

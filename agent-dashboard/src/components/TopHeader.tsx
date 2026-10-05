@@ -2,6 +2,7 @@ import { useLocation } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { Avatar } from './primitives';
 import './TopHeader.css';
+import SyncIndicator from './SyncIndicator';
 
 const TITLES: Record<string, string> = {
   '/': 'Today',
@@ -30,13 +31,7 @@ export default function TopHeader({ onLogout }: TopHeaderProps) {
       <h1 className="top-header__title">{title}</h1>
 
       <div className="top-header__right">
-        <div
-          className="top-header__sync"
-          title="The sync engine arrives in Phase 9.6."
-        >
-          <span className="top-header__sync-dot" />
-          <span>Sync not yet enabled</span>
-        </div>
+        <SyncIndicator />
 
         <Avatar name="Agent" size={28} />
 
