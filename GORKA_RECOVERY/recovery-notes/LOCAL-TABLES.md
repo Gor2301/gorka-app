@@ -1,7 +1,7 @@
 # GORKA LOCAL TABLES
 
-**Version:** 1.3
-**Date:** September 27, 2026 (v1.3 amendment applied)
+**Version:** 1.4
+**Date:** September 27, 2026 (v1.4 amendment applied October 6, 2026)
 **Purpose:** Freeze the list of local tables that belong in the Tauri
 client's SQLite database.
 **Authority:** Tauri Spec v3.2 is the authoritative source for the
@@ -200,19 +200,26 @@ Source: Tauri spec v3.2 §5.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| id | TEXT PRIMARY KEY | UUID v4 |
-| connector_code | TEXT NOT NULL | Matches cloud `connector_catalog.code` |
-| status | TEXT | 'CONNECTED' \| 'DISCONNECTED' |
-| credentials_encrypted | TEXT | Local-only; BYO API keys |
-| settings | JSON | User preferences |
-| created_at | DATETIME | |
-| updated_at | DATETIME | |
+| id | TEXT PRIMARY KEY | UUID v4. |
+| connector_code | TEXT NOT NULL | The catalog row's stable code. Matches cloud `connector_catalog.code`. |
+| organization_id | TEXT NOT NULL | Local organizational context metadata. Derived from the trusted organization context. MUST NOT be accepted as an arbitrary frontend-supplied value. |
+| tier | TEXT NOT NULL | 'TIER1' \| 'TIER2'. Set by the CONNECTOR_ENABLED event. |
+| status | TEXT NOT NULL | 'ENABLED' \| 'DISABLED'. Matches CONNECTOR-MODEL.md Section 6.3. |
+| credential_value | BLOB NOT NULL | The opaque credential. Stored as raw bytes. See CONNECTOR-MODEL.md Section 6.9. |
+| configuration | TEXT NOT NULL | Canonical JSON. The per-organization configuration. MAY be '{}'. See SYNC-ARCHITECTURE.md Section 25.13.4. |
+| source_device_id | TEXT NOT NULL | The device instance id that originated the most recent write to this record. For traceability, not for authorization. |
+| created_at | DATETIME NOT NULL | Local wall clock of the first write. |
+| updated_at | DATETIME NOT NULL | Local wall clock of the most recent write. |
 
-**Purpose:** Local connector configuration and BYO credentials.
-**Cloud equivalent:** `client_connectors` (metadata only; no
-credentials).
+**Purpose:** The local connector record. Holds the credential, per-organization configuration, and enablement metadata for one enabled connector, for one organization, on one device. It is the record defined logically in CONNECTOR-MODEL.md Section 6.3. Written by the CONNECTOR_ENABLED, CONNECTOR_DISABLED, and CONNECTOR_CREDENTIAL_REPLACED events (SYNC-ARCHITECTURE.md Sections 25.14 through 25.16). Read by the send path.
 
-Source: Connector addendum.
+**Indexes:** `idx_local_connectors_org_code` (unique) on (organization_id, connector_code); `idx_local_connectors_status` on (status).
+
+**Cloud equivalent:** `client_connectors` (metadata only; no credential).
+
+**Local only.** The credential_value never leaves the device in readable form. It travels to other devices only inside the end-to-end encrypted CONNECTOR_ENABLED / CONNECTOR_CREDENTIAL_REPLACED events.
+
+Source: CONNECTOR-MODEL.md v1.0 Section 6.3; SYNC-ARCHITECTURE.md v1.6 Sections 25.14 through 25.16.
 
 ---
 
@@ -253,6 +260,36 @@ Source: Connector addendum.
 partial sync.
 
 Source: Connector addendum.
+
+---
+
+## Category F — Compliance Operational Tables
+
+### F.1 compliance_rules
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | INTEGER PRIMARY KEY CHECK (id = 1) | Single row per device. |
+| organization_id | TEXT NOT NULL | Local organizational context metadata. Derived from the trusted organization context. MUST NOT be accepted as an arbitrary frontend-supplied value. |
+| quiet_hours_enabled | BOOLEAN NOT NULL DEFAULT 0 | |
+| quiet_hours_timezone | TEXT | IANA timezone name, e.g. "Asia/Manila". Nullable. |
+| quiet_hours_start | TEXT | Time of day, HH:MM 24-hour. Nullable. |
+| quiet_hours_end | TEXT | Time of day, HH:MM 24-hour. Nullable. |
+| quiet_hours_days | JSON NOT NULL DEFAULT '[]' | Array of weekday numbers (0=Sunday). |
+| quiet_hours_action | TEXT NOT NULL DEFAULT 'BLOCK' | BLOCK \| SCHEDULE \| ALLOW. |
+| contact_limit_enabled | BOOLEAN NOT NULL DEFAULT 0 | |
+| contact_limit_count | INTEGER | Nullable. |
+| contact_limit_period | TEXT | DAY \| WEEK \| MONTH. Nullable. |
+| disclosure_text | TEXT | Nullable. May be empty. |
+| updated_at | DATETIME NOT NULL | Local wall clock. |
+
+**Purpose:** The local compliance rules. Read by the compliance enforcement layer (CONNECTOR-MODEL.md Section 10) before every send. Entered on the device by the admin in the Client Dashboard's Local compliance rules page. Not synchronized in the MVP (CONNECTOR-MODEL.md Section 10.2.1, Option A).
+
+**Single-row invariant.** The table holds exactly one row per device. The CHECK (id = 1) constraint on the primary key enforces this. If the row does not exist (fresh install, admin has not yet configured rules), the enforcement layer treats every check as ALLOW. See CONNECTOR-MODEL.md Section 10.3.
+
+**Cloud equivalent:** None. The rules are entered locally per device in the MVP.
+
+Source: CONNECTOR-MODEL.md v1.0 Section 10.3.
 
 ---
 
@@ -766,8 +803,11 @@ Local caches only what the app needs to operate offline.
 | 18 | history_records | Sync | None |
 | 19 | pending_events | Sync | None |
 | 20 | entity_field_state | Sync | None |
+| 21 | calendar_events | Agent Operational | None |
+| 22 | debtor_relations | Agent Operational | None |
+| 23 | compliance_rules | Compliance | None |
 
-**Total: 20 local tables (6 operational + 3 connector + 3 cache + 8 sync).**
+**Total: 23 local tables (6 debtor operational + 3 connector + 3 cache + 8 sync + 2 agent operational + 1 compliance).**
 
 ---
 
@@ -993,3 +1033,44 @@ The amendment is additive. No existing rule is weakened.
 
 End of Amendment 1.
 
+
+
+Amendment 2 — local_connectors corrected and compliance_rules added (v1.4, October 6, 2026)
+Authority: Approved by the founder on October 6, 2026.
+Reason: CONNECTOR-MODEL.md v1.0 (frozen) Sections 6.3 and 10.3 define two local records for the connector model. The first, the connector local record, was already present in LOCAL-TABLES.md at Category B.1, but its shape predates the sync model and did not match Section 6.3's logical definition. The second, the compliance rules record, was not present at all. This amendment corrects B.1 to the Section 6.3 shape and adds the compliance rules record as a new Category F. It is a correction of an obsolete table plus an addition of one new table.
+Scope: One existing table is corrected in place. One new table is added. No table is removed. No unrelated column is changed. The invariant is unchanged.
+
+B.1 corrected in place
+The local_connectors table now holds the record defined in CONNECTOR-MODEL.md Section 6.3. The pre-sync shape had these fields: id, connector_code, status (CONNECTED|DISCONNECTED), credentials_encrypted (TEXT), settings (JSON), created_at, updated_at. The corrected shape has: id, connector_code, organization_id, tier, status (ENABLED|DISABLED), credential_value (BLOB), configuration (TEXT), source_device_id, created_at, updated_at.
+
+Changes:
+
+  credentials_encrypted (TEXT) is renamed to credential_value (BLOB). The type change reflects CONNECTOR-MODEL.md Section 6.9, which states the credential is stored as opaque bytes.
+  settings (JSON) is renamed to configuration (TEXT). The value is canonical JSON per SYNC-ARCHITECTURE.md Section 25.13.4.
+  status vocabulary changes from CONNECTED|DISCONNECTED to ENABLED|DISABLED, matching CONNECTOR-MODEL.md Section 6.3.
+  organization_id, tier, and source_device_id are added.
+
+Justification for correcting rather than adding a second table: local_connectors is the logical connector record defined by CONNECTOR-MODEL.md Section 6.3. Adding a second table (for example, connector_records) would leave two tables representing the same concept, creating ambiguity about which is authoritative. Since the pre-sync local_connectors holds no production data, correction in place is safe and cleaner.
+
+F.1 added
+A new Category F — Compliance Operational Tables is added. Its first table, F.1 compliance_rules, holds the local compliance rules read by the enforcement layer (CONNECTOR-MODEL.md Section 10) before every send.
+
+Updated summary table
+The main summary table now shows 23 tables. This also reconciles it with Amendment 1's two Agent Operational additions, which the main table had not previously listed.
+
+What this amendment does not change
+  The invariant in ARCHITECTURAL-LAW.md Section 1.
+  The two data planes.
+  The debtor data categories.
+  Categories A, C, D, and E.
+  Tables B.2 and B.3.
+  Any rule in any frozen document.
+
+Rule compliance
+  No production touched.
+  No cloud schema change.
+  No code written. This is a documentation amendment.
+  Invariant held. The corrected table and the new table are both local-only.
+  The amendment is a correction of an obsolete table plus an addition of one new table.
+
+End of Amendment 2.
