@@ -1,28 +1,40 @@
 # RESUME HERE
 
-**Updated:** 2026-10-07 (Phase 4 closed: migration 9 adds the connector and compliance tables. All green.)
-**Main machine:** 115796d
-**Cloud machine:** 115796d
-**GitHub:** 115796d
+**Updated:** 2026-10-07 (Phase 5 closed: connector wire encoders/decoders and Connectors.tsx aligned. All green.)
+**Main machine:** 68e775e
+**Cloud machine:** 68e775e (last verified green)
+**GitHub:** 68e775e
 
 ---
 
 ## Where we are
 
-Phase 4 is closed. The local SQLite schema now contains the four
-tables that LOCAL-TABLES.md already specified but the runtime DDL
-never created: local_connectors, local_connector_usage,
-connector_sync_state, compliance_rules. Cloud build, workspace
-tests, and node verify are green.
+Phase 5 is closed. Two commits:
 
-Reconnaissance at the start of Phase 4 found the actual gap: A3
-had been applied at the spec level last session, but the code that
-creates those tables was never written. No Rust source referenced
-either table. So Phase 4 was not an amendment slice; it was a
-migration slice.
+  62d332f  Phase 5a: CONNECTOR event wire encoders and decoders
+  68e775e  Phase 5b: align Connectors.tsx to actual backend
+           endpoints (B1, B2)
+
+Phase 5a added the Rust wire encoders and decoders for the
+three connector event types defined in SYNC-ARCHITECTURE.md
+Sections 25.14-25.16: CONNECTOR_ENABLED (0x0005),
+CONNECTOR_DISABLED (0x0006), CONNECTOR_CREDENTIAL_REPLACED
+(0x0007). Entity type 0x06. No changes to the spec; no changes
+to the pipeline; no connector wiring.
+
+Phase 5b aligned the Client Dashboard's Connectors page to the
+backend that actually exists. The old page called six routes
+that do not exist (/connectors/types, /:id, /:id/connect,
+/:id/connect-auto, /:id/test, /:id/disconnect). It also read
+five import.meta.env.VITE_* values that were being baked into
+the shipped bundle. Both defects are gone.
 
 Relevant commits, in order:
 
+  68e775e  Phase 5b: align Connectors.tsx to actual backend
+           endpoints (B1, B2)
+  62d332f  Phase 5a: CONNECTOR event wire encoders and decoders
+  8c88d0a  RESUME-HERE.md: Phase 4 closed.
   115796d  Phase 4: migration 9 adds local_connectors,
            connector_usage, connector_sync_state,
            compliance_rules
@@ -30,13 +42,15 @@ Relevant commits, in order:
 Prior phase commits, still in history:
 
   60974bc  RESUME-HERE.md: Phase 3 closed.
-  9ed9fda  Phase 3: test_factory returns Result to match fallible
-           AdapterFactory
+  9ed9fda  Phase 3: test_factory returns Result to match
+           fallible AdapterFactory
   c287e7b  Phase 3: real HttpClient, fallible AdapterFactory,
            default registry
   f1aa4ab  RESUME-HERE.md: Phase 2 closed.
-  585261e  Phase 2: test helper avoids Debug requirement on adapter
-  7271146  Phase 2: Resend email adapter with HttpClient abstraction
+  585261e  Phase 2: test helper avoids Debug requirement on
+           adapter
+  7271146  Phase 2: Resend email adapter with HttpClient
+           abstraction
   1b9066c  RESUME-HERE.md: Phase 1 closed.
   ea8fb49  Phase 1: gorka-shared::connectors skeleton
   221a771  RESUME-HERE.md: Phase 0 closed.
@@ -44,173 +58,273 @@ Prior phase commits, still in history:
 
 ---
 
-## What Phase 4 delivered
+## What Phase 5a delivered
 
-Modified file: shared/src/db.rs.
+Three files modified:
 
-  - One new migration block: `if current_version < 9 { ... }`,
-    inserted between migration 8's closing and the function's
-    Ok(()) in run_migrations.
-  - Creates local_connectors (B.1), with unique index on
-    (organization_id, connector_code) and a status index.
-  - Creates local_connector_usage (B.2), with FKs on debtor_id
-    (debtors, ON DELETE SET NULL) and message_log_id
-    (communications, ON DELETE SET NULL).
-  - Creates connector_sync_state (B.3), with UNIQUE on
-    connector_code.
-  - Creates compliance_rules (F.1), with CHECK (id = 1) enforcing
-    the single-row invariant.
-  - Sets PRAGMA user_version = 9.
-  - No table existing before Phase 4 was touched.
+  shared/src/sync.rs
+    encode_bytes_value                    new helper.
+                                          Mirrors
+                                          encode_string_value,
+                                          emits u32 BE length
+                                          then raw bytes.
+    encode_connector_enabled_payload      new. TLV order:
+                                          0x6001 connector_code
+                                          0x6002 tier
+                                          0x6003 credential_value
+                                          0x6004 configuration
+                                          0x6005 enabled_at (u64)
+    encode_connector_disabled_payload     new. TLV order:
+                                          0x6001 connector_code
+                                          0x6006 disabled_at (u64)
+    encode_connector_credential_replaced_payload
+                                          new. TLV order:
+                                          0x6001 connector_code
+                                          0x6003 credential_value
+                                          0x6004 configuration
+                                          0x6007 replaced_at (u64)
 
-New file: shared/tests/connector_tables.rs.
+  shared/src/sync_parse.rs
+    decode_bytes_value                    new helper.
+    ConnectorEnabledPayload               new struct.
+    ConnectorDisabledPayload              new struct.
+    ConnectorCredentialReplacedPayload    new struct.
+    parse_connector_enabled_payload       new.
+    parse_connector_disabled_payload      new.
+    parse_connector_credential_replaced_payload
+                                          new.
+                                          All three parsers use
+                                          the existing TlvReader
+                                          and seen: HashSet<u16>
+                                          guard pattern.
 
-  - Four integration tests:
-      migration_9_creates_all_four_tables
-      migration_9_creates_local_connectors_indexes
-      compliance_rules_enforces_single_row
-      local_connectors_accepts_a_row
-  - Uses open_in_memory_for_tests() from db.rs. No new dependency.
+  shared/tests/sync_wire_roundtrip.rs
+    connector_enabled_round_trip          new test.
+    connector_enabled_empty_configuration_round_trip
+                                          new test. Covers the
+                                          configuration="" edge
+                                          case.
+    connector_disabled_round_trip         new test.
+    connector_credential_replaced_round_trip
+                                          new test.
+
+No deterministic hex vectors. Round-trip tests only. Vectors
+are proposed as a separate small slice, 5a-vectors, to be done
+on cloud with a hex-capture step.
 
 ---
 
-## Verification at 115796d
+## What Phase 5b delivered
 
-  cargo build --workspace   green. Pre-existing warnings only:
-                            gorka-agent 2, gorka-client 3.
-  cargo test --workspace    all pass. gorka_shared lib: 25 (unchanged
-                            from Phase 3). New integration test
-                            connector_tables: 4/4. enrollment 6/6;
-                            sync 9/9 (V6 included); sync_engine 1/1;
-                            sync_pipeline 6/6; sync_session 2/2;
-                            sync_wire_roundtrip 15/15.
-  node verify/index.mjs     9/9 PASS.
+Four files changed:
+
+  src/backend/routes/connectors.routes.ts
+    + GET /api/connectors/catalog. Returns active
+      connector_catalog rows where isActive=true and
+      lifecycleStatus='ACTIVE'. JSON shape:
+      { success, data: { rows, total } }. Matches the existing
+      GET /api/connectors shape.
+
+  supervisor-dashboard/src/services/connectors.service.ts
+    Full rewrite. Four functions, all returning the
+    unwrapped body.data portion of the response:
+      listCatalog()      -> GET /connectors/catalog
+      listEnablements()  -> GET /connectors
+      enable(code)       -> POST /connectors/enable
+                            body { connectorCode, credentialsLocation: 'LOCAL' }
+      disable(code)      -> POST /connectors/disable
+                            body { connectorCode }
+    Types CatalogEntry and EnablementRow exported. The old
+    Connector interface and the six old functions are removed.
+
+  supervisor-dashboard/src/pages/Connectors.tsx
+    Full rewrite. Loads catalog and enablements in parallel on
+    mount, merges by code. Renders a card per catalog row with
+    the display shape defined by CONNECTOR-MODEL.md Section
+    4.4. Button wording:
+      Tier 1, disconnected -> Connect
+      Tier 1, connected    -> Disconnect
+      Tier 2, disconnected -> Configure (coming soon), disabled
+      Tier 2, connected    -> Disable
+    All four call the same two backend routes. No Test button,
+    no connect-auto, no reference to any nonexistent endpoint.
+    Tier 1 / Tier 2 derived from catalog.isManagedByGorka.
+
+  supervisor-dashboard/src/components/Connectors/ConfigurationModal.tsx
+    Full rewrite. B2 only. The getDefaultCredentials function
+    and its five import.meta.env.VITE_* reads are removed. The
+    credentials state initializes to {}. Everything else
+    unchanged. Not called by the page in 5b; stays in place
+    for B3.
 
 ---
 
-## What Phase 4 did not do
+## Verification at 68e775e (cloud)
 
-  - No Tauri command. No frontend.
-  - No sync event types for connector changes. Those need an
-    amendment to SYNC-ARCHITECTURE.md (CONNECTOR-MODEL.md Section
-    14 A1). That amendment has been applied already (commit
-    2273396 per the earlier "mechanism is live" summary), but the
-    Rust wire encoder/decoder for the three new event types does
-    not exist yet.
-  - No local_organization or local_user tables. Those are spec'd
-    (LOCAL-TABLES.md C.1, C.2) but out of scope for Phase 4.
-  - No fix of the pre-existing db.rs:4 unused-import warning.
+  cargo build --workspace   green. Warnings unchanged from
+                            Phase 4 baseline: gorka-agent 2,
+                            gorka-client 3, gorka-shared 6.
+  cargo test --workspace    72 tests, 0 failed.
+                            gorka_shared lib: 25 (unchanged).
+                            connector_tables: 4/4.
+                            enrollment: 6/6.
+                            sync: 9/9.
+                            sync_engine: 1/1.
+                            sync_pipeline: 6/6.
+                            sync_session: 2/2.
+                            sync_wire_roundtrip: 19/19
+                              (was 15; +4 connector tests).
+  node verify/index.mjs     9/9 PASS, unchanged.
+  npm run build (supervisor-dashboard)
+                            green, 660.73 kB bundle.
+  VITE_* in shipped bundle  zero matches. B2 verified.
+  Removed endpoints in bundle
+                            zero matches.
+  New endpoints in bundle   all three present
+                            (/connectors/catalog, /enable,
+                            /disable).
+
+---
+
+## What Phase 5 did not do
+
+  - No local_connectors write from the frontend. The Tier 2
+    Configure path is disabled in 5b because B3 (the local
+    Tauri credential write) does not exist yet.
+  - No Tauri command for local credential write. B3 next.
+  - No Zone 3 audit record write. B4.
+  - No local compliance rules page. B5, B6.
+  - No Tier 1 credential transit verification. B7.
+  - No "Test connection" via a Tauri command. Requires B3.
+  - No backend provider provisioning. POST /connectors/enable
+    still only writes the client_connectors row. No subaccount
+    is created with any provider.
+  - No deterministic hex test vectors for the three connector
+    events. Proposed as slice 5a-vectors.
+  - No change to ConfigurationModal.tsx's caller or the page's
+    use of it. The file is orphaned in 5b.
 
 ---
 
 ## Where we go next
 
-Phase 5 candidates, in dependency order:
+Phase 6 in the plan is the Zone 3 audit record. Phase 7 is the
+compliance rules page. Phase 8 is the agent send command. But
+the natural next slice from where we are is B3, the local
+credential write path. It closes the only gap that leaves a
+user-visible button disabled.
 
-  1. CONNECTOR_ENABLED / CONNECTOR_DISABLED /
-     CONNECTOR_CREDENTIAL_REPLACED wire encoders and decoders in
-     shared/src/sync.rs and sync_parse.rs, matching the amendment
-     already applied to SYNC-ARCHITECTURE.md Sections 25.14
-     through 25.16. This is the next structural piece: without
-     these, no credential can travel between devices. Spec-only
-     reference work first, then code.
+Candidate order:
 
-  2. Connectors.tsx alignment (CONNECTOR-MODEL.md Section 14.2
-     B1, B2). Frontend only. Self-contained but lower value.
+  1. 5a-vectors. Small. Cloud-only work: encode the three
+     events with fixed fixtures, capture the hex, freeze them
+     in sync_wire_roundtrip.rs. Adds 3-6 tests, no source
+     changes.
 
-  3. Tier 2 credential local write path (Section 14.2 B3). Now
-     unblocked: local_connectors exists. Needs a Tauri command and
-     the Client Dashboard form.
+  2. B3. Local Tauri command to write a credential into
+     local_connectors. Needs a new shared function in db.rs
+     or a new connectors module. Wire ConfigurationModal to
+     it. Re-enable the Tier 2 Configure button. Then B3's
+     verification requires the client to run with the
+     command registered.
 
-Full connector arc:
+  3. B4. Zone 3 audit record write. Small. DeclarationModal's
+     onAccept calls a new backend route or extends
+     /connectors/enable with an acknowledge flag. Writes one
+     row in organization_audit_events.
 
-  Phase 5 = connector event types; Phase 6 = Zone 3 audit record;
-  Phase 7 = compliance rules page; Phase 8 = agent send command;
-  ... Phase 15 = acceptance. (Phase 4 absorbed the old Phase 4 and
-  Phase 5 candidates; the Connectors.tsx alignment is now a
-  candidate for Phase 5 alongside the event types.)
+  4. B7. Tier 1 credential transit verification. Read-only
+     review of backend logging, tracing, error serialization.
+     No code change expected if the review finds nothing.
+
+Full connector arc (from CONNECTOR-MODEL.md Section 14):
+
+  Phase 5 (this phase) = connector event types + Connectors.tsx
+  Phase 6 = Zone 3 audit record
+  Phase 7 = compliance rules page
+  Phase 8 = agent send command
+  ...
+  Phase 15 = acceptance
 
 ---
 
 ## Known loose ends
 
-Build warnings (pre-existing, not from Phase 4):
+Build warnings (pre-existing, not from Phase 5):
 
   - shared/src/db.rs:4 -- unused import
     `use serde_json::Value as JsonValue;`
-  - shared/tests/sync_engine.rs:92 -- `let mut conn_b_test` does
-    not need `mut`.
+  - shared/tests/sync_engine.rs:92 -- `let mut conn_b_test`
+    does not need `mut`.
   Both predate Phase 1. Small cleanup slice candidate.
 
 Documentation:
 
   - CONNECTOR-MODEL.md Section 9.3 and Section 14 item A2 are
     stale: they describe the created_by defect as open, but
-    Phase 0 applied the A2 amendment and recomputed V6 to the
-    109-byte payload. Cosmetic.
-
-  - SYNC-TEST-VECTORS-v1.md header note is stale: it describes V6
-    as PENDING. The V6 entry and summary table correctly say
-    FROZEN. Cosmetic.
-
+    Phase 0 applied the A2 amendment and recomputed V6.
+    Cosmetic.
+  - SYNC-TEST-VECTORS-v1.md header says V6 is PENDING. The V6
+    entry and summary table correctly say FROZEN. Cosmetic.
   - LOCAL-TABLES.md B.2 and B.3 have a source line "Connector
-    addendum" rather than a section reference. Cosmetic. Its B.1
-    and F.1 reference CONNECTOR-MODEL.md sections properly.
+    addendum" rather than a section reference. Cosmetic.
 
 Code:
 
-  - No JWT decode. user_id comes from the login response and is
-    persisted to settings.dat at login. Design choice.
-
-  - The /api/auth/login response contract is load-bearing for the
-    local store. No backend-side test guards it, and no local
-    check refuses to originate when user_id is empty.
-
-  - The logout blocks in both binaries do not delete the user_id
-    key. Cosmetic.
+  - No JWT decode. user_id from login response. Persisted at
+    login. Design choice.
+  - /api/auth/login response contract is load-bearing. No
+    backend test guards it. No local check refuses to originate
+    when user_id empty.
+  - Logout does not delete user_id key. Cosmetic.
+  - V6 vector: created_by is now part of the spec
+    (SYNC-ARCHITECTURE.md v1.5, TLV 0x5006) but the Rust and
+    Node implementations were not recomputed. V6 is frozen at
+    its pre-amendment value. Tracked separately.
 
 Environment:
 
-  - Cloud has 8 untracked junk files from an earlier slice:
-    b7-meta-check.cjs, build-6b2b-listener.txt, build-6b2b.txt,
-    check-columns.ts, relay-check.cjs, test-6b2b-listener.txt,
-    test-6b2b.txt, test-output.txt.
-
-  - .env files in the repo contain live credentials. Rotation is
-    deferred until pre-launch.
-
-  - Resend live sending: a @gmail.com from-address is rejected by
-    Resend. Either verify a domain or use onboarding@resend.dev
-    when Phase 6+ exercises the live API.
+  - Cloud has untracked scratch files from earlier slices
+    (b7-meta-check.cjs, build-6b2b-listener.txt,
+    build-6b2b.txt, check-columns.ts, relay-check.cjs,
+    test-6b2b-listener.txt, test-6b2b.txt, test-output.txt).
+  - .env and .env.test contain live credentials including a
+    Resend API key and a Gemini API key. Rotation deferred to
+    pre-launch by founder decision. VITE_* reads from the
+    source are removed by 5b; the .env values themselves
+    remain.
+  - Resend sending: @gmail.com from-address rejected by
+    Resend. onboarding@resend.dev works for dev.
 
 ---
 
 ## Rules to remember
 
 - Invariant: no debtor data in GORKA cloud infrastructure.
-- All Rust builds and tests run on cloud. Main cannot reliably
-  compile (SAC blocks build-script binaries at unpredictable
-  points).
-- One machine owns a slice at a time. Git is the only handoff.
-- Edits on main. Commit on main, push, pull on cloud, build and
-  test and verify on cloud, pull back on main.
-- For any scripted edit to a recovery document or source file:
-  use content anchors (FindUnique returns exactly one match or
-  throws). Never use raw line indices. Never use String.Replace
-  on these files.
+- All Rust builds and tests run on cloud. Main cannot
+  reliably compile.
+- One machine owns a slice at a time. Git is the only
+  handoff.
+- Edits on main. Commit on main, push, pull on cloud, build
+  and test and verify on cloud, pull back on main.
+- For any scripted edit to a recovery document or source
+  file: use content anchors (FindUnique returns exactly one
+  match or throws). Never use raw line indices. Never use
+  String.Replace on these files.
 - Sanity-check before write. Abort on failure. Backup before
   every edit. Verify with findstr after every edit.
-- Read UTF-8 files as UTF-8, never as ANSI. Emoji in source
-  files will be silently corrupted otherwise. For single-line
-  edits on files that contain non-ASCII characters, edit by
-  hand in a text editor instead of scripting.
-- git diff <file> after every edit before moving on. Fastest
-  proof of a clean write.
-- Match tool weight to edit size. Heavy machinery for multi-
-  file, multi-anchor edits. Notepad for one-liners.
+- Read UTF-8 files as UTF-8. Emoji and non-ASCII in source
+  files will be silently corrupted otherwise. For
+  single-line edits on non-ASCII files, edit by hand in a
+  text editor instead of scripting.
+- When scripting multi-line insertions in PowerShell here-
+  strings, always leave a blank line before the closing '@
+  or the next line merges with the last. This bit us in 5a.
+- git diff <file> after every edit before moving on.
+- Match tool weight to edit size.
 - One commit per coherent change.
-- No guessing. Every fact confirmed on disk before the script
-  is written.
+- No guessing. Every fact confirmed on disk before the
+  script is written.
 - When in doubt, stop and ask the founder.
 
 ---
@@ -218,7 +332,6 @@ Environment:
 ## How to use this file
 
 At the start of a new chat: paste this file. That is the brief.
-Nothing else is needed.
 
 At slice end: rewrite it with the new state. This file is
 rewritten in place, not appended to. It stays under 250 lines.
