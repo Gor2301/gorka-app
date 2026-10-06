@@ -633,6 +633,102 @@ fn run_migrations(conn: &mut Connection) -> Result<(), String> {
         tx.commit().map_err(|e| e.to_string())?;
     }
 
+    if current_version < 9 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        // Category B.1 local_connectors: per-connector credential,
+        // configuration, and enablement metadata. Written by the
+        // CONNECTOR_ENABLED / CONNECTOR_DISABLED /
+        // CONNECTOR_CREDENTIAL_REPLACED events. Read by the send
+        // path. See LOCAL-TABLES.md B.1.
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS local_connectors (
+                id TEXT PRIMARY KEY,
+                connector_code TEXT NOT NULL,
+                organization_id TEXT NOT NULL,
+                tier TEXT NOT NULL,
+                status TEXT NOT NULL,
+                credential_value BLOB NOT NULL,
+                configuration TEXT NOT NULL,
+                source_device_id TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_local_connectors_org_code
+                ON local_connectors(organization_id, connector_code)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_local_connectors_status
+                ON local_connectors(status)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // Category B.2 local_connector_usage: raw usage log per
+        // operation. Source of truth for aggregation before sync.
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS local_connector_usage (
+                id TEXT PRIMARY KEY,
+                connector_code TEXT NOT NULL,
+                operation_type TEXT NOT NULL,
+                debtor_id TEXT,
+                message_log_id TEXT,
+                units_used INTEGER,
+                unit_type TEXT,
+                cost_estimate REAL,
+                created_at DATETIME,
+                FOREIGN KEY (debtor_id) REFERENCES debtors(id) ON DELETE SET NULL,
+                FOREIGN KEY (message_log_id) REFERENCES communications(id) ON DELETE SET NULL
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // Category B.3 connector_sync_state: bookkeeping for
+        // incremental usage sync.
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS connector_sync_state (
+                id TEXT PRIMARY KEY,
+                connector_code TEXT NOT NULL UNIQUE,
+                last_synced_at DATETIME,
+                last_synced_usage_id TEXT,
+                pending_count INTEGER
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // Category F.1 compliance_rules: single row per device.
+        // Read by the compliance enforcement layer before every
+        // send. Not synchronized in the MVP.
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS compliance_rules (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                organization_id TEXT NOT NULL,
+                quiet_hours_enabled BOOLEAN NOT NULL DEFAULT 0,
+                quiet_hours_timezone TEXT,
+                quiet_hours_start TEXT,
+                quiet_hours_end TEXT,
+                quiet_hours_days JSON NOT NULL DEFAULT '[]',
+                quiet_hours_action TEXT NOT NULL DEFAULT 'BLOCK',
+                contact_limit_enabled BOOLEAN NOT NULL DEFAULT 0,
+                contact_limit_count INTEGER,
+                contact_limit_period TEXT,
+                disclosure_text TEXT,
+                updated_at DATETIME NOT NULL
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute("PRAGMA user_version = 9", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 
