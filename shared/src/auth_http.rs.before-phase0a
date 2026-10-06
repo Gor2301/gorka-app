@@ -48,7 +48,6 @@ pub struct LoginResult {
     pub organization_id: String,
     pub name: String,
     pub email: String,
-    pub user_id: String,
 }
 
 pub async fn login(email: &str, password: &str) -> Result<LoginResult, String> {
@@ -83,6 +82,5 @@ pub async fn login(email: &str, password: &str) -> Result<LoginResult, String> {
         organization_id: login_data.user.organization_id,
         name: login_data.user.name,
         email: login_data.user.email,
-        user_id: login_data.user.id,
     })
 }

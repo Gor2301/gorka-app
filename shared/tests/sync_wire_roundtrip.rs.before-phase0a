@@ -132,7 +132,6 @@ fn communication_logged_round_trip() {
         "OUTBOUND",
         "Test call",
         Some("120"),
-        "user-test-A",
     );
     let p = parse_communication_logged_payload(&bytes).expect("parse failed");
     assert_eq!(p.debtor_id, "entity-test-001");
@@ -140,7 +139,6 @@ fn communication_logged_round_trip() {
     assert_eq!(p.direction, "OUTBOUND");
     assert_eq!(p.content, "Test call");
     assert_eq!(p.duration.as_deref(), Some("120"));
-    assert_eq!(p.created_by, "user-test-A");
 }
 
 #[test]

@@ -175,7 +175,6 @@ pub struct CommunicationLoggedPayload {
     pub direction: String,
     pub content: String,
     pub duration: Option<String>,
-    pub created_by: String,
 }
 
 // ---------------------------------------------------------------
@@ -359,7 +358,6 @@ pub fn parse_action_created_payload(data: &[u8]) -> Result<ActionCreatedPayload,
 ///   content             0x5004  required (may be empty)
 ///   duration            0x5005  optional
 pub fn parse_communication_logged_payload(
-///   created_by          0x5006  required
     data: &[u8],
 ) -> Result<CommunicationLoggedPayload, String> {
     let mut r = TlvReader::new(data);
@@ -368,7 +366,6 @@ pub fn parse_communication_logged_payload(
     let mut direction: Option<String> = None;
     let mut content: Option<String> = None;
     let mut duration: Option<String> = None;
-    let mut created_by: Option<String> = None;
     let mut seen: HashSet<u16> = HashSet::new();
 
     while !r.is_empty() {
@@ -382,7 +379,6 @@ pub fn parse_communication_logged_payload(
             0x5003 => direction = Some(decode_string_value(value)?),
             0x5004 => content = Some(decode_string_value(value)?),
             0x5005 => duration = decode_optional_string_value(value)?,
-            0x5006 => created_by = Some(decode_string_value(value)?),
             _ => return Err(format!("unknown COMMUNICATION_LOGGED field type 0x{:04x}", code)),
         }
     }
@@ -393,7 +389,6 @@ pub fn parse_communication_logged_payload(
             .ok_or("missing required field: communication_type")?,
         direction: direction.ok_or("missing required field: direction")?,
         content: content.ok_or("missing required field: content")?,
-        created_by: created_by.ok_or("missing required field: created_by")?,
         duration,
     })
 }

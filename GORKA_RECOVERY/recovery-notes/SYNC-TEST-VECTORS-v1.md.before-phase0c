@@ -1006,7 +1006,7 @@ V6 — COMMUNICATION\_LOGGED with non-canonical duration (byte encoding)
 
 Specification status:  SPECIFIED
 
-Expected-bytes status: FROZEN
+Expected-bytes status: PENDING
 
 
 
@@ -1037,16 +1037,14 @@ Inputs:
 &#x20;   content:            "Test call"
 
 &#x20;   duration:           "01"    (non-canonical)
-&#x20;   created_by:         "user-test-A"
 
 Operation:
 
-&#x20; Encode the payload as TLV per Section 25.11.3. Six fields in
+&#x20; Encode the payload as TLV per Section 25.11.3. Five fields in
 
 &#x20; order: debtor\_id (0x5001), communication\_type (0x5002),
 
 &#x20; direction (0x5003), content (0x5004), duration (0x5005). Each
-&#x20; record. The created_by (0x5006) field is also encoded as a UTF-8
 
 &#x20; is a UTF-8 string with a u32 length prefix, wrapped in a TLV
 
@@ -1064,7 +1062,7 @@ Expected output:
 
 &#x20; implementation on 2026-09-25. Hex:
 
-&#x20; 5001000000130000000f656e746974792d746573742d3030315002000000080000000443414c4c50030000000c000000084f5554424f554e4450040000000d00000009546573742063616c6c50050000000600000002303150060000000f0000000b757365722d746573742d41
+&#x20; 5001000000130000000f656e746974792d746573742d3030315002000000080000000443414c4c50030000000c000000084f5554424f554e4450040000000d00000009546573742063616c6c500500000006000000023031
 
 &#x20; Structure, verified before recording:
 
@@ -1079,9 +1077,8 @@ Expected output:
 &#x20;   5004 0000000d 00000009 546573742063616c6c content "Test call"
 
 &#x20;   5005 00000006 00000002 3031        duration "01"
-&#x20;   5006 0000000f 0000000b 757365722d746573742d41 created\_by "user-test-A"
 
-&#x20; Total: 109 bytes.
+&#x20; Total: 88 bytes.
 
 &#x20; Note: this is a reference value recorded by the first
 
@@ -1117,7 +1114,7 @@ Expected output:
 
 &#x20; V4       SPECIFIED              FROZEN           None
 
-&#x20; V6       SPECIFIED              FROZEN           None
+&#x20; V6       SPECIFIED              PENDING          A2
 
 
 

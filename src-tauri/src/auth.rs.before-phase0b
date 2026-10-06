@@ -1,20 +1,8 @@
-// src-tauri-agent/src/auth.rs
-//
-// Agent authentication. Store half of the auth flow; the HTTP
-// half lives in gorka_shared::auth_http.
-//
-// This file mirrors the Client's post-Item-2 auth.rs, with two
-// differences:
-//   - No debug println!s in get_token.
-//   - The store path resolves to the Agent's own app data folder
-//     (%APPDATA%\com.gorka.agent\settings.dat) automatically,
-//     because app_data_dir() resolves by bundle identifier.
-//
-// The store half is duplicated per binary by design (Item 2,
-// Reading A). The HTTP half is shared.
+// src-tauri/src/auth.rs
 
 use tauri_plugin_store::StoreBuilder;
 use serde_json::Value;
+use rand::RngCore;
 use crate::db;
 use gorka_shared::auth_http;
 
@@ -27,7 +15,8 @@ pub async fn login(email: String, password: String, app: tauri::AppHandle) -> Re
 
     store.set("auth_token", Value::String(result.token.clone()));
     store.set("organization_id", Value::String(result.organization_id));
-    store.set("user_id", Value::String(result.user_id));
+    store.set("user_name", Value::String(result.name));
+    store.set("user_email", Value::String(result.email));
     store.save().map_err(|e| e.to_string())?;
 
     let salt_exists = store.get("salt").is_some();
@@ -65,16 +54,28 @@ pub fn get_organization_id(app: tauri::AppHandle) -> Result<String, String> {
     Ok(org_id)
 }
 
-pub fn get_user_id(app: tauri::AppHandle) -> Result<String, String> {
+pub fn get_user_name(app: tauri::AppHandle) -> Result<String, String> {
     let store = StoreBuilder::new(&app, "settings.dat")
         .build()
         .map_err(|e| e.to_string())?;
 
-    let user_id = store.get("user_id")
+    let name = store.get("user_name")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .ok_or("No user ID found")?;
+        .unwrap_or_default();
 
-    Ok(user_id)
+    Ok(name)
+}
+
+pub fn get_user_email(app: tauri::AppHandle) -> Result<String, String> {
+    let store = StoreBuilder::new(&app, "settings.dat")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let email = store.get("user_email")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_default();
+
+    Ok(email)
 }
 
 pub fn get_salt(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
@@ -123,3 +124,24 @@ pub fn logout(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// The TCP port the Client's sync engine listens on. Development
+/// mechanism for Phase 9.6; replaced by Control Plane discovery in
+/// Phase 9.6b.
+pub fn get_listen_port(app: &tauri::AppHandle) -> Result<Option<u16>, String> {
+    let store = StoreBuilder::new(app, "settings.dat")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(store.get("listen_port").and_then(|v| v.as_u64()).map(|n| n as u16))
+}
+
+pub fn set_listen_port(app: &tauri::AppHandle, port: u16) -> Result<(), String> {
+    let store = StoreBuilder::new(app, "settings.dat")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    store.set("listen_port", Value::Number(serde_json::Number::from(port as u64)));
+    store.save().map_err(|e| e.to_string())?;
+
+    Ok(())
+}

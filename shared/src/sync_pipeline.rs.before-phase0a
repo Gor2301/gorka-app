@@ -562,7 +562,7 @@ fn apply_communication_logged(
                 &p.direction,
                 &p.content,
                 &duration,
-                &p.created_by,
+                Option::<String>::None,
                 &created_at,
             ],
         ).map_err(|e| e.to_string())?;

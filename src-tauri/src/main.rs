@@ -463,7 +463,8 @@ fn insert_communication(
     let organization_id = get_trusted_organization_id(&app)?;
     let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
-    communications::insert_communication(conn, &organization_id, input)
+    let user_id = crate::auth::get_user_id(app.clone())?;
+    communications::insert_communication(conn, &organization_id, &user_id, input)
 }
 
 #[command]

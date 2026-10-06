@@ -323,13 +323,11 @@ pub fn encode_entity_updated_payload(changes: &[(&str, Option<&str>)]) -> Vec<u8
 ///   content             0x5004
 ///   duration            0x5005  optional
 pub fn encode_communication_logged_payload(
-///   created_by          0x5006  required
     debtor_id: &str,
     communication_type: &str,
     direction: &str,
     content: &str,
     duration: Option<&str>,
-    created_by: &str,
 ) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(&encode_tlv(0x5001, &encode_string_value(debtor_id)));
@@ -339,7 +337,6 @@ pub fn encode_communication_logged_payload(
     if let Some(d) = duration {
         out.extend_from_slice(&encode_tlv(0x5005, &encode_string_value(d)));
     }
-    out.extend_from_slice(&encode_tlv(0x5006, &encode_string_value(created_by)));
     out
 }
 

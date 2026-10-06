@@ -328,15 +328,15 @@ fn v4_entity_updated_payload() {
 #[test]
 fn v6_communication_logged_payload() {
     let payload = encode_communication_logged_payload(
-        "entity-test-001", "CALL", "OUTBOUND", "Test call", Some("01"), "user-test-A",
+        "entity-test-001", "CALL", "OUTBOUND", "Test call", Some("01"),
     );
 
-    // Structural check: six fields, types 0x5001 through 0x5006.
+    // Structural check: five fields, types 0x5001 through 0x5005.
     assert_eq!(&payload[0..2], &[0x50, 0x01], "V6: first field type");
 
     let hex: String = payload.iter().map(|b| format!("{:02x}", b)).collect();
     println!("V6 payload ({} bytes): {}", payload.len(), hex);
-    let expected = hex::decode("5001000000130000000f656e746974792d746573742d3030315002000000080000000443414c4c50030000000c000000084f5554424f554e4450040000000d00000009546573742063616c6c50050000000600000002303150060000000f0000000b757365722d746573742d41").expect("V6: recorded hex is not valid");
+    let expected = hex::decode("5001000000130000000f656e746974792d746573742d3030315002000000080000000443414c4c50030000000c000000084f5554424f554e4450040000000d00000009546573742063616c6c500500000006000000023031").expect("V6: recorded hex is not valid");
     assert_eq!(payload, expected, "V6: payload differs from recorded vector");
 }
 

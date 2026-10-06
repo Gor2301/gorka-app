@@ -1,3 +1,8 @@
+$ErrorActionPreference = 'Stop'
+$path = 'C:\Users\kucha\gorka-app\GORKA_RECOVERY\recovery-notes\RESUME-HERE.md'
+Copy-Item $path ($path + '.before-phase0-recon') -Force
+
+$content = @'
 # RESUME HERE
 
 **Updated:** 2026-10-06 (Phase 0 reconnaissance complete, execution not started)
@@ -218,3 +223,10 @@ state.
 ---
 
 End of RESUME-HERE.md
+'@
+
+$enc = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($path, $content, $enc)
+Write-Host ("Updated: " + $path)
+Write-Host ("Lines: " + ($content -split "`n").Count)
+Write-Host 'Backup: RESUME-HERE.md.before-phase0-recon'
