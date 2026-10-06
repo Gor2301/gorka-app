@@ -7,6 +7,9 @@
 use std::collections::HashMap;
 use std::fmt;
 
+pub mod http;
+pub mod resend_email;
+
 /// The credential and configuration a factory passes to an adapter.
 ///
 /// `value` is opaque credential material. The generic connector layer
