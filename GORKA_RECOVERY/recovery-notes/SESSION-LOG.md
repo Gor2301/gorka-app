@@ -3929,3 +3929,97 @@ Main: npm run build passes at every step. Cloud: pulled ffb3d56, npm run build p
   - No frozen document amended.
 
 End of entry.
+
+---
+
+## Session Extension — October 6, 2026 (CONNECTOR-MODEL.md frozen)
+
+### What this session did
+
+Wrote, reviewed section by section, corrected, and froze GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md. Fourteen sections. Committed as 2f0d10c. Pushed to origin/main.
+
+The document is the connector specification: how the Client Dashboard and the Agent App interact with third-party communication providers and with the AI provider. It is the last item in the Phase 9.6 closure list.
+
+### The session's sequence
+
+Opening. The founder presented five pre-Tauri specification documents (Twilio/Comm Service, Connecting Spec, Communication Service, AI Copilot, Super Admin). These were written in the Electron + centralized-cloud era. They assume the cloud sees message content, holds debtor foreign keys, and gives the Super Admin a god-view of debtor PII. That model is gone. The session extracted the implementation-grade patterns that survive the architecture change and rejected everything that assumed the cloud sees content.
+
+Sections 1 and 2. Written, sent for external review. Four carry-forward items were identified (credential distribution as a security boundary; Tier 1 master credential capability boundary; value-versus-metadata for credentials in cloud; three separate data flows). Two corrections to Section 2 were applied: credential replication is scoped by Section 6, not a blanket rule; the provider-transmission description is provider-specific.
+
+Sections 3 and 4. Written, sent for review. Section 3 had one contradiction to fix: Mocean was marked Tier 1 in the catalog table but the per-provider section said Tier 1 was not confirmed. Fixed: mocean-sms and gemini-ai are now isManagedByGorka = false, with an explicit definition of the flag's meaning. The general master-credential sentence was widened to include lifecycle management. Section 4 was GO with no changes.
+
+Sections 5 and 6. Written, sent for review. Section 5 was GO with two carry-forwards (cache/UI distinction explicit in Section 6; "sender of record" settled in Section 8). Section 6 was CONDITIONAL GO with the connector event type amendment as the only hard blocker. Three additional corrections applied: the "one encryption layer" position was scoped; the sync-cannot-revoke distinction was added; the amendment scope was expanded.
+
+Sections 7 through 14. Written, sent for review in one batch. Multiple corrections across all sections. Section 7: test_connection semantics, async reconciliation, types checklist, factory-only invariant, expanded credential-leak test. Section 8: Send phase wording, send-flow error model separated from adapter error model, SendRequest invariant, retry policy rewritten to zero automatic retries for any error kind, idempotency claim corrected. Section 9: exact COMMUNICATION_LOGGED schema verified (found the created_by defect, which is now amendment A2), replica equality made precise. Section 10: seven corrections. Section 11: five corrections including voice deferred, contribution-token mechanism for device_id versus originating_device, resubmission semantics, request body organizationId removed, origin lookup clarified. Section 12: three safeguards. Section 13: Zone 2 / Zone 3 criterion made explicit, audit record made MVP-scoped, existing modal re-characterized as UI reference. Section 14: consolidation.
+
+### The document
+
+  Version:    1.0
+  Status:     FROZEN
+  File:       GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md
+  Size:       203,015 bytes
+  Commit:     2f0d10c
+
+Sections 1 through 14, plus header and section map.
+
+### The two-sided model, settled
+
+Admin enables and provides credentials on the Client Dashboard. Agent sends from the Agent App. The credential reaches agent devices through a dedicated encrypted sync event on the existing sync channel. Agents never see or type provider credentials. The GORKA cloud never holds the credential of either a Tier 1 subaccount or a Tier 2 BYOP key.
+
+Tier 1 (GORKA-managed): GORKA provisions a per-client subaccount using its master credential. The subaccount credential reaches the client's devices. The agent device sends directly to the provider.
+
+Tier 2 (BYOP): the client's own credential is entered on the admin's device, stored locally, distributed the same way.
+
+Both tiers use credentialsLocation = LOCAL. The MVP does not implement CLOUD.
+
+### Section 14 — the two hard blockers
+
+A1. SYNC-ARCHITECTURE.md amendment: three new event types (CONNECTOR_ENABLED, CONNECTOR_DISABLED, CONNECTOR_CREDENTIAL_REPLACED), one new entity type (CONNECTOR), payload schemas, wire encodings, NULL/empty semantics, validation, reconciliation.
+
+A2. SYNC-ARCHITECTURE.md amendment: created_by in COMMUNICATION_LOGGED. §25.13.9 says the field is present, §25.11.3 does not list it, and the V6 vector does not encode it. Resolution: add created_by to §25.11.3 as a required field with a new type code (0x5006), update the V6 vector.
+
+Neither hard blocker can be sidestepped by starting implementation first.
+
+### Other blocked items
+
+A3. LOCAL-TABLES.md amendment: two new local tables (the connector local record, the compliance rules record) and their indexes. The "cache" is the same connector record viewed from two angles.
+
+A4. CLOUD-TABLES.md verification: confirm the organization_audit_events table's columns support the Zone 3 acknowledgment record. No schema change expected.
+
+### Implementation-phase tasks recorded
+
+Client Dashboard (B1 through B7): endpoints alignment, remove env-var reads, replace cloud credential submission with local Tauri command, wire Zone 3 audit record, compliance rules page, "rules last configured at" display, Tier 1 credential transit verification.
+
+Agent App (C1 through C7): send command, test-connection command, Copilot command, boundary layer structural test, credential-leak test, registry invariant test, /api/connector-usage/sync organizationId verification.
+
+### Funded-phase items recorded
+
+D1 through D21. Credential fingerprints, organization-wide compliance synchronization, per-channel disclosure and contact limits, scheduled sends, voice, weekly/daily periodicity, frozen closed periods, AI usage aggregates, local_ai_history, delivery-status event, message-queue retry, provider-side idempotency, more Tier 1 providers, Mocean Tier 1, Gemini Tier 1, Zone 3 "remember this choice," additional Zone 3 categories.
+
+### The method used
+
+Same as the recovery's standard for specifications: write one section, send for external review, apply corrections in place, move to the next. Four review batches over the session. Every correction from the four reviews was applied before the next section was written.
+
+### Verification performed
+
+  - Fourteen END OF SECTION markers counted. All present, in order.
+  - END OF DOCUMENT marker present.
+  - Byte count: 203,015 bytes.
+  - Section header cross-check: no section was dropped during the chunked paste.
+
+### State at end of session
+
+  Main machine:  2f0d10c, clean, pushed.
+  Cloud machine: 36dc292, one commit behind.
+  GitHub:        2f0d10c.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held.
+  - No code changed.
+  - No frozen document amended.
+
+End of entry.

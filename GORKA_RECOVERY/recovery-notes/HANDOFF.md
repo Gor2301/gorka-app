@@ -3829,3 +3829,102 @@ Cloud:
   - No frozen document amended.
 
 End of entry.
+
+## STATUS UPDATE — October 6, 2026 (CONNECTOR-MODEL.md frozen)
+
+### What this session did
+
+Wrote, reviewed section by section, corrected, and froze GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md. Fourteen sections. Committed as 2f0d10c. Pushed to origin/main.
+
+The document is the connector specification: how the Client Dashboard and the Agent App interact with third-party communication providers (Twilio, Resend, Mocean, future) and with the AI provider (Gemini). It is the last item in the Phase 9.6 closure list.
+
+### The document
+
+  Version:    1.0
+  Status:     FROZEN
+  File:       GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md
+  Size:       203,015 bytes
+  Sections:   14 plus header and section map
+
+Sections:
+
+  1. Purpose, scope, and status
+  2. The two planes and the three zones
+  3. The connector catalog
+  4. Admin enable/disable
+  5. The agent view
+  6. Credential storage and distribution
+  7. Provider adapters in the shared crate
+  8. Single-recipient send flow
+  9. Message logging and sync
+  10. Compliance enforcement hooks
+  11. Aggregate usage reporting
+  12. AI Copilot as a connector
+  13. Zone 3 declaration
+  14. Open items
+
+### The two-sided model, settled
+
+Admin enables and provides credentials on the Client Dashboard. Agent sends from the Agent App. The credential reaches agent devices through a dedicated encrypted sync event on the existing sync channel. Agents never see or type provider credentials. The GORKA cloud never holds the credential of either a Tier 1 subaccount or a Tier 2 BYOP key.
+
+Tier 1 (GORKA-managed): GORKA provisions a per-client subaccount using its master credential. The subaccount credential reaches the client's devices. The agent device sends directly to the provider.
+
+Tier 2 (BYOP): the client's own credential is entered on the admin's device, stored locally, distributed the same way.
+
+Both tiers use credentialsLocation = LOCAL. The MVP does not implement CLOUD.
+
+### Section 14 — the two hard blockers
+
+A1. SYNC-ARCHITECTURE.md amendment: three new event types (CONNECTOR_ENABLED, CONNECTOR_DISABLED, CONNECTOR_CREDENTIAL_REPLACED), one new entity type (CONNECTOR), payload schemas, wire encodings, validation, reconciliation.
+
+A2. SYNC-ARCHITECTURE.md amendment: created_by in COMMUNICATION_LOGGED. §25.13.9 says the field is present, §25.11.3 does not list it, and the V6 vector does not encode it. Resolution: add created_by to §25.11.3 as a required field with a new type code (0x5006), update the V6 vector.
+
+Neither hard blocker can be sidestepped by starting implementation first.
+
+### Other blocked items
+
+A3. LOCAL-TABLES.md amendment: two new local tables (the connector local record, the compliance rules record) and their indexes. The "cache" is the same connector record viewed from two angles, not a third table.
+
+A4. CLOUD-TABLES.md verification: confirm the organization_audit_events table's columns support the Zone 3 acknowledgment record. No schema change expected; verification only.
+
+### Implementation-phase tasks recorded
+
+Client Dashboard (B1 through B7): fix Connectors.tsx's endpoints; remove import.meta.env.VITE_* reads from ConfigurationModal.tsx; replace the Tier 2 credential submission path with a local Tauri command; wire the Zone 3 audit record; add the "Local compliance rules" configuration page; display "rules last configured at"; build the Tier 1 credential transit verification.
+
+Agent App (C1 through C7): register the send command; register the test-connection command; build the Copilot command; structurally enforce the AI boundary layer path; write the credential-leak regression test for every adapter; write the registry invariant test; verify the /api/connector-usage/sync route's organizationId source.
+
+### Funded-phase items recorded
+
+D1 through D21, in the document's Section 14.4. Includes credential fingerprints, organization-wide compliance synchronization, per-channel disclosure and contact limits, scheduled sends, voice, weekly/daily periodicity, frozen closed periods, AI usage aggregates, local_ai_history, delivery-status event, message-queue retry, provider-side idempotency, more Tier 1 providers, Mocean Tier 1, Gemini Tier 1, Zone 3 "remember this choice," additional Zone 3 categories.
+
+### Method used
+
+Same as the recovery's standard: write one section, send for external review, apply corrections in place, move to the next. Four review batches over the session. Every correction from the four reviews was applied before the next section was written.
+
+### The pre-Tauri document extraction
+
+The session read five pre-Tauri specification documents the founder placed in the conversation (Twilio/Comm Service, Connecting Spec, Communication Service, AI Copilot, Super Admin). They assume an Electron + centralized-cloud architecture that no longer applies. The session extracted the implementation-grade patterns that survive the architecture change (provider-adapter pattern, provider-config routing, structured result shape, idempotency, retry, compliance rules, fact-validation for AI, MFA, immutable audit, archive-not-delete, anonymized analytics) and rejected everything that assumes the cloud sees content. The extraction is embodied in the new document; the raw reasoning is recorded in DECISIONS.md.
+
+### State at end of session
+
+  Main machine:  2f0d10c, clean, pushed.
+  Cloud machine: 36dc292, one commit behind.
+  GitHub:        2f0d10c.
+
+### What comes next
+
+  1. On cloud: `git pull`. Brings cloud to 2f0d10c.
+  2. Then the two amendments in order: A1 (connector event types), then A2 (created_by reconciliation).
+  3. Then A3 (LOCAL-TABLES.md amendment), A4 (CLOUD-TABLES.md verification).
+  4. Then the implementation-phase work.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched (release.yml unchanged).
+  - Invariant held.
+  - No code changed.
+  - No frozen document amended. The document names the amendments it requires; they are applied through their own processes.
+
+End of entry.

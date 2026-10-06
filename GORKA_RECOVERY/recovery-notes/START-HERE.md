@@ -1734,3 +1734,81 @@ See DECISIONS.md (October 5 entry), HANDOFF.md, SESSION-LOG.md,
 and PHASE-9.6-EXTRACTION-LOG.md for full details.
 
 End of update.
+
+================================================================
+Update - October 6, 2026 (CONNECTOR-MODEL.md frozen)
+================================================================
+
+CONNECTOR-MODEL.md is written, reviewed section by section,
+corrected, and frozen. It is the connector specification: how the
+Client Dashboard and the Agent App interact with third-party
+communication providers (Twilio, Resend, Mocean, future) and with
+the AI provider (Gemini). It is the last item in the Phase 9.6
+closure list.
+
+File: GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md
+Version: 1.0, FROZEN
+Size: 203,015 bytes
+Commit: 2f0d10c
+
+Fourteen sections. The method was the same as for
+SYNC-ARCHITECTURE.md and AGENT-APP-SPEC.md: write one section, send
+for external review, apply corrections in place, move to the next.
+Four review batches over the session. Every correction applied
+before the next section was written.
+
+The two-sided model. Admin enables and provides credentials on the
+Client Dashboard. Agent sends from the Agent App. The credential
+reaches agent devices through a dedicated encrypted sync event on
+the existing sync channel. Agents never see or type provider
+credentials. The GORKA cloud never holds the credential of either
+a Tier 1 subaccount or a Tier 2 BYOP key.
+
+Tier 1 (GORKA-managed): GORKA provisions a per-client subaccount
+using its master credential. The subaccount credential reaches the
+client's devices. The agent device sends directly to the provider.
+
+Tier 2 (BYOP): the client's own credential is entered on the
+admin's device, stored locally, distributed the same way.
+
+Both tiers use credentialsLocation = LOCAL. The MVP does not
+implement CLOUD.
+
+The document's Section 14 consolidates every open item. Two are
+hard blockers, both amendments to SYNC-ARCHITECTURE.md:
+
+  A1. Three new event types (CONNECTOR_ENABLED,
+      CONNECTOR_DISABLED, CONNECTOR_CREDENTIAL_REPLACED), one new
+      entity type (CONNECTOR), payload schemas, wire encodings,
+      validation, reconciliation.
+
+  A2. created_by in COMMUNICATION_LOGGED. §25.13.9 says the field
+      is present, §25.11.3 does not list it, and the V6 vector
+      does not encode it. Resolution: add created_by to §25.11.3
+      as a required field with a new type code (0x5006), update
+      the V6 vector.
+
+Two further blockers: A3 (LOCAL-TABLES.md amendment for two new
+local tables) and A4 (CLOUD-TABLES.md verification of the
+organization_audit_events columns).
+
+Implementation-phase tasks and funded-phase items are also in
+Section 14 (B1-B7, C1-C7, D1-D21).
+
+State at end of this session:
+
+  Main machine:  2f0d10c, clean, pushed.
+  Cloud machine: 36dc292, one commit behind.
+  GitHub:        2f0d10c.
+
+What remains:
+
+  - Cloud pull to 2f0d10c.
+  - Then the two amendments, A1 then A2.
+  - Then A3 and A4.
+  - Then the implementation-phase work.
+
+See DECISIONS.md (October 6 entry), HANDOFF.md, SESSION-LOG.md for
+full details.
+
+End of update.

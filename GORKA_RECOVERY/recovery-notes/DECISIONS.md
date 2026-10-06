@@ -9630,3 +9630,227 @@ Rule compliance.
     redesign recorded in full).
 
 End of entry.
+
+---
+
+## Recovery Session — October 6, 2026 (Connector Model specification)
+
+This entry records the session that wrote, reviewed, corrected, and froze CONNECTOR-MODEL.md, the connector specification for the two GORKA applications. It does not restate the document. The document is the standalone file GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md, committed as 2f0d10c. This entry records the decisions made during the session, the corrections that came from four external reviews, and the carry-forward items.
+
+### The session's task
+
+The task was to write the specification for how the two GORKA applications interact with third-party communication providers (Twilio, Resend, Mocean, future) and with the AI provider (Gemini). The specification is the last item in the Phase 9.6 closure list.
+
+The prior session had recorded a running list of open items and one prior attempt at a "connector context dump." That dump is not present on disk. The session started from the current source files (the catalog seed, the enable/disable backend, the admin UI page, the client-side service, the two Connectors components) and from the four pre-Tauri specification documents the founder placed in the conversation record: Gorka Core platform+Comm servce Twilio Spec.doc, Gorka Core platform+Comm servce Connecting Spec.doc, Gorka Communication servise Spec.doc, Gorka AI copilot Spec.doc, and Gorka Super admin Spec.doc.
+
+The founder's instruction at the start of the session: read the pre-Tauri specs. Use what is worth using. Do not port the architecture; the architecture has changed since those documents were written.
+
+### What the pre-Tauri documents were
+
+Five documents describing an Electron + centralized-cloud era communication service. They assume the cloud is a middleman that sees message content, holds debtor foreign keys, and gives the Super Admin a god-view of debtor PII. That contradicts the invariant. The whole communication layer in those documents is a cloud relay. That model is gone.
+
+The session extracted the implementation-grade patterns that survive the architecture change, and rejected everything that assumed the cloud sees content. The extraction is not recorded as a formal decision because the extraction is embodied in the new document itself. This entry records the raw reasoning so a future session can re-derive it if needed.
+
+Patterns carried forward:
+- The provider-adapter pattern (one interface, many providers).
+- Provider-config routing (per channel, per organization), not binary BYOP/Managed.
+- A structured result shape and a status vocabulary.
+- Idempotency, retry, message lifecycle.
+- Compliance: opt-out, quiet hours, contact limits, disclosure text, audit.
+- The revised AI Copilot: fact validation, deterministic fallback, structured output, recommendation expiry, manual trigger, PII boundary, and the cut-down scope.
+- The revised Super Admin: MFA, immutable audit, archive-not-delete, anonymized analytics, client state machine.
+
+Patterns rejected:
+- The cloud-hosted communication service as the path for sending.
+- Any cloud table with a debtor_id foreign key.
+- MessageLog / MessageEvent / opt_out_records in cloud.
+- A credential vault in cloud.
+- Any Super Admin view of debtor-level data.
+- Centralized AI shipping debtor PII to a provider.
+- Predictive ML, learning system, skip tracing, social scraping.
+- Automatic sending.
+
+### The two-sided model, settled at the start
+
+Six decisions were settled on the first day of the session, before Section 1 was written. They are recorded in Section 1.5 of the document; they are restated here so DECISIONS.md is self-contained.
+
+D1. Credential distribution. SETTLED.
+  Credentials for a connector are entered once, on the admin's device, in the Client Dashboard. They are stored only in the admin's local SQLCipher database. They are distributed to agent devices through a dedicated encrypted sync event, using the existing sync channel. Agents never see or type provider credentials. The GORKA cloud never holds the credential of either a Tier 1 subaccount or a Tier 2 BYOP key.
+  Credential distribution is itself a security boundary. Section 6 defines it in full.
+
+D1b. Tier 1 and Tier 2 credential origins. SETTLED.
+  Tier 1 (GORKA-managed): GORKA's master credential lives in GORKA's cloud, server-side only. GORKA creates one subaccount per client organization. The subaccount credential reaches the client's devices by the same mechanism as a Tier 2 credential. The agent device calls the provider directly. GORKA's cloud is not on the send path. Section 3 states the precise capability boundary per provider.
+  Tier 2 (BYOP): the client's own credential is entered on the admin's device, stored locally, distributed the same way. GORKA's cloud is never on the path.
+
+D2. Client Connectors.tsx. SETTLED.
+  The current page calls backend endpoints that do not exist. Pre-recovery UI. The intended shape is documented in the new document; the code fix lands in the implementation phase.
+
+D3. ConfigurationModal.tsx env-var reads. PROPOSED, not confirmed.
+  The file reads default credentials from import.meta.env.VITE_* variables. If those values are ever set at build time, they are baked into the shipped JS bundle. This is a boundary concern. Proposed disposition: documented in Section 14, removed in the implementation phase.
+
+D4. Agent send-path timing. PROPOSED, not confirmed.
+  The send path is a distinct slice. It does not close Phase 9.6. Proposed disposition: planned in Section 14, executed after the document is frozen.
+
+Communication content and replication. SETTLED.
+  For text communications, the full content syncs to every authorized device in the organization. This is "Option A." The reasoning: an agency that cannot reproduce what its agents told a debtor cannot answer a dispute or a regulator's request. The cost is documented and accepted.
+  Voice and attachments are separate; they are not covered by this decision.
+
+### The structure of the document
+
+Fourteen sections, plus a header and a section map.
+
+  1. Purpose, scope, and status
+  2. The two planes and the three zones
+  3. The connector catalog
+  4. Admin enable/disable
+  5. The agent view
+  6. Credential storage and distribution
+  7. Provider adapters in the shared crate
+  8. Single-recipient send flow
+  9. Message logging and sync
+  10. Compliance enforcement hooks
+  11. Aggregate usage reporting
+  12. AI Copilot as a connector
+  13. Zone 3 declaration
+  14. Open items
+
+Each section was written, reviewed externally by the founder's reviewer, corrected in place, and confirmed before the next section was written. Four review rounds were processed over the course of the session, one per batch of sections.
+
+### The four external reviews and what they changed
+
+Review 1 (Sections 1 and 2).
+
+  Carry-forward 1: credential distribution is a security boundary, not merely another sync event. Section 6 must explicitly answer which devices receive which credential, whether every authorized device receives it, whether Client and Agent receive identical credentials, whether credentials can be revoked independently, what happens on agent compromise and offboarding, whether the credential is ever displayed back to the user, whether it is stored encrypted locally after receipt, whether credential updates and replacement are supported.
+    Applied. Section 6 states each.
+
+  Carry-forward 2: Tier 1 master credential capability boundary must be precise. What can it do, and what does GORKA commit not to do?
+    Applied. Section 3.5 states the capability boundary per provider (Twilio, Resend, and the future-provider general rule). Mocean and Gemini are not Tier 1 in the MVP.
+
+  Carry-forward 3: "GORKA cloud never holds the credential" must distinguish credential value from credential metadata.
+    Applied. Section 2.3's table lists only tier and status as the credential-adjacent metadata permitted in Zone 1 for the MVP. No fingerprint, no version.
+
+  Carry-forward 4: the three data flows must stay separate throughout the document.
+    Applied. Section 2.4 names the three flows. Section 9 names them again for a single message.
+
+Review 1 also asked for two corrections to Section 2, both applied: the credential's replication is scoped by Section 6, not a blanket rule; and Flow 3's provider-transmission description is provider-specific, not a universal set of two fields.
+
+Review 2 (Sections 3 and 4).
+
+  Correction to Section 3: Mocean was marked isManagedByGorka = true in the catalog table but Section 3.5.3 said Tier 1 not confirmed. Contradiction. Applied: the catalog now shows mocean-sms = false and gemini-ai = false. The flag's meaning was tightened: "GORKA currently offers a GORKA-managed provisioning path for this connector in the MVP." The future-provider rule stands.
+
+  Minor fix: the general master-credential sentence was too narrow. Applied: "GORKA's master credential is used only for provisioning, lifecycle management, and aggregate usage reporting. It is never used to send a debtor message, read message content, or impersonate a client subaccount."
+
+  Section 4 review: GO, no changes.
+
+Review 3 (Sections 5 and 6).
+
+  Section 5's GO. Carry-forward: the local cache / UI projection distinction must be explicit in Section 6; and "sender of record" must be settled in Section 8.
+    Applied. Section 6.4 states the cache/UI distinction as an architectural rule. Section 8.9 settles "sender of record" as the human whose user_id is on the row.
+
+  Section 6's conditional GO. The only hard blocker identified was the connector event type amendment (A1).
+
+  Additional corrections to Section 6, all applied:
+  - Section 6.9's "one encryption layer" position was scoped: it rules out a second layer whose key lives on the same unlocked device; it does not rule out hardware-backed keys, OS credential vaults, or separate trust domains if the funded phase adds them.
+  - Section 6.10 added the distinction: sync cannot revoke a credential. Revocation happens at the provider. The security boundary against a departed device is provider-side invalidation.
+  - Section 6.11 expanded the amendment scope: not just three event type codes, but one entity type code, payload schemas, wire encodings, NULL/empty semantics, validation, and reconciliation.
+
+Review 4 (Sections 7 through 14).
+
+  Section 7 corrections, applied:
+  - test_connection's semantics were tightened: it performs the provider's safest non-message credential validation. It never sends a real debtor message.
+  - The trait's synchronous shape was flagged: implementation must reconcile the network calls with the async model already used in gorka-shared. Section 7.2 names the requirement; it does not choose the mechanism.
+  - The types section gained an implementation checklist for provider_response, SendRequest.body, and ConnectorError.message.
+  - The registry section gained the factory-only invariant and its test.
+  - The credential-leak regression test was expanded to cover eight surfaces.
+
+  Section 8 was significantly corrected:
+  - Phase 3's wording was clarified: one Send phase, one adapter attempt, no retry.
+  - The send-flow error model was separated from the adapter error model: SendFlowError is distinct from ConnectorError; ComplianceBlocked belongs to SendFlowError, not to ConnectorErrorKind.
+  - The SendRequest invariant was stated: no credential in the request; the credential is passed through construction.
+  - Section 8.7 was rewritten. The MVP performs zero automatic retries. Both TransportError and ProviderTransientError are treated as potentially post-acceptance; neither is retried. The outcome for either is TRANSPORT_UNCERTAIN, with an honest modal message telling the agent to check the provider's dashboard before resending.
+  - Section 8.10's idempotency claim was corrected: the MVP does not enforce idempotency keys; the field is metadata for future use.
+
+  Section 9's GO with two consistency checks:
+  - The exact COMMUNICATION_LOGGED schema was verified against the frozen spec. Finding: §25.13.9 says created_by is present, but §25.11.3 does not list it and the V6 vector does not encode it. This is now amendment A2 in Section 14.
+  - Replica equality was made precise: "the same communication exists on every device" means the synchronized communication facts, not a byte-identical row. The data column is local-only.
+
+  Section 10's corrections, applied:
+  - The "no configured rule blocked" terminology was added: an unconfigured rule is not "compliant."
+  - The preview-edit-retransform invariant was stated: if the agent edits after the preview, the disclosure transform must re-run. The transform is idempotent.
+  - The contact-limit predicate was made explicit: CALL, SMS, EMAIL are counted; NOTE is not.
+  - The index verification was noted: no composite (debtor_id, created_at) index is needed in the MVP; the existing debtor_id index is sufficient.
+  - Section 10.10 gained the "do not assume synchronized rules" bullet.
+  - Section 10.7's opt-out field was defined as a first-class change record ("opt_out.<channel>"), using the existing ENTITY_UPDATED field-level reconciliation.
+
+  Section 11's corrections, applied:
+  - Voice was removed from the MVP's scope. The unit question (calls vs minutes) is deferred until voice is designed.
+  - The device_id vs originating_device contradiction was resolved with the contribution-token mechanism: the wire device_id never leaves the device; the cloud stores an opaque per-contribution identifier for deduplication.
+  - Resubmission semantics were frozen: reports are idempotent per contribution token; a device may lower its own count as a correction; the cloud does not append duplicates.
+  - The request body example was corrected: no organizationId in the body; it comes from the JWT.
+  - The origin lookup was clarified: the communications row's id is the event's entity_id; the join is by id and event_type.
+
+  Section 12's corrections, applied:
+  - Empty-field validation safeguard: the AI adapter must not reject an empty to, from, or subject.
+  - No-generic-persistence rule for provider_response: no shared code writes it anywhere.
+  - Structural safeguard for the boundary layer path: the Copilot command is the only code path that constructs a Gemini SendRequest, and it always runs the boundary layer first.
+
+  Section 13's corrections, applied:
+  - The Zone 2 / Zone 3 criterion was made explicit: Zone 2 is a GORKA-provided mechanism for a specific, known provider; Zone 3 is a client-configured generic mechanism for a provider GORKA does not know. The classification of every current catalog row follows from this criterion.
+  - The audit record was made MVP-scoped. The law requires the warning to be recorded; Section 13.5 now writes the row in the MVP, before or during the enable call.
+  - The existing modal was re-characterized as the current UI reference, not as the source of truth. The architecture order is: law, then this document, then implementation.
+
+  Section 14's consolidation:
+  - The connector event type amendment and the created_by reconciliation are the two hard blockers, named A1 and A2.
+  - The LOCAL-TABLES.md amendment (A3) adds two new local tables. The cache is not a third table; it is the same record viewed from two angles.
+  - The CLOUD-TABLES.md verification (A4) confirms the organization_audit_events table's columns support the Zone 3 acknowledgment record.
+  - The Client Dashboard implementation tasks are B1 through B7.
+  - The Agent App implementation tasks are C1 through C7.
+  - The funded-phase items are D1 through D21.
+
+### The document was written, reviewed section by section
+
+The method this session used is the same as the method used for SYNC-ARCHITECTURE.md and AGENT-APP-SPEC.md: write one section, send it for external review, apply corrections in place, move to the next. The reviews arrived in four batches. Each section's corrections were applied before the next section was written.
+
+The document is committed as a standalone file, GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md, version 1.0, status FROZEN. Its exact content is not duplicated into this DECISIONS.md entry. This entry records the decisions and the corrections; the document records the specification.
+
+### Verification performed
+
+  - The document's fourteen END OF SECTION markers were counted. All fourteen present, in order.
+  - The END OF DOCUMENT marker is present.
+  - Byte count: 203,015 bytes.
+  - Section header cross-check: no section was dropped during the chunked paste.
+
+### What is not done
+
+  - The two hard blockers from Section 14.1 remain. A1 (connector event types) and A2 (created_by reconciliation) are amendments to SYNC-ARCHITECTURE.md. They are applied through that document's amendment process. Implementation of the affected parts of the connector model cannot begin until they are applied.
+  - The LOCAL-TABLES.md amendment (A3) is a blocker for the credential distribution and compliance rules tables.
+  - The CLOUD-TABLES.md verification (A4) is a blocker for the Zone 3 audit record.
+  - The Client Dashboard's implementation-phase tasks (B1 through B7) are the code changes that align the existing UI with this document.
+  - The Agent App's implementation-phase tasks (C1 through C7) are the new commands and tests.
+  - The funded-phase items (D1 through D21) are deferred by conscious decision.
+
+### Rule compliance
+
+  - No production touched.
+  - No cloud schema change.
+  - No CI/CD touched.
+  - Invariant held. The document does not introduce any path by which debtor data reaches GORKA's cloud in readable form.
+  - No code changed.
+  - No frozen document amended. The two required amendments are named; they are applied separately.
+  - The pre-Tauri specification documents were read as reference. Their architecture was not ported; their implementation patterns were extracted where they survive the current architecture. The extraction is embodied in the new document.
+
+### The session's output
+
+  - GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md. New file. Version 1.0. FROZEN. 203,015 bytes. Commit 2f0d10c.
+  - This DECISIONS.md entry.
+
+### What comes next
+
+The two amendment tasks, in this order:
+
+  1. A1 — the connector event type amendment to SYNC-ARCHITECTURE.md. Three event types, one entity type, payload schemas, wire encodings, validation, reconciliation.
+  2. A2 — the created_by reconciliation in COMMUNICATION_LOGGED. One new TLV field (0x5006), the §25.11.3 table update, and the V6 vector update.
+
+Then A3 and A4, then the implementation-phase work.
+
+End of entry.
