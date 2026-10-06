@@ -1,137 +1,104 @@
 import { useState, useEffect } from 'react';
 import { connectorsService } from '../services/connectors.service';
-import type { Connector } from '../services/connectors.service';
-import { 
-  RefreshCw, 
-  Mail, 
-  MessageSquare, 
-  Phone, 
+import type { CatalogEntry, EnablementRow } from '../services/connectors.service';
+import {
+  RefreshCw,
+  Mail,
+  MessageSquare,
+  Phone,
   Database,
-  Link,
-  Unlink,
-  CheckCircle,
+  Bot,
+  Power,
 } from 'lucide-react';
-import { DeclarationModal } from '../components/Connectors/DeclarationModal';
-import { ConfigurationModal } from '../components/Connectors/ConfigurationModal';
+
+interface DisplayRow {
+  catalog: CatalogEntry;
+  enablement: EnablementRow | null;
+}
 
 export default function Connectors() {
-  const [connectors, setConnectors] = useState<Connector[]>([]);
+  const [rows, setRows] = useState<DisplayRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showDeclaration, setShowDeclaration] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const [selectedConnector, setSelectedConnector] = useState<Connector | null>(null);
+  const [busyCode, setBusyCode] = useState<string | null>(null);
 
-  const loadConnectors = async () => {
+  const load = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await connectorsService.getConnectorTypes();
-      setConnectors(data || []);
+      const [catalog, enablements] = await Promise.all([
+        connectorsService.listCatalog(),
+        connectorsService.listEnablements(),
+      ]);
+      const byCode = new Map(enablements.map((e) => [e.connectorCode, e]));
+      const merged: DisplayRow[] = catalog.map((c) => ({
+        catalog: c,
+        enablement: byCode.get(c.code) ?? null,
+      }));
+      setRows(merged);
     } catch (err: any) {
-      console.error('Error:', err);
-      setError(err.message || 'Failed to load connectors');
-      setConnectors([]);
+      console.error('Failed to load connectors:', err);
+      setError(err?.message || 'Failed to load connectors');
+      setRows([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadConnectors();
+    load();
   }, []);
 
-  // ─── Handle Connect ──────────────────────────────────────────────────
-  const handleConnect = async (connector: Connector) => {
-    if (connector.provider === 'external_api') {
-      setSelectedConnector(connector);
-      setShowDeclaration(true);
-      return;
-    }
-
+  const handleConnect = async (row: DisplayRow) => {
+    if (busyCode) return;
+    setBusyCode(row.catalog.code);
     try {
-      const response = await connectorsService.connectAuto(connector.id);
-      console.log('🔍 connectAuto response:', response);
-
-      if (response.success) {
-        alert(`✅ ${connector.name} connected successfully!`);
-
-        setConnectors(prev => {
-          const updated = prev.map(c =>
-            c.id === connector.id
-              ? { ...c, status: 'CONNECTED' as const, hasCredentials: true }
-              : c
-          );
-          console.log('🔵 Setting state to:', updated);
-          return updated;
-        });
-
-        setTimeout(() => {
-          console.log('🔵 State 500ms later — check if reverted');
-        }, 500);
-
-      } else {
-        alert(`❌ Failed to connect: ${response.error || 'Unknown error'}`);
-      }
+      await connectorsService.enable(row.catalog.code);
+      await load();
     } catch (err: any) {
-      console.error('Auto-connect error:', err);
-      alert(`❌ Failed to connect ${connector.name}: ${err.message || 'Unknown error'}`);
+      alert('Failed to connect ' + row.catalog.name + ': ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBusyCode(null);
     }
   };
 
-  // ─── Handle Accept Declaration ──────────────────────────────────────
-  const handleAcceptDeclaration = () => {
-    setShowDeclaration(false);
-    setShowConfig(true);
-  };
-
-  // ─── Handle Save Configuration ──────────────────────────────────────
-  const handleSaveConfiguration = async (config: Record<string, any>, credentials: Record<string, any>) => {
-    if (!selectedConnector) return;
-
+  const handleDisconnect = async (row: DisplayRow) => {
+    if (busyCode) return;
+    if (!confirm('Disconnect ' + row.catalog.name + '?')) return;
+    setBusyCode(row.catalog.code);
     try {
-      await connectorsService.connectConnector(selectedConnector.id, {
-        acknowledged: true,
-        config,
-        credentials
-      });
-
-      alert(`✅ Successfully connected to ${selectedConnector.name}!`);
-      setShowConfig(false);
-      setSelectedConnector(null);
-      await loadConnectors();
-    } catch (err) {
-      console.error('Failed to connect:', err);
-      alert('❌ Failed to connect. Please check your credentials.');
-    }
-  };
-
-  // ─── Handle Disconnect ──────────────────────────────────────────────
-  const handleDisconnect = async (connector: Connector) => {
-    if (!confirm(`Are you sure you want to disconnect ${connector.name}?`)) return;
-
-    try {
-      await connectorsService.disconnectConnector(connector.id);
-      alert(`✅ Successfully disconnected ${connector.name}`);
-      await loadConnectors();
-    } catch (err) {
-      console.error('Failed to disconnect:', err);
-      alert('❌ Failed to disconnect');
-    }
-  };
-
-  // ─── Handle Test ─────────────────────────────────────────────────────
-  const handleTest = async (connector: Connector) => {
-    try {
-      const result = await connectorsService.testConnector(connector.id);
-      if (result.success) {
-        alert('✅ Test successful!');
-      } else {
-        alert(`❌ Test failed: ${result.message || 'Unknown error'}`);
-      }
-      await loadConnectors();
+      await connectorsService.disable(row.catalog.code);
+      await load();
     } catch (err: any) {
-      alert(`❌ Test failed: ${err.message || 'Unknown error'}`);
+      alert('Failed to disconnect ' + row.catalog.name + ': ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBusyCode(null);
+    }
+  };
+
+  const categoryIcon = (category: CatalogEntry['category']) => {
+    switch (category) {
+      case 'EMAIL':
+        return <Mail className="w-5 h-5 text-gray-600" />;
+      case 'SMS':
+        return <MessageSquare className="w-5 h-5 text-gray-600" />;
+      case 'VOICE':
+        return <Phone className="w-5 h-5 text-gray-600" />;
+      case 'AI':
+        return <Bot className="w-5 h-5 text-gray-600" />;
+      default:
+        return <Database className="w-5 h-5 text-gray-600" />;
+    }
+  };
+
+  const statusStyle = (status: string | undefined) => {
+    switch (status) {
+      case 'CONNECTED':
+        return 'bg-green-100 text-green-700';
+      case 'ERROR':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
     }
   };
 
@@ -149,7 +116,7 @@ export default function Connectors() {
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <p><strong>Error:</strong> {error}</p>
           <button
-            onClick={loadConnectors}
+            onClick={load}
             className="mt-2 px-4 py-2 bg-red-100 hover:bg-red-200 rounded-lg transition-colors"
           >
             Retry
@@ -159,19 +126,6 @@ export default function Connectors() {
     );
   }
 
-  const statusColors: Record<string, string> = {
-    CONNECTED: 'bg-green-100 text-green-700',
-    DISCONNECTED: 'bg-gray-100 text-gray-700',
-    ERROR: 'bg-red-100 text-red-700'
-  };
-
-  const typeIcons: Record<string, React.ReactNode> = {
-    EMAIL: <Mail className="w-5 h-5 text-gray-600" />,
-    SMS: <MessageSquare className="w-5 h-5 text-gray-600" />,
-    VOICE: <Phone className="w-5 h-5 text-gray-600" />,
-    DATA_SOURCE: <Database className="w-5 h-5 text-gray-600" />
-  };
-
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
@@ -180,13 +134,9 @@ export default function Connectors() {
           <p className="text-gray-500 mt-1">
             Connect GORKA to external services for email, SMS, and more
           </p>
-          <div className="flex items-center gap-2 mt-2 text-sm text-yellow-600 bg-yellow-50 px-3 py-1 rounded-lg border border-yellow-200">
-            <span>⚠️</span>
-            <span>External API connections require manual configuration</span>
-          </div>
         </div>
         <button
-          onClick={loadConnectors}
+          onClick={load}
           className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
@@ -195,74 +145,73 @@ export default function Connectors() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {connectors && connectors.length > 0 ? (
-          connectors.map((connector) => {
-            const statusColor = statusColors[connector.status] || 'bg-gray-100 text-gray-700';
-            const typeIcon = typeIcons[connector.type] || <Database className="w-5 h-5 text-gray-600" />;
-            const isBuiltIn = connector.provider !== 'external_api';
+        {rows.length > 0 ? (
+          rows.map((row) => {
+            const { catalog, enablement } = row;
+            const isTier1 = catalog.isManagedByGorka;
+            const isConnected = enablement?.status === 'CONNECTED';
+            const isBusy = busyCode === catalog.code;
+            const tierLabel = isTier1 ? 'GORKA-managed' : 'Bring your own';
 
             return (
-              <div key={connector.id} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div
+                key={catalog.code}
+                className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="text-gray-600">{typeIcon}</div>
+                    <div>{categoryIcon(catalog.category)}</div>
                     <div>
-                      <h3 className="font-medium text-gray-900">{connector.name}</h3>
-                      <p className="text-sm text-gray-500">{connector.provider}</p>
-                      {isBuiltIn && (
-                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                          Built-in
-                        </span>
-                      )}
+                      <h3 className="font-medium text-gray-900">{catalog.name}</h3>
+                      <p className="text-sm text-gray-500">{catalog.provider}</p>
+                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                        {tierLabel}
+                      </span>
                     </div>
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor}`}>
-                    {connector.status}
+                  <span
+                    className={'px-2 py-1 rounded-full text-xs font-medium ' + statusStyle(enablement?.status)}
+                  >
+                    {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
                   </span>
                 </div>
 
-                {connector.description && (
-                  <p className="text-sm text-gray-600 mb-4">{connector.description}</p>
+                {catalog.description && (
+                  <p className="text-sm text-gray-600 mb-4">{catalog.description}</p>
                 )}
 
                 <div className="flex flex-wrap gap-2">
-                  {connector.status === 'DISCONNECTED' && (
+                  {!isConnected && isTier1 && (
                     <button
-                      onClick={() => handleConnect(connector)}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+                      onClick={() => handleConnect(row)}
+                      disabled={isBusy}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                     >
-                      <Link className="w-4 h-4" />
-                      {isBuiltIn ? 'Connect' : 'Configure'}
+                      <Power className="w-4 h-4" />
+                      {isBusy ? 'Connecting...' : 'Connect'}
                     </button>
                   )}
 
-                  {connector.status === 'CONNECTED' && connector.hasCredentials && (
-                    <>
-                      <button
-                        onClick={() => handleTest(connector)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Test
-                      </button>
-                      <button
-                        onClick={() => handleDisconnect(connector)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 transition-colors cursor-pointer"
-                      >
-                        <Unlink className="w-4 h-4" />
-                        Disconnect
-                      </button>
-                      <span className="px-2 py-1 bg-green-50 text-green-600 text-xs rounded-full flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        Connected
-                      </span>
-                    </>
+                  {!isConnected && !isTier1 && (
+                    <button
+                      disabled
+                      title="Local credential storage will be available in a future update."
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-500 text-sm rounded-lg cursor-not-allowed"
+                    >
+                      <Power className="w-4 h-4" />
+                      Configure (coming soon)
+                    </button>
                   )}
 
-                  {connector.isDefault && (
-                    <span className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded-full">
-                      Default
-                    </span>
+                  {isConnected && (
+                    <button
+                      onClick={() => handleDisconnect(row)}
+                      disabled={isBusy}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                    >
+                      <Power className="w-4 h-4" />
+                      {isBusy ? 'Disconnecting...' : (isTier1 ? 'Disconnect' : 'Disable')}
+                    </button>
                   )}
                 </div>
               </div>
@@ -270,25 +219,10 @@ export default function Connectors() {
           })
         ) : (
           <div className="col-span-full text-center text-gray-500 py-8">
-            No connectors found.
+            No connectors available.
           </div>
         )}
       </div>
-
-      <DeclarationModal
-        isOpen={showDeclaration}
-        onClose={() => setShowDeclaration(false)}
-        onAccept={handleAcceptDeclaration}
-        connectorName={selectedConnector?.name || ''}
-      />
-
-      <ConfigurationModal
-        isOpen={showConfig}
-        onClose={() => setShowConfig(false)}
-        onSave={handleSaveConfiguration}
-        connectorName={selectedConnector?.name || ''}
-        provider={selectedConnector?.provider || ''}
-      />
     </div>
   );
 }

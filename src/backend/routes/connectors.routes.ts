@@ -169,4 +169,18 @@ router.post('/disable', async (req: Request, res: Response): Promise<any> => {
   }
 });
 
+// GET /api/connectors/catalog
+// Returns the active connector_catalog rows for display.
+router.get('/catalog', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const rows = await prisma.connectorCatalog.findMany({
+      where: { isActive: true, lifecycleStatus: 'ACTIVE' },
+      orderBy: { code: 'asc' },
+    });
+    return res.status(200).json({ success: true, data: { rows, total: rows.length } });
+  } catch (error) {
+    console.error('Connector catalog error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to list catalog' });
+  }
+});
 export default router;

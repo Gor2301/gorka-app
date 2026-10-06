@@ -9,53 +9,18 @@ interface ConfigurationModalProps {
   provider: string;
 }
 
-export function ConfigurationModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  connectorName, 
-  provider 
+export function ConfigurationModal({
+  isOpen,
+  onClose,
+  onSave,
+  connectorName,
+  provider
 }: ConfigurationModalProps) {
   const [config, setConfig] = useState<Record<string, any>>({});
   const [showCredentials, setShowCredentials] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [authType, setAuthType] = useState<string>('API Key');
-
-  // ─── Get default credentials from .env ──────────────────────────────
-  const getDefaultCredentials = (provider: string): Record<string, any> => {
-    switch (provider) {
-      case 'resend':
-        return {
-          apiKey: import.meta.env.VITE_RESEND_API_KEY || '',
-        };
-      case 'mocean':
-        return {
-          apiKey: import.meta.env.VITE_MOCEAN_API_KEY || '',
-          apiSecret: import.meta.env.VITE_MOCEAN_API_SECRET || '',
-        };
-      case 'twilio_voice':
-        return {
-          authToken: import.meta.env.VITE_TWILIO_AUTH_TOKEN || '',
-        };
-      case 'twilio_sms':
-        return {
-          authToken: import.meta.env.VITE_TWILIO_AUTH_TOKEN || '',
-        };
-      case 'sendgrid':
-        return {
-          apiKey: import.meta.env.VITE_SENDGRID_API_KEY || '',
-        };
-      case 'external_api':
-        return {};
-      default:
-        return {};
-    }
-  };
-
-  // ─── Initialize credentials with defaults ───────────────────────────
-  const [credentials, setCredentials] = useState<Record<string, any>>(
-    getDefaultCredentials(provider)
-  );
+  const [credentials, setCredentials] = useState<Record<string, any>>({});
 
   if (!isOpen) return null;
 
@@ -80,12 +45,12 @@ export function ConfigurationModal({
       ],
       external_api: [
         { name: 'baseUrl', label: 'Base URL', type: 'text', placeholder: 'https://api.credit-bureau.com/v1', required: true },
-        { 
-          name: 'authType', 
-          label: 'Auth Type', 
-          type: 'select', 
-          options: ['API Key', 'Bearer Token', 'Basic Auth'], 
-          required: true 
+        {
+          name: 'authType',
+          label: 'Auth Type',
+          type: 'select',
+          options: ['API Key', 'Bearer Token', 'Basic Auth'],
+          required: true
         }
       ]
     };
@@ -123,11 +88,11 @@ export function ConfigurationModal({
         ]
       }
     };
-    
+
     if (provider === 'external_api') {
       return fields.external_api[authType] || [];
     }
-    
+
     return fields[provider] || [
       { name: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your API Key', required: true }
     ];
@@ -135,15 +100,10 @@ export function ConfigurationModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     const configToSave = {
       ...config,
       authType: authType || config.authType
     };
-    
-    console.log('🔵 [Modal] Config being saved:', configToSave);
-    console.log('🔵 [Modal] Credentials being saved:', credentials);
-    
     setLoading(true);
     try {
       await onSave(configToSave, credentials);
