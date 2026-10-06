@@ -8,9 +8,9 @@ GORKA — SYNC ARCHITECTURE
 
 Document:    SYNC-ARCHITECTURE.md
 
-Version:     1.5 (frozen)
+Version:     1.6 (frozen)
 
-Date:        September 19, 2026 (v1.5 amendment applied October 6, 2026)
+Date:        September 19, 2026 (v1.6 amendment applied October 6, 2026)
 
 Status:      FROZEN — approved by the founder on September 19, 2026.
              v1.1 amendment (Section 25.13 field-semantics
@@ -98,6 +98,56 @@ SYNC-TEST-VECTORS-v1.md. No other section was changed by the v1.5
 
 
 amendment.
+
+
+
+A v1.6 amendment was applied on October 6, 2026. Section 9.2 was
+
+
+
+extended from four to seven event types. Three new event types
+
+
+
+were added: CONNECTOR_ENABLED, CONNECTOR_DISABLED, and
+
+
+
+CONNECTOR_CREDENTIAL_REPLACED. Section 22.13.2 gained entity type
+
+
+
+0x06 (connector). Section 22.13.3 gained event type codes 0x0005,
+
+
+
+0x0006, and 0x0007. New subsections 25.14, 25.15, and 25.16 were
+
+
+
+added, defining the wire format, validation, and application rules
+
+
+
+for the three new event types. The previous Section 25.14 was
+
+
+
+renumbered to Section 25.17. Section 25.12.1's schema
+
+
+
+cross-reference now includes Sections 25.14 through 25.16. Section
+
+
+
+30.3 records that the three new event types have no test vectors
+
+
+
+yet. No other section was changed by the v1.6 amendment.
+
+
 
 ========================================================================
 
@@ -3425,7 +3475,7 @@ protocol defines an event type for it.
 
 
 
-The MVP produces exactly four event types:
+The MVP produces exactly seven event types:
 
 
 
@@ -3442,6 +3492,16 @@ The MVP produces exactly four event types:
 \- COMMUNICATION\_LOGGED — a new communication was logged on this
 
 &#x20; device.
+
+\- CONNECTOR\_ENABLED — a connector was enabled on this device.
+
+&#x20; The event carries the opaque credential.
+
+\- CONNECTOR\_DISABLED — a connector was disabled on this device.
+
+\- CONNECTOR\_CREDENTIAL\_REPLACED — a connector credential or
+
+&#x20; configuration changed on this device.
 
 
 
@@ -10116,13 +10176,15 @@ is a u8. It is one of:
 - 0x03 — action.
 - 0x04 — communication.
 - 0x05 — document.
+- 0x06 — connector.
 
-The entity_type identifies the entity namespace. In the MVP,
-only entity types 0x01 (debtor), 0x03 (action), and 0x04
-(communication) are valid for accepted MVP sync events. Entity
-types 0x02 (debt) and 0x05 (document) are reserved identifiers
-in the MVP and MUST NOT appear in an accepted MVP sync event.
-See Section 25.9.2.
+The entity_type identifies the entity namespace. In the MVP, the
+entity types valid for accepted MVP sync events are: 0x01 (debtor),
+0x03 (action), 0x04 (communication), and 0x06 (connector). Entity
+types 0x02 (debt) and 0x05 (document) are reserved identifiers in
+the MVP and MUST NOT appear in an accepted MVP sync event. Entity
+type 0x06 appears only in the three CONNECTOR_* events (Sections
+25.14 through 25.16). See Section 25.9.2.
 
 The entity_id is a TLV record with type code 0x1107. Its value
 is the entity identifier, as raw bytes. The TLV length provides
@@ -10144,6 +10206,9 @@ The MVP event types (Section 9.2) have the following codes:
 - 0x0002 — ENTITY_UPDATED.
 - 0x0003 — ACTION_CREATED.
 - 0x0004 — COMMUNICATION_LOGGED.
+- 0x0005 — CONNECTOR_ENABLED.
+- 0x0006 — CONNECTOR_DISABLED.
+- 0x0007 — CONNECTOR_CREDENTIAL_REPLACED.
 
 The funded-phase event types (Section 8.2) will be assigned
 codes starting at 0x0100, defined in Section 24 when they are
@@ -15099,7 +15164,7 @@ order:
 
 &#x20;     - The payload matches the event\_type's schema
 
-&#x20;       (Section 25.8 through 25.11).
+&#x20;       (Sections 25.8 through 25.11 and 25.14 through 25.16).
 
 &#x20;     - Field values are valid for their fields (per
 
@@ -15163,7 +15228,7 @@ order:
 
 &#x20;     - Apply its domain effect to the state tables
 
-&#x20;       (Sections 25.8 through 25.11).
+&#x20;       (Sections 25.8 through 25.11 and 25.14 through 25.16).
 
 &#x20;     - Record losing values in history\_records
 
@@ -16253,7 +16318,297 @@ this section is amended through the standard amendment process.
 
 
 ========================================================================
-25.14 WHAT SECTION 25 DOES NOT DO
+
+25.14 EVENT TYPE: CONNECTOR_ENABLED
+
+25.14.1 Purpose
+
+CONNECTOR_ENABLED records that a connector was enabled for the
+client's organization, and carries the credential and configuration
+the organization's devices need in order to send through it. It is
+originated by the device where the admin enabled the connector
+(CONNECTOR-MODEL.md Sections 4.5 and 4.6). It is accepted by every
+other authorized device in the organization.
+
+The credential_value is opaque. The sync engine does not parse,
+validate, or transform it. Its internal structure is defined by the
+adapter that writes and reads it (CONNECTOR-MODEL.md Section 7.3).
+
+25.14.2 Allowed Entity Type
+
+entity_type MUST be 0x06 (connector).
+
+25.14.3 Payload Wire Format
+
+The payload is a TLV-encoded structure. Its TLV type codes:
+
+  +--------------------------+-----------+
+  | field                    | type code |
+  +--------------------------+-----------+
+  | connector_code           | 0x6001    |
+  | tier                     | 0x6002    |
+  | credential_value         | 0x6003    |
+  | configuration            | 0x6004    |
+  | enabled_at               | 0x6005    |
+  +--------------------------+-----------+
+
+The field connector_code is a UTF-8 string, length-prefixed. It is
+the catalog row's stable code (for example "twilio-sms").
+
+The field tier is a UTF-8 string, length-prefixed. One of TIER1,
+TIER2.
+
+The field credential_value is a binary blob, length-prefixed. It
+is the opaque credential. It MUST NOT be empty.
+
+The field configuration is a UTF-8 string, length-prefixed, carrying
+canonical JSON per Section 25.13.4. It MAY be empty (representing
+{}).
+
+The field enabled_at is a u64: the originating device's wall clock
+in milliseconds since the Unix epoch. Informational only.
+
+Required fields: connector_code, tier, credential_value,
+configuration, enabled_at.
+
+Field order is fixed: connector_code, tier, credential_value,
+configuration, enabled_at.
+
+25.14.4 Validation
+
+An event is valid if:
+
+- entity_type is 0x06 (connector).
+- The payload is valid TLV.
+- connector_code is present, non-empty, valid UTF-8.
+- tier is present and one of TIER1, TIER2.
+- credential_value is present and non-empty.
+- configuration is present, valid UTF-8. If non-empty, it is valid
+  canonical JSON per Section 25.13.4.
+- enabled_at is present.
+- The entity_id is present and non-empty, and equals the
+  connector_code.
+- No other payload fields are present.
+
+A payload that fails any check is an EVENT_ERROR.
+
+25.14.5 Application Transaction
+
+When a CONNECTOR_ENABLED event is applied:
+
+1. Determine whether a connector local record with this
+   connector_code and this device's organization_id exists.
+
+   a. If the record does not exist, insert a new record with:
+      connector_code = payload.connector_code
+      organization_id = the device's organization_id
+      tier = payload.tier
+      status = ENABLED
+      credential_value = payload.credential_value
+      configuration = payload.configuration
+      source_device_id = event.device_id
+      created_at = event.created_at
+      updated_at = event.created_at
+
+   b. If the record exists, update it with the same fields, and
+      update updated_at.
+
+2. Write an entry to the application audit log.
+
+3. Advance the logical clock.
+
+4. Append the event to sync_events.
+
+Steps 1 through 4 are one transaction.
+
+No entity_field_state rows are written for CONNECTOR events.
+CONNECTOR records do not participate in field-level reconciliation.
+
+25.14.6 Concurrent CONNECTOR Events
+
+Two devices might originate a CONNECTOR_ENABLED event for the same
+connector_code. In the MVP this is not anticipated: only the admin's
+device originates CONNECTOR events (CONNECTOR-MODEL.md Section 4.1).
+If it nevertheless occurred, the standard acceptance pipeline would
+apply the events in the order they arrived; the local record would
+hold the value from whichever was applied last. The MVP does not add
+a deterministic protocol-order tie-break for CONNECTOR records,
+because the deployment model rules out the case. A future phase may
+add a rule if the case becomes possible.
+
+25.14.7 Failure Behavior
+
+If CONNECTOR_ENABLED fails validation, the outcome is EVENT_ERROR
+with the appropriate code. The event is rejected; it is not applied;
+its row is not appended to sync_events; the outcome is reported in
+the SYNC_ACK as REJECTED.
+
+CONNECTOR_ENABLED has no prerequisite. It is never pending.
+
+25.15 EVENT TYPE: CONNECTOR_DISABLED
+
+25.15.1 Purpose
+
+CONNECTOR_DISABLED records that a connector was disabled for the
+client's organization. On every device, the local record for that
+connector is deleted, including the credential and the configuration
+(CONNECTOR-MODEL.md Section 6.8).
+
+25.15.2 Allowed Entity Type
+
+entity_type MUST be 0x06 (connector).
+
+25.15.3 Payload Wire Format
+
+The payload is a TLV-encoded structure. Its TLV type codes:
+
+  +--------------------------+-----------+
+  | field                    | type code |
+  +--------------------------+-----------+
+  | connector_code           | 0x6001    |
+  | disabled_at              | 0x6006    |
+  +--------------------------+-----------+
+
+The field connector_code is a UTF-8 string, length-prefixed.
+
+The field disabled_at is a u64: the originating device's wall clock
+in milliseconds since the Unix epoch. Informational only.
+
+Required fields: connector_code, disabled_at.
+
+Field order is fixed: connector_code, disabled_at.
+
+Note: the codes 0x6001 through 0x6007 are shared across the three
+CONNECTOR event types. Code 0x6006 is used by CONNECTOR_DISABLED
+here and code 0x6007 is used by CONNECTOR_CREDENTIAL_REPLACED in
+Section 25.16.3.
+
+25.15.4 Validation
+
+An event is valid if:
+
+- entity_type is 0x06 (connector).
+- The payload is valid TLV.
+- connector_code is present, non-empty, valid UTF-8.
+- disabled_at is present.
+- The entity_id is present and non-empty, and equals the
+  connector_code.
+- No other payload fields are present.
+
+A payload that fails any check is an EVENT_ERROR.
+
+25.15.5 Application Transaction
+
+When a CONNECTOR_DISABLED event is applied:
+
+1. Delete the connector local record for this connector_code, if it
+   exists. The credential_value, configuration, tier, and all other
+   fields are removed together.
+
+   If no record exists, this is a no-op. The event is still
+   accepted.
+
+2. Write an entry to the application audit log.
+
+3. Advance the logical clock.
+
+4. Append the event to sync_events.
+
+Steps 1 through 4 are one transaction.
+
+25.15.6 Failure Behavior
+
+Same as Section 25.14.7.
+
+25.16 EVENT TYPE: CONNECTOR_CREDENTIAL_REPLACED
+
+25.16.1 Purpose
+
+CONNECTOR_CREDENTIAL_REPLACED records that the credential or
+configuration for an already-enabled connector changed. On every
+device, the local record's credential_value and configuration are
+overwritten with the new values. The old values are not retained
+(CONNECTOR-MODEL.md Section 6.8).
+
+25.16.2 Allowed Entity Type
+
+entity_type MUST be 0x06 (connector).
+
+25.16.3 Payload Wire Format
+
+The payload is a TLV-encoded structure. Its TLV type codes:
+
+  +--------------------------+-----------+
+  | field                    | type code |
+  +--------------------------+-----------+
+  | connector_code           | 0x6001    |
+  | credential_value         | 0x6003    |
+  | configuration            | 0x6004    |
+  | replaced_at              | 0x6007    |
+  +--------------------------+-----------+
+
+Field descriptions are the same as in Section 25.14.3.
+
+Required fields: connector_code, credential_value, configuration,
+replaced_at.
+
+Field order is fixed: connector_code, credential_value,
+configuration, replaced_at.
+
+Note: this event does not carry a tier. The tier is set by the
+CONNECTOR_ENABLED event and does not change on a credential
+replacement.
+
+25.16.4 Validation
+
+An event is valid if:
+
+- entity_type is 0x06 (connector).
+- The payload is valid TLV.
+- connector_code is present, non-empty, valid UTF-8.
+- credential_value is present and non-empty.
+- configuration is present, valid UTF-8. If non-empty, it is valid
+  canonical JSON per Section 25.13.4.
+- replaced_at is present.
+- The entity_id is present and non-empty, and equals the
+  connector_code.
+- No other payload fields are present.
+
+A payload that fails any check is an EVENT_ERROR.
+
+25.16.5 Application Transaction
+
+When a CONNECTOR_CREDENTIAL_REPLACED event is applied:
+
+1. If a connector local record exists for this connector_code and
+   this device's organization_id:
+
+   - Overwrite credential_value = payload.credential_value
+   - Overwrite configuration = payload.configuration
+   - Update updated_at = event.created_at
+   - Update source_device_id = event.device_id
+
+   If no record exists, this is a no-op. The event is still
+   accepted. The corresponding CONNECTOR_ENABLED event has not yet
+   arrived; when it does, it will create the record. In that
+   out-of-order case, the enable wins over the replace, because the
+   enable carries the initial credential and the replace carried a
+   modification intended for a state that had not yet been
+   established.
+
+2. Write an entry to the application audit log.
+
+3. Advance the logical clock.
+
+4. Append the event to sync_events.
+
+Steps 1 through 4 are one transaction.
+
+25.16.6 Failure Behavior
+
+Same as Section 25.14.7.
+
+25.17 WHAT SECTION 25 DOES NOT DO
 
 ========================================================================
 
@@ -16331,7 +16686,7 @@ does not redefine either.
 
 
 
-25.14.1 What Section 25 Relies On
+25.17.1 What Section 25 Relies On
 
 
 
@@ -16367,7 +16722,7 @@ Section 25 relies on, but does not redefine:
 
 
 
-25.14.2 What Section 25 Requires of LOCAL-TABLES.md
+25.17.2 What Section 25 Requires of LOCAL-TABLES.md
 
 
 
@@ -20648,6 +21003,34 @@ version and corrected if necessary.
 The following test vectors are required. Each is stated with
 
 what it covers and what the expected outcome is.
+
+
+
+Note on CONNECTOR event types: Sections 25.14 through 25.16 define
+
+
+
+three event types — CONNECTOR_ENABLED, CONNECTOR_DISABLED, and
+
+
+
+CONNECTOR_CREDENTIAL_REPLACED — for which no deterministic test
+
+
+
+vectors exist in SYNC-TEST-VECTORS-v1.md. Their vectors will be
+
+
+
+added in the funded phase, or as part of the connector
+
+
+
+implementation slice. Until then, the three event types are
+
+
+
+specified but not covered by a vector.
 
 
 
