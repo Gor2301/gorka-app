@@ -1,127 +1,79 @@
 # RESUME HERE
 
-**Updated:** 2026-10-06 (Phase 0 reconnaissance complete, execution not started)
-**Main machine:** 3b3c1dd
-**Cloud machine:** 36dc292 (behind; needs git pull to 3b3c1dd)
-**GitHub:** 3b3c1dd
+**Updated:** 2026-10-06 (Phase 0 applied on main; cloud test pending)
+**Main machine:** 562a7be
+**Cloud machine:** 36dc292 or later (needs git pull to reach 562a7be)
+**GitHub:** 562a7be
 
 ---
 
 ## Where we are
 
 Phase 9.6. All four CONNECTOR-MODEL.md Section 14 blockers (A1-A4)
-are closed. Phase 0 is the V6 vector recomputation (the A2
-follow-up).
+are closed. Phase 0 (the A2 follow-up) is applied on main and
+verified on disk. The only thing left in Phase 0 is the cloud
+build and test run.
 
-Reconnaissance discovered Phase 0 is larger than initially
-described. The production code does not source user_id at all, so
-closing A2 means threading user_id from login through to the
-encoder AND the parser AND the receiving pipeline. 13 files.
-
-Reconnaissance is complete and recorded below. Phase 0 execution
-has not started. No code has been changed.
+Phase 0 threaded created_by from login through to the wire format
+and back. 13 source files were edited, in three sub-scripts (0a,
+0b, 0c), each sanity-checked before writing, each verified with
+findstr after. A junk-file cleanup followed the Phase 0 commit.
 
 ---
 
 ## Current task
 
-Write and run the Phase 0 script. 13 files, one cloud trip.
+Run the cloud build and test. If green, commit the result and
+update this file. If red, paste the failure.
 
-Decision: Option 1 (all 13 files in one slice). The founder chose
-Option 1 over Option 2 (split into 0a/0b) specifically to avoid
-leaving a temporary empty-string bridge in production code.
-
-Decision: three sub-scripts (A, B, C) run on main before one
-cloud trip, not one large 13-file script. If A fails, B and C do
-not run. Failures isolate to a group of 7, 4, or 2 files.
+Do NOT re-run Phase 0a, Phase 0b, or Phase 0c. The source files
+already contain the created_by edits. Re-running would fail every
+anchor.
 
 ---
 
 ## Next action
 
-Write and run script A (Rust library, 7 files).
-Then script B (Tauri binaries, 4 files).
-Then script C (vectors and verifier, 2 files).
-Then one cloud trip:
-  git pull
-  cargo build --workspace
-  cargo test --workspace
-  node verify/index.mjs
-Commit if green. Push. Update RESUME-HERE. Session ends.
+On cloud, four commands in order:
+
+  cd /d C:\gorka-app && git pull
+  cd /d C:\gorka-app && cargo build --workspace
+  cd /d C:\gorka-app && cargo test --workspace
+  cd /d C:\gorka-app && node verify\index.mjs
+
+Expected:
+  - cargo test: all tests pass, including the updated V6
+  - node verify: 9/9 PASS, with V6 now FROZEN and matching
+
+If cargo test fails: paste the error. Do not commit.
+If cargo test passes: no further edits needed on cloud.
 
 ---
 
-## The 13 files Phase 0 touches
+## Phase 0 result on main (already done, do not redo)
 
-Script A - Rust library (7 files):
+Three commits relevant:
 
-1. shared/src/sync.rs
-   Encoder at line 325. Takes 5 args today. Add `created_by: &str`.
-   Write 0x5006 TLV after duration. Update doc comment at 317-324.
+  5bf435b  Phase 0 applied (13 files) plus accidental junk-file
+           staging. Superseded by the next commit.
+  562a7be  Remove 23 junk files committed by mistake in 5bf435b.
+           The 13 intended Phase 0 edits remain untouched.
 
-2. shared/src/sync_parse.rs
-   Struct CommunicationLoggedPayload at line 172. Add
-   `pub created_by: String`. Parser at line 360. Add 0x5006 read.
-   Add required-field check. Update doc comment at 355-359.
+The 13 files, now on disk with created_by threaded through:
 
-3. shared/src/sync_pipeline.rs
-   Line 565. Replace `Option::<String>::None` with `&p.created_by`.
-
-4. shared/src/communications.rs
-   Function insert_communication at line 70. Add `created_by: &str`
-   param. Line 117 writes NULL today - replace with
-   `Some(created_by)`. Line 131-137 pass to encoder. Line 159 return
-   `created_by: Some(created_by.to_string())`.
-
-5. shared/src/auth_http.rs
-   LoginResult at line 46. Add `pub user_id: String`. Constructor at
-   line 80-85. Add `user_id: login_data.user.id`.
-
-6. shared/tests/sync.rs
-   V6 test at line 329. Add `"user-test-A"` argument. Expected hex at
-   line 339. Replace with new 109-byte hex. Comment at line 334
-   "five fields" -> "six fields".
-
-7. shared/tests/sync_wire_roundtrip.rs
-   Round-trip test at line 129. Add `"user-test-A"` argument. Add
-   assertion `p.created_by == "user-test-A"`.
-
-Script B - Tauri binaries (4 files, mirrored pairs):
-
-8. src-tauri/src/auth.rs
-   login at 9-31. Add `store.set("user_id", ...)` after line 19.
-   Add `get_user_id` function after `get_organization_id` at line 55.
-   logout near line 119. Add `store.delete("user_id")`.
-
-9. src-tauri-agent/src/auth.rs
-   login at 21-41. Add `store.set("user_id", ...)` after line 29.
-   Add `get_user_id` function after `get_organization_id` at line 65.
-   logout at 100-111. Add `store.delete("user_id")`.
-
-10. src-tauri/src/main.rs
-    insert_communication command at line 458. Add `get_user_id(app)`
-    read. Pass `&user_id` to shared::communications::insert_communication.
-
-11. src-tauri-agent/src/main.rs
-    Same as 10, at line 380.
-
-Script C - Vectors and verifier (2 files):
-
-12. verify/index.mjs
-    Fixtures F at line 103. Add `user_id_A: 'user-test-A'`.
-    EXPECTED.V6 at line 135. Replace with new hex.
-    buildV6 at line 158. Add `tlvString(0x5006, F.user_id_A)`.
-
-13. GORKA_RECOVERY/recovery-notes/SYNC-TEST-VECTORS-v1.md
-    Header note at line 25-37. Update PENDING back to FROZEN.
-    V6 entry at line 1001-1087, six sub-edits:
-      status at 1009: PENDING -> FROZEN
-      inputs at 1015-1039: add created_by line
-      operation at 1043: "Five fields" -> "Six fields", add 0x5006
-      expected hex at 1065: replace with new 109-byte hex
-      structure at 1069-1079: add 0x5006 line
-      byte count at 1081: 88 -> 109
-    Summary table at 1117: PENDING -> FROZEN, "A2" -> "None".
+  shared/src/sync.rs                 encoder signature + 0x5006 write
+  shared/src/sync_parse.rs           parser struct + 0x5006 read
+  shared/src/sync_pipeline.rs        bind &p.created_by instead of NULL
+  shared/src/communications.rs       new param, write, pass to encoder
+  shared/src/auth_http.rs            LoginResult gains user_id
+  src-tauri/src/auth.rs              write user_id, add get_user_id
+  src-tauri-agent/src/auth.rs        same (mirror)
+  src-tauri/src/main.rs              read user_id, pass to shared
+  src-tauri-agent/src/main.rs        same (mirror)
+  shared/tests/sync.rs               V6 test: new arg, new expected hex
+  shared/tests/sync_wire_roundtrip.rs  round-trip: new arg + assertion
+  verify/index.mjs                   fixture + buildV6 + EXPECTED.V6
+  SYNC-TEST-VECTORS-v1.md            V6 entry + summary + byte count
 
 ---
 
@@ -138,68 +90,49 @@ New 21-byte TLV record appended after duration:
   0000000b        inner string length = 11
   757365722d746573742d41   "user-test-A"
 
-The new V6 input field is created_by = "user-test-A" (the existing
-fixture user_id_A in SYNC-TEST-VECTORS-v1.md section 2.2).
-
 Field order per amended Section 25.11.3:
   debtor_id, communication_type, direction, content, duration, created_by
 
 ---
 
-## Reconnaissance findings (all confirmed on disk)
+## Known loose ends
 
-Wire layer:
-  encode_communication_logged_payload: shared/src/sync.rs:325, 5 args
-  CommunicationLoggedPayload struct: shared/src/sync_parse.rs:172, 5 fields
-  parse_communication_logged_payload: shared/src/sync_parse.rs:360, reads 0x5001-0x5005
+- The header note at the top of SYNC-TEST-VECTORS-v1.md was
+  reverted to its pre-Phase-0 A2 state. It still describes V6 as
+  PENDING. That is out of date after Phase 0, but harmless: the
+  V6 entry itself (line ~1009) and the summary table (line ~1120)
+  both correctly say FROZEN. Do not panic if the header says
+  PENDING. It is a cosmetic artifact, and a proper fix is a
+  separate small task.
 
-Callers of the encoder (all four):
-  shared/src/communications.rs:131   production origination
-  shared/src/sync.rs:325             the definition
-  shared/tests/sync.rs:330           V6 test
-  shared/tests/sync_wire_roundtrip.rs:129  round-trip test
+- No JWT decode exists anywhere in the codebase. user_id comes
+  from the login response (auth_http.rs UserData.id) and is
+  persisted to settings.dat at login. Devices logged in before
+  this change will not have user_id in their store; the next
+  login will populate it. On a fresh clone or a fresh login,
+  this is not an issue.
 
-Callers of the parser (all four, all in sync_pipeline.rs):
-  202  validate
-  326  check entity exists
-  359  queue pending
-  542  apply
-
-Where created_by is written today (both write NULL):
-  shared/src/communications.rs:117   origination
-  shared/src/sync_pipeline.rs:565    receiving
-
-Where user_id lives today:
-  shared/src/auth_http.rs:38         UserData.id (the stable user id)
-  shared/src/auth_http.rs:46-51      LoginResult (does NOT carry it)
-  src-tauri/src/auth.rs:16-19        writes 4 keys, no user_id
-  src-tauri-agent/src/auth.rs:28-29  writes 2 keys, no user_id
-  No JWT decode anywhere in the codebase
-
-Tauri command signatures:
-  src-tauri/src/main.rs:458          insert_communication
-  src-tauri-agent/src/main.rs:380    insert_communication
-  Both read only get_trusted_organization_id today.
-
-Fixtures in the verifier (verify/index.mjs:103):
-  No user_id fixture exists. Must be added.
-  The vectors-file fixture is user_id_A = "user-test-A".
+- The logout blocks in both binaries do not yet delete the
+  user_id key. Cosmetic. Add in a future cleanup if desired.
 
 ---
 
 ## Rules to remember
 
 - Invariant: no debtor data in GORKA cloud infrastructure.
-- All Rust builds and tests run on cloud. Main cannot reliably compile.
+- All Rust builds and tests run on cloud. Main cannot reliably
+  compile (SAC blocks build-script binaries at unpredictable
+  points).
 - One machine owns a slice at a time. Git is the only handoff.
-- Line-based PowerShell edits. Never String.Replace on these files;
-  their doubled-newline pattern makes replace-based edits silent and
-  unreliable.
-- Sanity-check before write. Abort on failure. Backup before every
-  edit. Verify with findstr after every edit.
-- One commit per coherent change. One push per commit.
-- No guessing. Every fact confirmed on disk before the script is
-  written.
+- For any future scripted edit to a recovery document or source
+  file: use content-anchor pattern (FindUnique returns exactly
+  one match or throws). Never use raw line indices. Never use
+  String.Replace on these files.
+- Sanity-check before write. Abort on failure. Backup before
+  every edit. Verify with findstr after every edit.
+- One commit per coherent change.
+- No guessing. Every fact confirmed on disk before the script
+  is written.
 - When in doubt, stop and ask the founder.
 
 ---
@@ -209,11 +142,12 @@ Fixtures in the verifier (verify/index.mjs:103):
 At the start of a new chat: paste this file. That is the brief.
 Nothing else is needed.
 
-At slice end: rewrite it with the new state.
+At slice end: rewrite it with the new state. This file is
+rewritten in place, not appended to. It stays under 250 lines.
 
-If the chat dies unexpectedly: this file is stale by at most one
-operation. Paste it. The assistant resumes from the last recorded
-state.
+If the chat dies unexpectedly: this file is stale by at most
+one operation. Paste it. The assistant resumes from the last
+recorded state.
 
 ---
 
