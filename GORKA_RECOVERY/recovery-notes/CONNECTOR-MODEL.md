@@ -8040,11 +8040,25 @@ A2. SYNC-ARCHITECTURE.md amendment — created\_by in
 
 
 
-&#x20;   HARD BLOCKER for any implementation of COMMUNICATION\_LOGGED
+&#x20;   SPECIFICATION APPLIED October 6, 2026 (SYNC-ARCHITECTURE.md
 
-&#x20;   that depends on created\_by being present, which includes the
+&#x20;   v1.5). The payload wire format table in Section 25.11.3 now
 
-&#x20;   send flow in Section 8.
+&#x20;   lists created\_by at type code 0x5006; Section 25.11.4 requires
+
+&#x20;   it; Section 25.11.5 maps it to payload.created\_by. The V6
+
+&#x20;   vector's expected bytes change as a result; V6's expected-
+
+&#x20;   bytes status in SYNC-TEST-VECTORS-v1.md is changed from
+
+&#x20;   FROZEN to PENDING. The Rust and Node.js implementations of
+
+&#x20;   V6 are recomputed as a separate task. The specification-level
+
+&#x20;   blocker is cleared; the vector and code blocker remains until
+
+&#x20;   V6 is recomputed.
 
 
 

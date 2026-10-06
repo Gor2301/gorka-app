@@ -8,9 +8,9 @@ GORKA — SYNC ARCHITECTURE
 
 Document:    SYNC-ARCHITECTURE.md
 
-Version:     1.4 (frozen)
+Version:     1.5 (frozen)
 
-Date:        September 19, 2026 (v1.4 amendment applied September 27, 2026)
+Date:        September 19, 2026 (v1.5 amendment applied October 6, 2026)
 
 Status:      FROZEN — approved by the founder on September 19, 2026.
              v1.1 amendment (Section 25.13 field-semantics
@@ -58,6 +58,46 @@ type 0x02 on the wire. Debt information that is part of the
 synchronized debtor representation is carried inside the debtor's
 data_json field. Two protocol-level rules (receipt and origination)
 are added. No other section was changed by the v1.4 amendment.
+
+
+
+A v1.5 amendment was applied on October 6, 2026. Section 25.11.3,
+
+
+
+25.11.4, and 25.11.5 were amended to add the created_by field to
+
+
+
+the COMMUNICATION_LOGGED event. The field was already defined in
+
+
+
+Sections 25.13.1, 25.13.9, and 25.13.11, but was missing from the
+
+
+
+payload wire format table in 25.11.3 and from the validation and
+
+
+
+application rules in 25.11.4 and 25.11.5. The amendment adds the
+
+
+
+field at TLV type code 0x5006 and makes it required for every
+
+
+
+COMMUNICATION_LOGGED. The V6 test vector is updated separately in
+
+
+
+SYNC-TEST-VECTORS-v1.md. No other section was changed by the v1.5
+
+
+
+amendment.
 
 ========================================================================
 
@@ -14581,6 +14621,10 @@ The payload is a TLV-encoded structure. Its TLV type codes:
 
 &#x20; | duration                 | 0x5005    |
 
+
+
+&#x20; | created\_by               | 0x5006    |
+
 &#x20; +--------------------------+-----------+
 
 
@@ -14655,9 +14699,25 @@ duration is known. It may be absent.
 
 
 
+The field created\_by is a UTF-8 string, length-prefixed,
+
+
+
+carrying the stable user\_id of the authenticated user whose
+
+
+
+business action is recorded by the event. It is required. Its
+
+
+
+source and semantics are defined in Section 25.13.9.
+
+
+
 Required fields: debtor\_id, communication\_type, direction,
 
-content.
+content, created\_by.
 
 
 
@@ -14667,7 +14727,7 @@ Optional fields: duration.
 
 Field order is fixed: debtor\_id, communication\_type,
 
-direction, content, duration.
+direction, content, duration, created\_by.
 
 
 
@@ -14700,6 +14760,8 @@ An event is valid if:
 &#x20; integer as defined in Section 25.11.3.
 
 \- The entity\_id is present and non-empty.
+
+\- created\_by is present, non-empty, valid UTF-8.
 
 \- No other payload fields are present.
 
@@ -14759,7 +14821,7 @@ When a COMMUNICATION\_LOGGED event is applied:
 
 &#x20;                  when the field is absent
 
-&#x20;       created\_by = attribution per Section 25.13
+&#x20;       created\_by = payload.created\_by
 
 &#x20;       created\_at = event.created\_at
 

@@ -20,6 +20,22 @@ Status:      All nine vectors recorded. Second-implementation
 
 &#x20;            confirmed by an independent implementation.
 
+
+
+             Amendment note (2026-10-06). SYNC-ARCHITECTURE.md
+
+             v1.5 added the created_by field to COMMUNICATION_LOGGED
+
+             at TLV type code 0x5006. V6 expected bytes change as a
+
+             result. V6 expected-bytes status is changed from FROZEN
+
+             to PENDING. Recomputation of V6 and the corresponding
+
+             Rust and Node.js implementations is a separate task. All
+
+             other vectors are unaffected.
+
 Authority:   Companion to SYNC-ARCHITECTURE.md v1.1 (frozen),
 
 &#x20;            Section 30.
@@ -990,7 +1006,7 @@ V6 — COMMUNICATION\_LOGGED with non-canonical duration (byte encoding)
 
 Specification status:  SPECIFIED
 
-Expected-bytes status: FROZEN
+Expected-bytes status: PENDING
 
 
 
@@ -1098,7 +1114,7 @@ Expected output:
 
 &#x20; V4       SPECIFIED              FROZEN           None
 
-&#x20; V6       SPECIFIED              FROZEN           None
+&#x20; V6       SPECIFIED              PENDING          A2
 
 
 
