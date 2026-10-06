@@ -14,6 +14,9 @@ use gorka_shared::sync::{
     encode_action_created_payload,
     encode_communication_logged_payload,
     encode_event_record,
+    encode_connector_enabled_payload,
+    encode_connector_disabled_payload,
+    encode_connector_credential_replaced_payload,
     build_sync_message,
     parse_sync_message,
 };
@@ -23,6 +26,9 @@ use gorka_shared::sync_parse::{
     parse_entity_updated_payload,
     parse_action_created_payload,
     parse_communication_logged_payload,
+    parse_connector_enabled_payload,
+    parse_connector_disabled_payload,
+    parse_connector_credential_replaced_payload,
     parse_event_record,
     parse_sync_message_inner,
 };
@@ -302,4 +308,64 @@ fn sync_ack_round_trip() {
     assert_eq!(p.outcomes[0].outcome, AckOutcome::Accepted);
     assert_eq!(p.outcomes[1].event_id, event_id_2);
     assert_eq!(p.outcomes[1].outcome, AckOutcome::Duplicate);
+}
+
+#[test]
+fn connector_enabled_round_trip() {
+    let bytes = encode_connector_enabled_payload(
+        "resend-email",
+        "TIER1",
+        b"opaque-cred-bytes-A",
+        "{\"from\":\"sender@example.invalid\"}",
+        1_789_891_200_000,
+    );
+    let p = parse_connector_enabled_payload(&bytes).expect("parse failed");
+    assert_eq!(p.connector_code, "resend-email");
+    assert_eq!(p.tier, "TIER1");
+    assert_eq!(p.credential_value, b"opaque-cred-bytes-A");
+    assert_eq!(p.configuration, "{\"from\":\"sender@example.invalid\"}");
+    assert_eq!(p.enabled_at_ms, 1_789_891_200_000);
+}
+
+#[test]
+fn connector_enabled_empty_configuration_round_trip() {
+    let bytes = encode_connector_enabled_payload(
+        "mocean-sms",
+        "TIER2",
+        b"opaque-cred-bytes-B",
+        "",
+        1_789_891_200_001,
+    );
+    let p = parse_connector_enabled_payload(&bytes).expect("parse failed");
+    assert_eq!(p.connector_code, "mocean-sms");
+    assert_eq!(p.tier, "TIER2");
+    assert_eq!(p.credential_value, b"opaque-cred-bytes-B");
+    assert_eq!(p.configuration, "");
+    assert_eq!(p.enabled_at_ms, 1_789_891_200_001);
+}
+
+#[test]
+fn connector_disabled_round_trip() {
+    let bytes = encode_connector_disabled_payload(
+        "twilio-sms",
+        1_789_891_200_002,
+    );
+    let p = parse_connector_disabled_payload(&bytes).expect("parse failed");
+    assert_eq!(p.connector_code, "twilio-sms");
+    assert_eq!(p.disabled_at_ms, 1_789_891_200_002);
+}
+
+#[test]
+fn connector_credential_replaced_round_trip() {
+    let bytes = encode_connector_credential_replaced_payload(
+        "resend-email",
+        b"opaque-cred-bytes-C",
+        "{\"from\":\"new-sender@example.invalid\"}",
+        1_789_891_200_003,
+    );
+    let p = parse_connector_credential_replaced_payload(&bytes).expect("parse failed");
+    assert_eq!(p.connector_code, "resend-email");
+    assert_eq!(p.credential_value, b"opaque-cred-bytes-C");
+    assert_eq!(p.configuration, "{\"from\":\"new-sender@example.invalid\"}");
+    assert_eq!(p.replaced_at_ms, 1_789_891_200_003);
 }

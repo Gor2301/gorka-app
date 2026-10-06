@@ -107,6 +107,20 @@ fn decode_string_value(value: &[u8]) -> Result<String, String> {
     Ok(s.to_string())
 }
 
+/// Decode a length-prefixed binary blob value.
+///
+/// Per Section 22.4: u32 BE byte length, then the bytes.
+/// The input is the TLV value, not a TLV record.
+fn decode_bytes_value(value: &[u8]) -> Result<Vec<u8>, String> {
+    if value.len() < 4 {
+        return Err("bytes value too short for length prefix".to_string());
+    }
+    let n = u32::from_be_bytes([value[0], value[1], value[2], value[3]]) as usize;
+    if value.len() != 4 + n {
+        return Err("bytes value length prefix mismatch".to_string());
+    }
+    Ok(value[4..].to_vec())
+}
 /// Decode an optional string value.
 ///
 /// Per Section 25.13.3:
@@ -157,6 +171,28 @@ pub struct EntityUpdatedPayload {
     pub changes: Vec<EntityFieldChange>,
 }
 
+/// CONNECTOR_ENABLED payload (Section 25.14.3).
+pub struct ConnectorEnabledPayload {
+    pub connector_code: String,
+    pub tier: String,
+    pub credential_value: Vec<u8>,
+    pub configuration: String,
+    pub enabled_at_ms: u64,
+}
+
+/// CONNECTOR_DISABLED payload (Section 25.15.3).
+pub struct ConnectorDisabledPayload {
+    pub connector_code: String,
+    pub disabled_at_ms: u64,
+}
+
+/// CONNECTOR_CREDENTIAL_REPLACED payload (Section 25.16.3).
+pub struct ConnectorCredentialReplacedPayload {
+    pub connector_code: String,
+    pub credential_value: Vec<u8>,
+    pub configuration: String,
+    pub replaced_at_ms: u64,
+}
 /// ACTION_CREATED payload (Section 25.10.3).
 pub struct ActionCreatedPayload {
     pub debtor_id: String,
@@ -399,6 +435,131 @@ pub fn parse_communication_logged_payload(
 }
 
 // ---------------------------------------------------------------
+/// Parse a CONNECTOR_ENABLED payload (Section 25.14.3).
+///
+/// Wire fields, in order:
+///   connector_code    0x6001  required
+///   tier              0x6002  required
+///   credential_value  0x6003  required
+///   configuration     0x6004  required
+///   enabled_at        0x6005  required
+pub fn parse_connector_enabled_payload(
+    data: &[u8],
+) -> Result<ConnectorEnabledPayload, String> {
+    let mut r = TlvReader::new(data);
+    let mut connector_code: Option<String> = None;
+    let mut tier: Option<String> = None;
+    let mut credential_value: Option<Vec<u8>> = None;
+    let mut configuration: Option<String> = None;
+    let mut enabled_at_ms: Option<u64> = None;
+    let mut seen: HashSet<u16> = HashSet::new();
+
+    while !r.is_empty() {
+        let (code, value) = r.read_tlv()?;
+        if !seen.insert(code) {
+            return Err(format!("duplicate field type 0x{:04x}", code));
+        }
+        match code {
+            0x6001 => connector_code = Some(decode_string_value(value)?),
+            0x6002 => tier = Some(decode_string_value(value)?),
+            0x6003 => credential_value = Some(decode_bytes_value(value)?),
+            0x6004 => configuration = Some(decode_string_value(value)?),
+            0x6005 => enabled_at_ms = Some(decode_u64(value)?),
+            _ => return Err(format!("unknown CONNECTOR_ENABLED field type 0x{:04x}", code)),
+        }
+    }
+
+    Ok(ConnectorEnabledPayload {
+        connector_code: connector_code
+            .ok_or("missing required field: connector_code")?,
+        tier: tier.ok_or("missing required field: tier")?,
+        credential_value: credential_value
+            .ok_or("missing required field: credential_value")?,
+        configuration: configuration
+            .ok_or("missing required field: configuration")?,
+        enabled_at_ms: enabled_at_ms
+            .ok_or("missing required field: enabled_at")?,
+    })
+}
+
+/// Parse a CONNECTOR_DISABLED payload (Section 25.15.3).
+///
+/// Wire fields, in order:
+///   connector_code    0x6001  required
+///   disabled_at       0x6006  required
+pub fn parse_connector_disabled_payload(
+    data: &[u8],
+) -> Result<ConnectorDisabledPayload, String> {
+    let mut r = TlvReader::new(data);
+    let mut connector_code: Option<String> = None;
+    let mut disabled_at_ms: Option<u64> = None;
+    let mut seen: HashSet<u16> = HashSet::new();
+
+    while !r.is_empty() {
+        let (code, value) = r.read_tlv()?;
+        if !seen.insert(code) {
+            return Err(format!("duplicate field type 0x{:04x}", code));
+        }
+        match code {
+            0x6001 => connector_code = Some(decode_string_value(value)?),
+            0x6006 => disabled_at_ms = Some(decode_u64(value)?),
+            _ => return Err(format!("unknown CONNECTOR_DISABLED field type 0x{:04x}", code)),
+        }
+    }
+
+    Ok(ConnectorDisabledPayload {
+        connector_code: connector_code
+            .ok_or("missing required field: connector_code")?,
+        disabled_at_ms: disabled_at_ms
+            .ok_or("missing required field: disabled_at")?,
+    })
+}
+
+/// Parse a CONNECTOR_CREDENTIAL_REPLACED payload (Section 25.16.3).
+///
+/// Wire fields, in order:
+///   connector_code    0x6001  required
+///   credential_value  0x6003  required
+///   configuration     0x6004  required
+///   replaced_at       0x6007  required
+pub fn parse_connector_credential_replaced_payload(
+    data: &[u8],
+) -> Result<ConnectorCredentialReplacedPayload, String> {
+    let mut r = TlvReader::new(data);
+    let mut connector_code: Option<String> = None;
+    let mut credential_value: Option<Vec<u8>> = None;
+    let mut configuration: Option<String> = None;
+    let mut replaced_at_ms: Option<u64> = None;
+    let mut seen: HashSet<u16> = HashSet::new();
+
+    while !r.is_empty() {
+        let (code, value) = r.read_tlv()?;
+        if !seen.insert(code) {
+            return Err(format!("duplicate field type 0x{:04x}", code));
+        }
+        match code {
+            0x6001 => connector_code = Some(decode_string_value(value)?),
+            0x6003 => credential_value = Some(decode_bytes_value(value)?),
+            0x6004 => configuration = Some(decode_string_value(value)?),
+            0x6007 => replaced_at_ms = Some(decode_u64(value)?),
+            _ => return Err(format!(
+                "unknown CONNECTOR_CREDENTIAL_REPLACED field type 0x{:04x}",
+                code
+            )),
+        }
+    }
+
+    Ok(ConnectorCredentialReplacedPayload {
+        connector_code: connector_code
+            .ok_or("missing required field: connector_code")?,
+        credential_value: credential_value
+            .ok_or("missing required field: credential_value")?,
+        configuration: configuration
+            .ok_or("missing required field: configuration")?,
+        replaced_at_ms: replaced_at_ms
+            .ok_or("missing required field: replaced_at")?,
+    })
+}
 // Event record
 // ---------------------------------------------------------------
 

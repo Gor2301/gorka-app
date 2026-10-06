@@ -248,6 +248,16 @@ pub fn encode_string_value(s: &str) -> Vec<u8> {
     out
 }
 
+/// Encode a binary blob field value.
+///
+/// Per Section 22.4: u32 BE length (bytes) || bytes.
+/// The result is the TLV *value*, not the TLV record.
+pub fn encode_bytes_value(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(4 + bytes.len());
+    out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+    out.extend_from_slice(bytes);
+    out
+}
 /// Encode a DEBTOR_CREATED payload (Section 25.8.3).
 ///
 /// Fields, in order:
@@ -343,6 +353,65 @@ pub fn encode_communication_logged_payload(
     out
 }
 
+/// Encode a CONNECTOR_ENABLED payload (Section 25.14.3).
+///
+/// Fields, in order:
+///   connector_code    0x6001  string, required
+///   tier              0x6002  string, required
+///   credential_value  0x6003  binary blob, required
+///   configuration     0x6004  string, required
+///   enabled_at        0x6005  u64, required
+pub fn encode_connector_enabled_payload(
+    connector_code: &str,
+    tier: &str,
+    credential_value: &[u8],
+    configuration: &str,
+    enabled_at_ms: u64,
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&encode_tlv(0x6001, &encode_string_value(connector_code)));
+    out.extend_from_slice(&encode_tlv(0x6002, &encode_string_value(tier)));
+    out.extend_from_slice(&encode_tlv(0x6003, &encode_bytes_value(credential_value)));
+    out.extend_from_slice(&encode_tlv(0x6004, &encode_string_value(configuration)));
+    out.extend_from_slice(&encode_tlv(0x6005, &enabled_at_ms.to_be_bytes()));
+    out
+}
+
+/// Encode a CONNECTOR_DISABLED payload (Section 25.15.3).
+///
+/// Fields, in order:
+///   connector_code    0x6001  string, required
+///   disabled_at       0x6006  u64, required
+pub fn encode_connector_disabled_payload(
+    connector_code: &str,
+    disabled_at_ms: u64,
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&encode_tlv(0x6001, &encode_string_value(connector_code)));
+    out.extend_from_slice(&encode_tlv(0x6006, &disabled_at_ms.to_be_bytes()));
+    out
+}
+
+/// Encode a CONNECTOR_CREDENTIAL_REPLACED payload (Section 25.16.3).
+///
+/// Fields, in order:
+///   connector_code    0x6001  string, required
+///   credential_value  0x6003  binary blob, required
+///   configuration     0x6004  string, required
+///   replaced_at       0x6007  u64, required
+pub fn encode_connector_credential_replaced_payload(
+    connector_code: &str,
+    credential_value: &[u8],
+    configuration: &str,
+    replaced_at_ms: u64,
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&encode_tlv(0x6001, &encode_string_value(connector_code)));
+    out.extend_from_slice(&encode_tlv(0x6003, &encode_bytes_value(credential_value)));
+    out.extend_from_slice(&encode_tlv(0x6004, &encode_string_value(configuration)));
+    out.extend_from_slice(&encode_tlv(0x6007, &replaced_at_ms.to_be_bytes()));
+    out
+}
 /// Encode an event record (Section 22.13.2).
 ///
 /// Fields, in order:
