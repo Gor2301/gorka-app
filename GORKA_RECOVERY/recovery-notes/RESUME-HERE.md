@@ -1,152 +1,164 @@
 # RESUME HERE
 
-**Updated:** 2026-10-06 (Phase 0 closed: cloud build, tests, and node verify all green)
-**Main machine:** dcfe858
-**Cloud machine:** dcfe858
-**GitHub:** dcfe858
+**Updated:** 2026-10-06 (Phase 1 closed: connectors skeleton on cloud, all green)
+**Main machine:** ea8fb49
+**Cloud machine:** ea8fb49
+**GitHub:** ea8fb49
 
 ---
 
 ## Where we are
 
-Phase 0 is closed. All four CONNECTOR-MODEL.md Section 14 blockers
-(A1-A4) were closed at the spec level in a previous slice. Phase 0
-was the A2 follow-up, and it is now finished end to end: applied on
-main, built on cloud, tested on cloud, verified on cloud, committed,
-pushed, and pulled back to main.
+Phase 1 is closed. The gorka-shared::connectors skeleton exists on
+all three machines at ea8fb49. Cloud build, workspace tests, and
+node verify are green.
 
-Phase 0 threaded created_by from the login response all the way to
-the COMMUNICATION_LOGGED wire format and back. 13 source files were
-edited on main in three sub-scripts (0a, 0b, 0c), each sanity-checked
-before write and verified with findstr after. Four build-blocking
-defects were then found and fixed on the first real cloud build
-(see below). Build, tests, and Node verify are now all green.
+Phase 1 added one module and one line. Nothing else changed. No new
+dependencies.
 
-The relevant commits, in order:
+The relevant commit:
 
-  5bf435b  Phase 0 applied (13 files) plus accidental junk staging.
-  562a7be  Remove 23 junk files committed by mistake in 5bf435b.
-  65482ac  Update RESUME-HERE.md to reflect Phase 0 applied on main.
-  dcfe858  Phase 0 build fixes: two doc-comment placements and
-           two argument swaps. Found on the first cloud build.
+  ea8fb49  Phase 1: gorka-shared::connectors skeleton
+
+Prior Phase 0 commits, still in history:
+
+  221a771  RESUME-HERE.md: Phase 0 closed.           (docs only)
+  dcfe858  Phase 0 build fixes: two doc-comment placements, two
+           argument swaps. Found on the first cloud build.
+  5bf435b  Phase 0: created_by added to COMMUNICATION_LOGGED.
 
 ---
 
-## What Phase 0 delivered
+## What Phase 1 delivered
 
-Origination path:
+New file: shared/src/connectors/mod.rs (194 lines).
 
-  - login response carries UserData.id; auth_http.rs LoginResult
-    gains user_id
-  - both Tauri binaries persist user_id to settings.dat at login
-    (src-tauri/src/auth.rs and src-tauri-agent/src/auth.rs each add
-    get_user_id and store the id)
-  - both binaries' insert_communication commands read user_id from
-    AppState and pass it to the shared function
-  - shared/src/communications.rs accepts created_by and writes it to
-    the row and to the wire
+  - ConnectorAdapter trait: `: Send`, three methods
+    (send, test_connection, code), object-safe, synchronous.
+    Mirrors CONNECTOR-MODEL.md Section 7.2.
+  - SendRequest, SendResult, ConnectorError, ConnectorErrorKind:
+    the exact shapes from Section 7.3. Debug on all four.
+    Display and std::error::Error on ConnectorError.
+  - ConnectorCredential { value: Vec<u8>, configuration:
+    serde_json::Value }: closes the spec gap in Section 7.4/7.6
+    where the type was named but never defined. No Debug derive,
+    by design - accidental printing is harder by construction.
+  - AdapterFactory: fn(ConnectorCredential) -> Box<dyn
+    ConnectorAdapter>. The factory is the boundary between the
+    registry and the adapter.
+  - ConnectorRegistry: HashMap<&'static str, AdapterFactory>
+    with new(), register(), factory(). Unseeded. No provider
+    codes hardcoded. No Default impl.
 
-Receiving path:
+Modified file: shared/src/lib.rs. One line added:
 
-  - shared/src/sync_parse.rs reads 0x5006 and requires it
-  - shared/src/sync_pipeline.rs binds &p.created_by instead of NULL
+  pub mod connectors;
 
-Tests and vectors:
+placed between `communications` and `dashboard`, keeping the
+existing alphabetical order.
 
-  - shared/tests/sync.rs V6 updated to the 109-byte payload
-  - shared/tests/sync_wire_roundtrip.rs round-trip updated
-  - verify/index.mjs fixture and EXPECTED.V6 updated
-  - SYNC-TEST-VECTORS-v1.md V6 entry, summary table, and encoded
-    value updated (the header note at the top of that file is still
-    stale; see loose ends)
+Six tests, all inline in mod.rs:
 
-New V6 TLV record appended after duration:
+  1. registry_new_is_empty
+  2. registry_register_then_lookup
+  3. registry_lookup_unknown_code_returns_none
+  4. factory_persists_after_constructed_adapter_is_dropped
+  5. adapter_is_object_safe
+  6. connector_error_debug_and_display_are_stable
 
-  5006            type code
-  0000000f        TLV length = 15
-  0000000b        inner string length = 11
-  757365722d746573742d41   "user-test-A"
-
-Field order per amended Section 25.11.3:
-  debtor_id, communication_type, direction, content, duration, created_by
+No new dependencies. serde and serde_json were already present.
 
 ---
 
-## What was fixed on cloud
+## Verification at ea8fb49
 
-Four compile errors, all found on the first real cloud build. None
-had been visible on main because main cannot reliably compile.
+  cargo build --workspace   green. Pre-existing warnings only:
+                            gorka-agent 2, gorka-client 3.
+                            Unchanged from Phase 0.
+  cargo test --workspace    all pass. connectors 6/6 new;
+                            enrollment 6/6; sync 9/9 (V6 included);
+                            sync_engine 1/1; sync_pipeline 6/6;
+                            sync_session 2/2; sync_wire_roundtrip
+                            15/15.
+  node verify/index.mjs     9/9 PASS.
 
-  1. shared/src/sync.rs: a stray "/// created_by 0x5006 required"
-     doc line had landed inside the parameter list of
-     encode_communication_logged_payload. Rust rejects doc comments
-     in that position. Fixed by moving the line above the pub fn.
+---
 
-  2. shared/src/sync_parse.rs: same defect on
-     parse_communication_logged_payload. Same fix.
+## What Phase 1 did not do
 
-  3. src-tauri/src/main.rs: insert_communication was called with
-     the last two arguments in the wrong order
-     (&user_id, input) instead of (input, &user_id). Fixed.
-
-  4. src-tauri-agent/src/main.rs: same call, same fix.
-
-No wire-format change. The 109-byte V6 vector is correct as-is and
-is what passed.
+  - No adapter files (twilio_sms.rs, twilio_voice.rs,
+    resend_email.rs, mocean_sms.rs, gemini_ai.rs). Each is added
+    when its adapter is implemented.
+  - No command registration in either binary.
+  - No network code, no async runtime (no tokio, no async_trait).
+  - No AppState wiring. CONNECTOR-MODEL.md Section 7.4 says the
+    MVP will store the registry in AppState; that is later-phase
+    territory.
+  - No touch to auth_http.rs, communications.rs, or any sync
+    module.
+  - No change outside shared/src/lib.rs and shared/src/connectors/.
 
 ---
 
 ## Where we go next
 
-Phase 1: gorka-shared::connectors skeleton.
-
-A new module with a trait, types, and a registry. Compiles
-standalone. Does not touch user identity or the communications path.
-Does not depend on Phase 0's findings. The foundation the connector
-work will stand on.
-
-The connector-model planning documents are at
-GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md. Sections 1-14 are
-the map. Section 14 lists the four A-series blockers (all closed).
-
-One planning note that carries forward: Phase 8 (the send command)
-has to source created_by at origination the same way Phase 0 now
-does for communications. The pattern is established - read user_id
-from AppState, pass it into the shared function, write it to the row
-and to the wire. Phase 8 repeats the pattern; it does not invent it.
+Phase 2: to be defined by the founder.
 
 ---
 
 ## Known loose ends
 
-- SYNC-TEST-VECTORS-v1.md header note is stale. It still describes
-  V6 as PENDING. The V6 entry itself (line ~1009) and the summary
-  table (line ~1120) correctly say FROZEN. Cosmetic. A proper fix
-  is a small separate task.
+Documentation:
 
-- No JWT decode exists anywhere in the codebase. user_id comes from
-  the login response (auth_http.rs UserData.id) and is persisted to
-  settings.dat at login. Devices logged in before Phase 0 will not
-  have user_id in their store until the next login. On a fresh clone
-  or a fresh login, this is not an issue. The "no JWT decode"
-  property is a design choice, not an accident.
+  - CONNECTOR-MODEL.md Section 9.3 and Section 14 item A2 are
+    stale. Both still describe the created_by defect as open, but
+    Phase 0 applied the A2 amendment and recomputed V6 to the
+    109-byte payload. The document is frozen; a proper fix runs
+    through the amendment process. Cosmetic. Record; do not fix
+    mid-slice.
 
-- The /api/auth/login response contract is now load-bearing for the
-  local store. If the backend ever changes the login response shape,
-  the local user_id becomes empty and events become non-compliant
-  at origination. There is no backend-side test guarding this.
-  A future slice should add one, plus a local-side check that
-  refuses to originate an event when user_id is empty.
+  - SYNC-TEST-VECTORS-v1.md header note is stale. It describes
+    V6 as PENDING. The V6 entry (line ~1009) and the summary
+    table (line ~1120) correctly say FROZEN. Cosmetic.
 
-- The logout blocks in both binaries do not delete the user_id key.
-  Cosmetic. Add in a future cleanup if desired.
+  - RESUME-HERE.md header lag: folded into this rewrite. The
+    previous header said dcfe858, which was stale by exactly the
+    commit that wrote it. This header reflects ea8fb49, the
+    commit that will contain it. The same self-referential lag
+    will recur under the current convention. No convention change
+    now.
 
-- Cloud has 8 untracked junk files left over from an earlier slice:
-  b7-meta-check.cjs, build-6b2b-listener.txt, build-6b2b.txt,
-  check-columns.ts, relay-check.cjs, test-6b2b-listener.txt,
-  test-6b2b.txt, test-output.txt. Same category as the 23 cleaned
-  in 562a7be. They do not block anything. A future cleanup commit
-  should delete them.
+Code:
+
+  - No JWT decode exists. user_id comes from the login response
+    (auth_http.rs UserData.id) and is persisted to settings.dat
+    at login. Devices logged in before Phase 0 will not have
+    user_id in their store until the next login. Design choice,
+    not an accident.
+
+  - The /api/auth/login response contract is now load-bearing
+    for the local store. If the backend changes the login
+    response shape, local user_id becomes empty and events
+    become non-compliant at origination. No backend-side test
+    guards this. A future slice should add one, plus a local-
+    side check that refuses to originate when user_id is empty.
+
+  - The logout blocks in both binaries do not delete the
+    user_id key. Cosmetic.
+
+Environment:
+
+  - Cloud has 8 untracked junk files left from an earlier
+    slice: b7-meta-check.cjs, build-6b2b-listener.txt,
+    build-6b2b.txt, check-columns.ts, relay-check.cjs,
+    test-6b2b-listener.txt, test-6b2b.txt, test-output.txt.
+    Same category as the 23 cleaned in 562a7be. They do not
+    block anything. A future cleanup commit should delete them.
+
+  - Build warning counts at ea8fb49: gorka-agent 2,
+    gorka-client 3. Both pre-existing, unchanged from Phase 0.
+    Not caused by Phase 1. Not yet investigated. Recorded so a
+    future session does not misattribute them to a recent change.
 
 ---
 
@@ -157,16 +169,22 @@ and to the wire. Phase 8 repeats the pattern; it does not invent it.
   compile (SAC blocks build-script binaries at unpredictable
   points).
 - One machine owns a slice at a time. Git is the only handoff.
+- Edits on main. Commit on main, push, pull on cloud, build and
+  test and verify on cloud, pull back on main.
 - For any scripted edit to a recovery document or source file:
   use content anchors (FindUnique returns exactly one match or
   throws). Never use raw line indices. Never use String.Replace
   on these files.
 - Sanity-check before write. Abort on failure. Backup before
   every edit. Verify with findstr after every edit.
-- Read UTF-8 files as UTF-8, never as ANSI. Emoji in source files
-  will be silently corrupted otherwise. For single-line edits on
-  files that contain non-ASCII characters, edit by hand in a text
-  editor instead of scripting.
+- Read UTF-8 files as UTF-8, never as ANSI. Emoji in source
+  files will be silently corrupted otherwise. For single-line
+  edits on files that contain non-ASCII characters, edit by
+  hand in a text editor instead of scripting.
+- git diff <file> after every edit before moving on. Fastest
+  proof of a clean write.
+- Match tool weight to edit size. Heavy machinery for multi-
+  file, multi-anchor edits. Notepad for one-liners.
 - One commit per coherent change.
 - No guessing. Every fact confirmed on disk before the script
   is written.
