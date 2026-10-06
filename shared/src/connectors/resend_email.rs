@@ -235,6 +235,15 @@ mod tests {
         })
     }
 
+    fn expect_constructor_error(
+        result: Result<ResendEmailAdapter, ConnectorError>,
+    ) -> ConnectorError {
+        match result {
+            Ok(_) => panic!("expected constructor error, got Ok"),
+            Err(e) => e,
+        }
+    }
+
     // --- constructor ---
 
     #[test]
@@ -252,7 +261,7 @@ mod tests {
             value: b"not json at all".to_vec(),
             configuration: serde_json::json!({"from": "sender@example.com"}),
         };
-        let err = ResendEmailAdapter::new(cred, Box::new(mock)).unwrap_err();
+        let err = expect_constructor_error(ResendEmailAdapter::new(cred, Box::new(mock)));
         assert!(matches!(
             err.kind,
             ConnectorErrorKind::LocalConfigurationError
@@ -266,7 +275,7 @@ mod tests {
             value: b"{}".to_vec(),
             configuration: serde_json::json!({"from": "sender@example.com"}),
         };
-        let err = ResendEmailAdapter::new(cred, Box::new(mock)).unwrap_err();
+        let err = expect_constructor_error(ResendEmailAdapter::new(cred, Box::new(mock)));
         assert!(matches!(
             err.kind,
             ConnectorErrorKind::LocalConfigurationError
@@ -282,7 +291,7 @@ mod tests {
                 .into_bytes(),
             configuration: serde_json::json!({}),
         };
-        let err = ResendEmailAdapter::new(cred, Box::new(mock)).unwrap_err();
+        let err = expect_constructor_error(ResendEmailAdapter::new(cred, Box::new(mock)));
         assert!(matches!(
             err.kind,
             ConnectorErrorKind::LocalConfigurationError
