@@ -322,8 +322,8 @@ pub fn encode_entity_updated_payload(changes: &[(&str, Option<&str>)]) -> Vec<u8
 ///   direction           0x5003
 ///   content             0x5004
 ///   duration            0x5005  optional
-pub fn encode_communication_logged_payload(
 ///   created_by          0x5006  required
+pub fn encode_communication_logged_payload(
     debtor_id: &str,
     communication_type: &str,
     direction: &str,

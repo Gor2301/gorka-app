@@ -358,8 +358,8 @@ pub fn parse_action_created_payload(data: &[u8]) -> Result<ActionCreatedPayload,
 ///   direction           0x5003  required
 ///   content             0x5004  required (may be empty)
 ///   duration            0x5005  optional
-pub fn parse_communication_logged_payload(
 ///   created_by          0x5006  required
+pub fn parse_communication_logged_payload(
     data: &[u8],
 ) -> Result<CommunicationLoggedPayload, String> {
     let mut r = TlvReader::new(data);
