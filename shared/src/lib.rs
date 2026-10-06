@@ -11,6 +11,7 @@ pub mod actions;
 pub mod auth_http;
 pub mod calendar;
 pub mod communications;
+pub mod connectors;
 pub mod dashboard;
 pub mod db;
 pub mod debtors;
