@@ -1,164 +1,195 @@
 # RESUME HERE
 
-**Updated:** 2026-10-06 (Phase 1 closed: connectors skeleton on cloud, all green)
-**Main machine:** ea8fb49
-**Cloud machine:** ea8fb49
-**GitHub:** ea8fb49
+**Updated:** 2026-10-06 (Phase 2 closed: Resend adapter on cloud, all green)
+**Main machine:** 585261e
+**Cloud machine:** 585261e
+**GitHub:** 585261e
 
 ---
 
 ## Where we are
 
-Phase 1 is closed. The gorka-shared::connectors skeleton exists on
-all three machines at ea8fb49. Cloud build, workspace tests, and
-node verify are green.
+Phase 2 is closed. The gorka-shared::connectors module now contains
+an HTTP abstraction and the first real provider adapter (Resend
+email). Cloud build, workspace tests, and node verify are green.
 
-Phase 1 added one module and one line. Nothing else changed. No new
-dependencies.
+Phase 2 added two new files and two lines in mod.rs. No new
+dependencies. No network calls. Everything goes through an injected
+HttpClient trait; tests use MockHttpClient.
 
-The relevant commit:
+The relevant commits, in order:
 
+  7271146  Phase 2: Resend email adapter with HttpClient abstraction
+  585261e  Phase 2: test helper avoids Debug requirement on adapter
+
+Prior phase commits, still in history:
+
+  1b9066c  RESUME-HERE.md: Phase 1 closed.
   ea8fb49  Phase 1: gorka-shared::connectors skeleton
-
-Prior Phase 0 commits, still in history:
-
-  221a771  RESUME-HERE.md: Phase 0 closed.           (docs only)
-  dcfe858  Phase 0 build fixes: two doc-comment placements, two
-           argument swaps. Found on the first cloud build.
-  5bf435b  Phase 0: created_by added to COMMUNICATION_LOGGED.
+  221a771  RESUME-HERE.md: Phase 0 closed.         (docs only)
+  dcfe858  Phase 0 build fixes.
 
 ---
 
-## What Phase 1 delivered
+## What Phase 2 delivered
 
-New file: shared/src/connectors/mod.rs (194 lines).
+New file: shared/src/connectors/http.rs.
 
-  - ConnectorAdapter trait: `: Send`, three methods
-    (send, test_connection, code), object-safe, synchronous.
-    Mirrors CONNECTOR-MODEL.md Section 7.2.
-  - SendRequest, SendResult, ConnectorError, ConnectorErrorKind:
-    the exact shapes from Section 7.3. Debug on all four.
-    Display and std::error::Error on ConnectorError.
-  - ConnectorCredential { value: Vec<u8>, configuration:
-    serde_json::Value }: closes the spec gap in Section 7.4/7.6
-    where the type was named but never defined. No Debug derive,
-    by design - accidental printing is harder by construction.
-  - AdapterFactory: fn(ConnectorCredential) -> Box<dyn
-    ConnectorAdapter>. The factory is the boundary between the
-    registry and the adapter.
-  - ConnectorRegistry: HashMap<&'static str, AdapterFactory>
-    with new(), register(), factory(). Unseeded. No provider
-    codes hardcoded. No Default impl.
+  - HttpMethod, HttpRequest, HttpResponse, HttpErrorKind,
+    HttpError.
+  - HttpClient trait: `fn execute(&self, request: &HttpRequest)
+    -> Result<HttpResponse, HttpError>`. Send + Sync.
+  - HttpRequest carries `redacted_debug()` (method, URL, header
+    names only, body length). No Debug derive on HttpRequest:
+    headers may carry Authorization: Bearer; an accidental
+    `{:?}` is a leak path.
+  - MockHttpClient behind #[cfg(test)] with a MockHandle so tests
+    can inspect sent requests after the client is moved into the
+    adapter. Returns (client, handle) from ::new().
 
-Modified file: shared/src/lib.rs. One line added:
+New file: shared/src/connectors/resend_email.rs.
 
-  pub mod connectors;
+  - ResendEmailAdapter. Implements ConnectorAdapter.
+  - Constructor `new(credential, http)` parses:
+      value:         JSON {"apiKey": "re_..."}
+      configuration: JSON {"from": "sender@example.com"}
+    Missing or malformed fields produce LocalConfigurationError
+    whose message names the field only, never the value.
+  - `send()` builds POST https://api.resend.com/emails with
+    Bearer auth, JSON body {from, to, subject?, text}. Success
+    (200/201) parses {"id": "..."} into SendResult.
+  - `test_connection()` builds GET https://api.resend.com/domains.
+    200 -> Ok(()), otherwise mapped error.
+  - Error mapping: 401/403 -> AuthenticationFailed; 422 ->
+    InvalidRecipient; 429 -> RateLimited; 5xx ->
+    ProviderTransientError; other 4xx -> ProviderPermanentError;
+    HttpError::Transport or Timeout -> TransportError.
+  - No Debug derive on the adapter struct (holds api_key in
+    plaintext; Debug would be a leak path).
 
-placed between `communications` and `dashboard`, keeping the
-existing alphabetical order.
+Modified file: shared/src/connectors/mod.rs. Two lines added
+after the `use` block:
 
-Six tests, all inline in mod.rs:
+  pub mod http;
+  pub mod resend_email;
 
-  1. registry_new_is_empty
-  2. registry_register_then_lookup
-  3. registry_lookup_unknown_code_returns_none
-  4. factory_persists_after_constructed_adapter_is_dropped
-  5. adapter_is_object_safe
-  6. connector_error_debug_and_display_are_stable
+Tests: 12 new in resend_email::tests. All 12 pass. The
+credential-leak regression (CONNECTOR-MODEL.md Section 7.8) is
+among them. Phase 1's 6 tests in connectors::tests still pass.
 
-No new dependencies. serde and serde_json were already present.
+The HTTP shape (URLs, header names, response bodies) is a
+reasonable default for Phase 2. Phase 3 verifies against the live
+Resend API and corrects where reality differs.
 
 ---
 
-## Verification at ea8fb49
+## Verification at 585261e
 
   cargo build --workspace   green. Pre-existing warnings only:
                             gorka-agent 2, gorka-client 3.
-                            Unchanged from Phase 0.
-  cargo test --workspace    all pass. connectors 6/6 new;
-                            enrollment 6/6; sync 9/9 (V6 included);
-                            sync_engine 1/1; sync_pipeline 6/6;
-                            sync_session 2/2; sync_wire_roundtrip
-                            15/15.
+                            Unchanged from Phase 1.
+  cargo test --workspace    all pass. gorka_shared lib: 18 (12 new
+                            resend_email + 6 connectors). enrollment
+                            6/6; sync 9/9 (V6 included); sync_engine
+                            1/1; sync_pipeline 6/6; sync_session
+                            2/2; sync_wire_roundtrip 15/15.
   node verify/index.mjs     9/9 PASS.
 
 ---
 
-## What Phase 1 did not do
+## What Phase 2 did not do
 
-  - No adapter files (twilio_sms.rs, twilio_voice.rs,
-    resend_email.rs, mocean_sms.rs, gemini_ai.rs). Each is added
-    when its adapter is implemented.
-  - No command registration in either binary.
-  - No network code, no async runtime (no tokio, no async_trait).
-  - No AppState wiring. CONNECTOR-MODEL.md Section 7.4 says the
-    MVP will store the registry in AppState; that is later-phase
-    territory.
-  - No touch to auth_http.rs, communications.rs, or any sync
-    module.
-  - No change outside shared/src/lib.rs and shared/src/connectors/.
+  - No adapter factory registration. The frozen factory signature
+    is `fn(ConnectorCredential) -> Box<dyn ConnectorAdapter>`
+    (CONNECTOR-MODEL.md Section 7.4). It needs a real HttpClient,
+    which does not exist yet. Phase 3 adds it.
+  - No Tauri command.
+  - No DB.
+  - No real network. Everything goes through MockHttpClient in
+    tests.
+  - No new dependency. serde_json was already present.
+  - No Mocean adapter. That was considered first; Resend chosen
+    because a live credential exists.
 
 ---
 
 ## Where we go next
 
-Phase 2: to be defined by the founder.
+Phase 3: test_connection command + real HttpClient + factory
+registration. Roughly:
+
+  - Add a real HttpClient implementation backed by
+    reqwest::blocking (already a dependency with the blocking
+    feature enabled; first use in this crate).
+  - Register the Resend factory in ConnectorRegistry under code
+    "resend-email".
+  - Add the Tauri command in the Client binary that wires
+    test_connection to the ConnectorAdapter trait.
+  - Verify the HTTP shape against the live Resend API and correct
+    the fixtures in resend_email.rs if reality differs.
+  - Prerequisite for live testing: a Resend verified sending
+    domain, OR use onboarding@resend.dev as the from. A
+    @gmail.com from-address will be rejected by Resend.
+
+Full connector arc, in the numbering used since Phase 0:
+Phase 4 = Connectors.tsx alignment; Phase 5 = Tier 2 credential
+local write; Phase 6 = Zone 3 audit record; Phase 7 = compliance
+rules page; Phase 8 = agent send command; ... Phase 15 =
+acceptance. See CONNECTOR-MODEL.md Sections 14.2, 14.3 for the
+B/C item lists.
 
 ---
 
 ## Known loose ends
 
+Build warnings (pre-existing, not from Phase 2):
+
+  - shared/src/db.rs:4 -- unused import
+    `use serde_json::Value as JsonValue;`
+  - shared/tests/sync_engine.rs:92 -- `let mut conn_b_test`
+    does not need `mut`.
+  Both predate Phase 2. Recorded so a future session does not
+  misattribute them to a recent change. Small cleanup slice
+  candidate.
+
 Documentation:
 
   - CONNECTOR-MODEL.md Section 9.3 and Section 14 item A2 are
-    stale. Both still describe the created_by defect as open, but
+    stale: they describe the created_by defect as open, but
     Phase 0 applied the A2 amendment and recomputed V6 to the
-    109-byte payload. The document is frozen; a proper fix runs
-    through the amendment process. Cosmetic. Record; do not fix
-    mid-slice.
+    109-byte payload. Frozen document; a proper fix runs through
+    the amendment process. Cosmetic.
 
-  - SYNC-TEST-VECTORS-v1.md header note is stale. It describes
-    V6 as PENDING. The V6 entry (line ~1009) and the summary
-    table (line ~1120) correctly say FROZEN. Cosmetic.
-
-  - RESUME-HERE.md header lag: folded into this rewrite. The
-    previous header said dcfe858, which was stale by exactly the
-    commit that wrote it. This header reflects ea8fb49, the
-    commit that will contain it. The same self-referential lag
-    will recur under the current convention. No convention change
-    now.
+  - SYNC-TEST-VECTORS-v1.md header note is stale: it describes V6
+    as PENDING. The V6 entry and summary table correctly say
+    FROZEN. Cosmetic.
 
 Code:
 
-  - No JWT decode exists. user_id comes from the login response
-    (auth_http.rs UserData.id) and is persisted to settings.dat
-    at login. Devices logged in before Phase 0 will not have
-    user_id in their store until the next login. Design choice,
-    not an accident.
+  - No JWT decode. user_id comes from the login response and is
+    persisted to settings.dat at login. Design choice.
 
-  - The /api/auth/login response contract is now load-bearing
-    for the local store. If the backend changes the login
-    response shape, local user_id becomes empty and events
-    become non-compliant at origination. No backend-side test
-    guards this. A future slice should add one, plus a local-
-    side check that refuses to originate when user_id is empty.
+  - The /api/auth/login response contract is load-bearing for the
+    local store. No backend-side test guards it, and no local
+    check refuses to originate when user_id is empty. A future
+    slice should add both.
 
-  - The logout blocks in both binaries do not delete the
-    user_id key. Cosmetic.
+  - The logout blocks in both binaries do not delete the user_id
+    key. Cosmetic.
 
 Environment:
 
-  - Cloud has 8 untracked junk files left from an earlier
-    slice: b7-meta-check.cjs, build-6b2b-listener.txt,
-    build-6b2b.txt, check-columns.ts, relay-check.cjs,
-    test-6b2b-listener.txt, test-6b2b.txt, test-output.txt.
-    Same category as the 23 cleaned in 562a7be. They do not
-    block anything. A future cleanup commit should delete them.
+  - Cloud has 8 untracked junk files left from an earlier slice:
+    b7-meta-check.cjs, build-6b2b-listener.txt, build-6b2b.txt,
+    check-columns.ts, relay-check.cjs, test-6b2b-listener.txt,
+    test-6b2b.txt, test-output.txt. A future cleanup commit
+    should delete them.
 
-  - Build warning counts at ea8fb49: gorka-agent 2,
-    gorka-client 3. Both pre-existing, unchanged from Phase 0.
-    Not caused by Phase 1. Not yet investigated. Recorded so a
-    future session does not misattribute them to a recent change.
+  - .env files in the repo contain live credentials
+    (RESEND_API_KEY, VITE_GEMINI_API_KEY, JWT_SECRET,
+    DATABASE_URL with password). Rotation is deferred until
+    pre-launch. Recorded so pre-launch work includes rotating
+    every key in .env and moving them out of the repo.
 
 ---
 
