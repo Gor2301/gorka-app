@@ -1,44 +1,39 @@
 # RESUME HERE
 
-**Updated:** 2026-10-07 (Phase 3 closed: real HttpClient, fallible factory, default registry. All green.)
-**Main machine:** 9ed9fda
-**Cloud machine:** 9ed9fda
-**GitHub:** 9ed9fda
+**Updated:** 2026-10-07 (Phase 4 closed: migration 9 adds the connector and compliance tables. All green.)
+**Main machine:** 115796d
+**Cloud machine:** 115796d
+**GitHub:** 115796d
 
 ---
 
 ## Where we are
 
-Phase 3 is closed. The gorka-shared::connectors module now contains
-a real HTTP client (reqwest::blocking), a fallible AdapterFactory
-signature, and a default registry that returns a fully wired
-Resend email adapter. Cloud build, workspace tests, and node verify
-are green.
+Phase 4 is closed. The local SQLite schema now contains the four
+tables that LOCAL-TABLES.md already specified but the runtime DDL
+never created: local_connectors, local_connector_usage,
+connector_sync_state, compliance_rules. Cloud build, workspace
+tests, and node verify are green.
 
-Two design decisions were settled at the start of Phase 3:
+Reconnaissance at the start of Phase 4 found the actual gap: A3
+had been applied at the spec level last session, but the code that
+creates those tables was never written. No Rust source referenced
+either table. So Phase 4 was not an amendment slice; it was a
+migration slice.
 
-  1. AdapterFactory became fallible. The frozen Section 7.4
-     signature returned Box<dyn ConnectorAdapter>; construction
-     errors had nowhere to go. Now it returns
-     Result<Box<dyn ConnectorAdapter>, ConnectorError>. Section
-     7.4 of CONNECTOR-MODEL.md is amended in place, with a dated
-     amendment note. Section 7.3's LocalConfigurationError finally
-     has a producer.
+Relevant commits, in order:
 
-  2. Phase 3 stayed shared-crate-only. No Tauri command. A command
-     would need a credential source, and local_connectors does not
-     exist yet (CONNECTOR-MODEL.md Section 14 A3 names it as a
-     required amendment). The command lands in a later phase.
-
-The relevant commits, in order:
-
-  c287e7b  Phase 3: real HttpClient, fallible AdapterFactory,
-           default registry
-  9ed9fda  Phase 3: test_factory returns Result to match fallible
-           AdapterFactory
+  115796d  Phase 4: migration 9 adds local_connectors,
+           connector_usage, connector_sync_state,
+           compliance_rules
 
 Prior phase commits, still in history:
 
+  60974bc  RESUME-HERE.md: Phase 3 closed.
+  9ed9fda  Phase 3: test_factory returns Result to match fallible
+           AdapterFactory
+  c287e7b  Phase 3: real HttpClient, fallible AdapterFactory,
+           default registry
   f1aa4ab  RESUME-HERE.md: Phase 2 closed.
   585261e  Phase 2: test helper avoids Debug requirement on adapter
   7271146  Phase 2: Resend email adapter with HttpClient abstraction
@@ -49,115 +44,97 @@ Prior phase commits, still in history:
 
 ---
 
-## What Phase 3 delivered
+## What Phase 4 delivered
 
-New file: shared/src/connectors/http_reqwest.rs.
+Modified file: shared/src/db.rs.
 
-  - ReqwestHttpClient. Implements HttpClient. Wraps
-    reqwest::blocking::Client, 30s connect timeout, 60s read
-    timeout. Style mirrors sync_discovery.rs, which uses the same
-    blocking client for Control Plane discovery.
-  - Error mapping: reqwest timeout -> HttpErrorKind::Timeout;
-    everything else -> HttpErrorKind::Transport.
-  - Default impl for ReqwestHttpClient (calls ::new()).
+  - One new migration block: `if current_version < 9 { ... }`,
+    inserted between migration 8's closing and the function's
+    Ok(()) in run_migrations.
+  - Creates local_connectors (B.1), with unique index on
+    (organization_id, connector_code) and a status index.
+  - Creates local_connector_usage (B.2), with FKs on debtor_id
+    (debtors, ON DELETE SET NULL) and message_log_id
+    (communications, ON DELETE SET NULL).
+  - Creates connector_sync_state (B.3), with UNIQUE on
+    connector_code.
+  - Creates compliance_rules (F.1), with CHECK (id = 1) enforcing
+    the single-row invariant.
+  - Sets PRAGMA user_version = 9.
+  - No table existing before Phase 4 was touched.
 
-Modified file: shared/src/connectors/mod.rs.
+New file: shared/tests/connector_tables.rs.
 
-  - `pub mod http_reqwest;` added after `pub mod http;`.
-  - AdapterFactory signature changed to fallible:
-      pub type AdapterFactory =
-          fn(ConnectorCredential)
-              -> Result<Box<dyn ConnectorAdapter>, ConnectorError>;
-  - `pub fn build_default_registry() -> ConnectorRegistry` added.
-    Registers "resend-email" -> resend_email::factory.
-  - test_factory helper updated to match the new signature.
-  - Two new tests: build_default_registry_contains_resend,
-    default_registry_returns_none_for_unknown.
-
-Modified file: shared/src/connectors/resend_email.rs.
-
-  - `use crate::connectors::http_reqwest::ReqwestHttpClient;`
-  - Two new free functions:
-      pub fn factory(credential) -> Result<Box<dyn
-          ConnectorAdapter>, ConnectorError>
-        Constructs the adapter with a real ReqwestHttpClient.
-      pub fn factory_with_http(credential, http) -> Result<Box<dyn
-          ConnectorAdapter>, ConnectorError>
-        Constructs the adapter with a caller-supplied HttpClient.
-        Used by tests and by any caller that controls transport.
-  - Two new tests: factory_with_http_succeeds_on_valid_credential,
-    factory_with_http_propagates_constructor_error.
-
-Modified file: GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md.
-
-  - Section 7.4 AdapterFactory signature updated. Dated amendment
-    note added. This is the first spec amendment applied in place
-    since Phase 0's A2 amendment.
-
-Tests: 7 new (3 in http_reqwest, 2 in mod, 2 in resend_email).
-gorka_shared lib is now at 25 tests total.
+  - Four integration tests:
+      migration_9_creates_all_four_tables
+      migration_9_creates_local_connectors_indexes
+      compliance_rules_enforces_single_row
+      local_connectors_accepts_a_row
+  - Uses open_in_memory_for_tests() from db.rs. No new dependency.
 
 ---
 
-## Verification at 9ed9fda
+## Verification at 115796d
 
   cargo build --workspace   green. Pre-existing warnings only:
                             gorka-agent 2, gorka-client 3.
-                            Unchanged from Phase 2.
-  cargo test --workspace    all pass. gorka_shared lib: 25 (7 new).
-                            enrollment 6/6; sync 9/9 (V6 included);
-                            sync_engine 1/1; sync_pipeline 6/6;
-                            sync_session 2/2; sync_wire_roundtrip
-                            15/15.
+  cargo test --workspace    all pass. gorka_shared lib: 25 (unchanged
+                            from Phase 3). New integration test
+                            connector_tables: 4/4. enrollment 6/6;
+                            sync 9/9 (V6 included); sync_engine 1/1;
+                            sync_pipeline 6/6; sync_session 2/2;
+                            sync_wire_roundtrip 15/15.
   node verify/index.mjs     9/9 PASS.
 
 ---
 
-## What Phase 3 did not do
+## What Phase 4 did not do
 
-  - No Tauri command. No credential source exists yet on the
-    local device.
-  - No local_connectors table. That is CONNECTOR-MODEL.md Section
-    14 A3; an amendment to LOCAL-TABLES.md is required before it
-    exists.
-  - No live Resend API call in the test suite. The
-    ReqwestHttpClient tests hit http://127.0.0.1:1 (a closed
-    port), and the adapter tests use MockHttpClient.
-  - No Mocean adapter.
-  - No new dependency. reqwest (with blocking) was already in
-    shared/Cargo.toml.
+  - No Tauri command. No frontend.
+  - No sync event types for connector changes. Those need an
+    amendment to SYNC-ARCHITECTURE.md (CONNECTOR-MODEL.md Section
+    14 A1). That amendment has been applied already (commit
+    2273396 per the earlier "mechanism is live" summary), but the
+    Rust wire encoder/decoder for the three new event types does
+    not exist yet.
+  - No local_organization or local_user tables. Those are spec'd
+    (LOCAL-TABLES.md C.1, C.2) but out of scope for Phase 4.
+  - No fix of the pre-existing db.rs:4 unused-import warning.
 
 ---
 
 ## Where we go next
 
-Phase 4 candidates, in dependency order:
+Phase 5 candidates, in dependency order:
 
-  1. LOCAL-TABLES.md amendment (CONNECTOR-MODEL.md Section 14 A3)
-     adding local_connectors and compliance_rules tables. This is
-     a hard blocker for Phase 5 (credential write path) and Phase
-     7 (compliance page). It is a spec-only slice, like Phase 3's
-     Section 7.4 amendment.
+  1. CONNECTOR_ENABLED / CONNECTOR_DISABLED /
+     CONNECTOR_CREDENTIAL_REPLACED wire encoders and decoders in
+     shared/src/sync.rs and sync_parse.rs, matching the amendment
+     already applied to SYNC-ARCHITECTURE.md Sections 25.14
+     through 25.16. This is the next structural piece: without
+     these, no credential can travel between devices. Spec-only
+     reference work first, then code.
 
-  2. Client Dashboard Connectors.tsx alignment (CONNECTOR-MODEL
-     Section 14.2 B1, B2). Frontend only. No local table needed.
+  2. Connectors.tsx alignment (CONNECTOR-MODEL.md Section 14.2
+     B1, B2). Frontend only. Self-contained but lower value.
 
-  3. Tier 2 credential local write path (Section 14.2 B3). Needs
-     local_connectors (item 1 above).
+  3. Tier 2 credential local write path (Section 14.2 B3). Now
+     unblocked: local_connectors exists. Needs a Tauri command and
+     the Client Dashboard form.
 
-Full connector arc, still on the numbering from the plan the
-founder adopted after Phase 1:
+Full connector arc:
 
-  Phase 4 = Connectors.tsx alignment; Phase 5 = Tier 2 credential
-  local write; Phase 6 = Zone 3 audit record; Phase 7 = compliance
-  rules page; Phase 8 = agent send command; ... Phase 15 =
-  acceptance.
+  Phase 5 = connector event types; Phase 6 = Zone 3 audit record;
+  Phase 7 = compliance rules page; Phase 8 = agent send command;
+  ... Phase 15 = acceptance. (Phase 4 absorbed the old Phase 4 and
+  Phase 5 candidates; the Connectors.tsx alignment is now a
+  candidate for Phase 5 alongside the event types.)
 
 ---
 
 ## Known loose ends
 
-Build warnings (pre-existing, not from Phase 3):
+Build warnings (pre-existing, not from Phase 4):
 
   - shared/src/db.rs:4 -- unused import
     `use serde_json::Value as JsonValue;`
@@ -170,12 +147,15 @@ Documentation:
   - CONNECTOR-MODEL.md Section 9.3 and Section 14 item A2 are
     stale: they describe the created_by defect as open, but
     Phase 0 applied the A2 amendment and recomputed V6 to the
-    109-byte payload. Cosmetic. A proper fix runs through the
-    amendment process.
+    109-byte payload. Cosmetic.
 
   - SYNC-TEST-VECTORS-v1.md header note is stale: it describes V6
     as PENDING. The V6 entry and summary table correctly say
     FROZEN. Cosmetic.
+
+  - LOCAL-TABLES.md B.2 and B.3 have a source line "Connector
+    addendum" rather than a section reference. Cosmetic. Its B.1
+    and F.1 reference CONNECTOR-MODEL.md sections properly.
 
 Code:
 
@@ -197,12 +177,11 @@ Environment:
     test-6b2b.txt, test-output.txt.
 
   - .env files in the repo contain live credentials. Rotation is
-    deferred until pre-launch. Recorded so pre-launch work
-    includes rotating every key and moving them out of the repo.
+    deferred until pre-launch.
 
-  - Resend sending: for a live test_connection call from Phase 4+
-    onward, a @gmail.com from-address will be rejected by Resend.
-    Either verify a domain or use onboarding@resend.dev.
+  - Resend live sending: a @gmail.com from-address is rejected by
+    Resend. Either verify a domain or use onboarding@resend.dev
+    when Phase 6+ exercises the live API.
 
 ---
 
