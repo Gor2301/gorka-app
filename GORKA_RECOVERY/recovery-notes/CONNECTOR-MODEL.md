@@ -3704,9 +3704,18 @@ to the adapter that handles it.
 
 
 
-&#x20; pub type AdapterFactory =
+  pub type AdapterFactory =
+      fn(ConnectorCredential)
+          -> Result<Box<dyn ConnectorAdapter>, ConnectorError>;
 
-&#x20;     fn(ConnectorCredential) -> Box<dyn ConnectorAdapter>;
+  Amendment applied 2026-10-06 (Phase 3). The factory return type
+  gained a Result wrapper so that construction-time failures -
+  malformed credentials, missing configuration fields - surface as
+  ConnectorError with kind LocalConfigurationError, rather than
+  being deferred to first send. Section 7.3 already defines that
+  error kind; this amendment gives it its producer. The change is
+  internal to the Rust API shape and does not touch the wire format
+  or any event payload.
 
 
 

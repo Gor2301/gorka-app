@@ -12,6 +12,7 @@
 // Fixtures below are reasonable defaults, not yet confirmed live.
 
 use crate::connectors::http::{HttpClient, HttpErrorKind, HttpMethod, HttpRequest};
+use crate::connectors::http_reqwest::ReqwestHttpClient;
 use crate::connectors::{
     ConnectorAdapter, ConnectorCredential, ConnectorError, ConnectorErrorKind, SendRequest,
     SendResult,
@@ -157,6 +158,24 @@ impl ResendEmailAdapter {
     }
 }
 
+/// Build an adapter that talks to the real Resend API through
+/// ReqwestHttpClient. Intended for the registry and for application
+/// code.
+pub fn factory(
+    credential: ConnectorCredential,
+) -> Result<Box<dyn ConnectorAdapter>, ConnectorError> {
+    factory_with_http(credential, Box::new(ReqwestHttpClient::new()))
+}
+
+/// Build an adapter with a caller-supplied HttpClient. Used by tests
+/// and by any caller that wants to control the transport.
+pub fn factory_with_http(
+    credential: ConnectorCredential,
+    http: Box<dyn HttpClient>,
+) -> Result<Box<dyn ConnectorAdapter>, ConnectorError> {
+    Ok(Box::new(ResendEmailAdapter::new(credential, http)?))
+}
+
 impl ConnectorAdapter for ResendEmailAdapter {
     fn send(&self, request: &SendRequest) -> Result<SendResult, ConnectorError> {
         let http_request = self.build_send_request(request);
@@ -240,6 +259,15 @@ mod tests {
     ) -> ConnectorError {
         match result {
             Ok(_) => panic!("expected constructor error, got Ok"),
+            Err(e) => e,
+        }
+    }
+
+    fn expect_factory_error(
+        result: Result<Box<dyn ConnectorAdapter>, ConnectorError>,
+    ) -> ConnectorError {
+        match result {
+            Ok(_) => panic!("expected factory error, got Ok"),
             Err(e) => e,
         }
     }
@@ -429,5 +457,27 @@ mod tests {
             !result_debug.contains(SAMPLE_API_KEY),
             "api key leaked via SendResult Debug"
         );
+    }
+
+    #[test]
+    fn factory_with_http_succeeds_on_valid_credential() {
+        let (mock, _handle) = MockHttpClient::new(vec![]);
+        let result = factory_with_http(sample_credential(), Box::new(mock));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().code(), CATALOG_CODE);
+    }
+
+    #[test]
+    fn factory_with_http_propagates_constructor_error() {
+        let (mock, _handle) = MockHttpClient::new(vec![]);
+        let cred = ConnectorCredential {
+            value: b"not json at all".to_vec(),
+            configuration: serde_json::json!({"from": "sender@example.com"}),
+        };
+        let err = expect_factory_error(factory_with_http(cred, Box::new(mock)));
+        assert!(matches!(
+            err.kind,
+            ConnectorErrorKind::LocalConfigurationError
+        ));
     }
 }

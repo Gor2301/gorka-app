@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod http;
+pub mod http_reqwest;
 pub mod resend_email;
 
 /// The credential and configuration a factory passes to an adapter.
@@ -76,7 +77,8 @@ impl fmt::Display for ConnectorError {
 impl std::error::Error for ConnectorError {}
 
 /// Section 7.4. Factory is a pure function from credential to adapter.
-pub type AdapterFactory = fn(ConnectorCredential) -> Box<dyn ConnectorAdapter>;
+pub type AdapterFactory =
+    fn(ConnectorCredential) -> Result<Box<dyn ConnectorAdapter>, ConnectorError>;
 
 /// Section 7.4. Holds factories, never constructed adapters.
 pub struct ConnectorRegistry {
@@ -95,6 +97,14 @@ impl ConnectorRegistry {
     pub fn factory(&self, code: &str) -> Option<&AdapterFactory> {
         self.factories.get(code)
     }
+}
+
+/// Build a registry pre-populated with every implemented adapter.
+/// New adapters are added here as they land.
+pub fn build_default_registry() -> ConnectorRegistry {
+    let mut registry = ConnectorRegistry::new();
+    registry.register("resend-email", crate::connectors::resend_email::factory);
+    registry
 }
 
 #[cfg(test)]
@@ -193,5 +203,17 @@ mod tests {
         assert!(debug.contains("credential rejected by provider"));
         assert!(display.contains("AuthenticationFailed"));
         assert!(display.contains("credential rejected by provider"));
+    }
+
+    #[test]
+    fn build_default_registry_contains_resend() {
+        let reg = build_default_registry();
+        assert!(reg.factory("resend-email").is_some());
+    }
+
+    #[test]
+    fn default_registry_returns_none_for_unknown() {
+        let reg = build_default_registry();
+        assert!(reg.factory("not-registered").is_none());
     }
 }
