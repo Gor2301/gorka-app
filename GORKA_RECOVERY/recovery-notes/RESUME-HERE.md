@@ -1,164 +1,177 @@
 # RESUME HERE
 
-**Updated:** 2026-10-06 (Phase 2 closed: Resend adapter on cloud, all green)
-**Main machine:** 585261e
-**Cloud machine:** 585261e
-**GitHub:** 585261e
+**Updated:** 2026-10-07 (Phase 3 closed: real HttpClient, fallible factory, default registry. All green.)
+**Main machine:** 9ed9fda
+**Cloud machine:** 9ed9fda
+**GitHub:** 9ed9fda
 
 ---
 
 ## Where we are
 
-Phase 2 is closed. The gorka-shared::connectors module now contains
-an HTTP abstraction and the first real provider adapter (Resend
-email). Cloud build, workspace tests, and node verify are green.
+Phase 3 is closed. The gorka-shared::connectors module now contains
+a real HTTP client (reqwest::blocking), a fallible AdapterFactory
+signature, and a default registry that returns a fully wired
+Resend email adapter. Cloud build, workspace tests, and node verify
+are green.
 
-Phase 2 added two new files and two lines in mod.rs. No new
-dependencies. No network calls. Everything goes through an injected
-HttpClient trait; tests use MockHttpClient.
+Two design decisions were settled at the start of Phase 3:
+
+  1. AdapterFactory became fallible. The frozen Section 7.4
+     signature returned Box<dyn ConnectorAdapter>; construction
+     errors had nowhere to go. Now it returns
+     Result<Box<dyn ConnectorAdapter>, ConnectorError>. Section
+     7.4 of CONNECTOR-MODEL.md is amended in place, with a dated
+     amendment note. Section 7.3's LocalConfigurationError finally
+     has a producer.
+
+  2. Phase 3 stayed shared-crate-only. No Tauri command. A command
+     would need a credential source, and local_connectors does not
+     exist yet (CONNECTOR-MODEL.md Section 14 A3 names it as a
+     required amendment). The command lands in a later phase.
 
 The relevant commits, in order:
 
-  7271146  Phase 2: Resend email adapter with HttpClient abstraction
-  585261e  Phase 2: test helper avoids Debug requirement on adapter
+  c287e7b  Phase 3: real HttpClient, fallible AdapterFactory,
+           default registry
+  9ed9fda  Phase 3: test_factory returns Result to match fallible
+           AdapterFactory
 
 Prior phase commits, still in history:
 
+  f1aa4ab  RESUME-HERE.md: Phase 2 closed.
+  585261e  Phase 2: test helper avoids Debug requirement on adapter
+  7271146  Phase 2: Resend email adapter with HttpClient abstraction
   1b9066c  RESUME-HERE.md: Phase 1 closed.
   ea8fb49  Phase 1: gorka-shared::connectors skeleton
-  221a771  RESUME-HERE.md: Phase 0 closed.         (docs only)
+  221a771  RESUME-HERE.md: Phase 0 closed.
   dcfe858  Phase 0 build fixes.
 
 ---
 
-## What Phase 2 delivered
+## What Phase 3 delivered
 
-New file: shared/src/connectors/http.rs.
+New file: shared/src/connectors/http_reqwest.rs.
 
-  - HttpMethod, HttpRequest, HttpResponse, HttpErrorKind,
-    HttpError.
-  - HttpClient trait: `fn execute(&self, request: &HttpRequest)
-    -> Result<HttpResponse, HttpError>`. Send + Sync.
-  - HttpRequest carries `redacted_debug()` (method, URL, header
-    names only, body length). No Debug derive on HttpRequest:
-    headers may carry Authorization: Bearer; an accidental
-    `{:?}` is a leak path.
-  - MockHttpClient behind #[cfg(test)] with a MockHandle so tests
-    can inspect sent requests after the client is moved into the
-    adapter. Returns (client, handle) from ::new().
+  - ReqwestHttpClient. Implements HttpClient. Wraps
+    reqwest::blocking::Client, 30s connect timeout, 60s read
+    timeout. Style mirrors sync_discovery.rs, which uses the same
+    blocking client for Control Plane discovery.
+  - Error mapping: reqwest timeout -> HttpErrorKind::Timeout;
+    everything else -> HttpErrorKind::Transport.
+  - Default impl for ReqwestHttpClient (calls ::new()).
 
-New file: shared/src/connectors/resend_email.rs.
+Modified file: shared/src/connectors/mod.rs.
 
-  - ResendEmailAdapter. Implements ConnectorAdapter.
-  - Constructor `new(credential, http)` parses:
-      value:         JSON {"apiKey": "re_..."}
-      configuration: JSON {"from": "sender@example.com"}
-    Missing or malformed fields produce LocalConfigurationError
-    whose message names the field only, never the value.
-  - `send()` builds POST https://api.resend.com/emails with
-    Bearer auth, JSON body {from, to, subject?, text}. Success
-    (200/201) parses {"id": "..."} into SendResult.
-  - `test_connection()` builds GET https://api.resend.com/domains.
-    200 -> Ok(()), otherwise mapped error.
-  - Error mapping: 401/403 -> AuthenticationFailed; 422 ->
-    InvalidRecipient; 429 -> RateLimited; 5xx ->
-    ProviderTransientError; other 4xx -> ProviderPermanentError;
-    HttpError::Transport or Timeout -> TransportError.
-  - No Debug derive on the adapter struct (holds api_key in
-    plaintext; Debug would be a leak path).
+  - `pub mod http_reqwest;` added after `pub mod http;`.
+  - AdapterFactory signature changed to fallible:
+      pub type AdapterFactory =
+          fn(ConnectorCredential)
+              -> Result<Box<dyn ConnectorAdapter>, ConnectorError>;
+  - `pub fn build_default_registry() -> ConnectorRegistry` added.
+    Registers "resend-email" -> resend_email::factory.
+  - test_factory helper updated to match the new signature.
+  - Two new tests: build_default_registry_contains_resend,
+    default_registry_returns_none_for_unknown.
 
-Modified file: shared/src/connectors/mod.rs. Two lines added
-after the `use` block:
+Modified file: shared/src/connectors/resend_email.rs.
 
-  pub mod http;
-  pub mod resend_email;
+  - `use crate::connectors::http_reqwest::ReqwestHttpClient;`
+  - Two new free functions:
+      pub fn factory(credential) -> Result<Box<dyn
+          ConnectorAdapter>, ConnectorError>
+        Constructs the adapter with a real ReqwestHttpClient.
+      pub fn factory_with_http(credential, http) -> Result<Box<dyn
+          ConnectorAdapter>, ConnectorError>
+        Constructs the adapter with a caller-supplied HttpClient.
+        Used by tests and by any caller that controls transport.
+  - Two new tests: factory_with_http_succeeds_on_valid_credential,
+    factory_with_http_propagates_constructor_error.
 
-Tests: 12 new in resend_email::tests. All 12 pass. The
-credential-leak regression (CONNECTOR-MODEL.md Section 7.8) is
-among them. Phase 1's 6 tests in connectors::tests still pass.
+Modified file: GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md.
 
-The HTTP shape (URLs, header names, response bodies) is a
-reasonable default for Phase 2. Phase 3 verifies against the live
-Resend API and corrects where reality differs.
+  - Section 7.4 AdapterFactory signature updated. Dated amendment
+    note added. This is the first spec amendment applied in place
+    since Phase 0's A2 amendment.
+
+Tests: 7 new (3 in http_reqwest, 2 in mod, 2 in resend_email).
+gorka_shared lib is now at 25 tests total.
 
 ---
 
-## Verification at 585261e
+## Verification at 9ed9fda
 
   cargo build --workspace   green. Pre-existing warnings only:
                             gorka-agent 2, gorka-client 3.
-                            Unchanged from Phase 1.
-  cargo test --workspace    all pass. gorka_shared lib: 18 (12 new
-                            resend_email + 6 connectors). enrollment
-                            6/6; sync 9/9 (V6 included); sync_engine
-                            1/1; sync_pipeline 6/6; sync_session
-                            2/2; sync_wire_roundtrip 15/15.
+                            Unchanged from Phase 2.
+  cargo test --workspace    all pass. gorka_shared lib: 25 (7 new).
+                            enrollment 6/6; sync 9/9 (V6 included);
+                            sync_engine 1/1; sync_pipeline 6/6;
+                            sync_session 2/2; sync_wire_roundtrip
+                            15/15.
   node verify/index.mjs     9/9 PASS.
 
 ---
 
-## What Phase 2 did not do
+## What Phase 3 did not do
 
-  - No adapter factory registration. The frozen factory signature
-    is `fn(ConnectorCredential) -> Box<dyn ConnectorAdapter>`
-    (CONNECTOR-MODEL.md Section 7.4). It needs a real HttpClient,
-    which does not exist yet. Phase 3 adds it.
-  - No Tauri command.
-  - No DB.
-  - No real network. Everything goes through MockHttpClient in
-    tests.
-  - No new dependency. serde_json was already present.
-  - No Mocean adapter. That was considered first; Resend chosen
-    because a live credential exists.
+  - No Tauri command. No credential source exists yet on the
+    local device.
+  - No local_connectors table. That is CONNECTOR-MODEL.md Section
+    14 A3; an amendment to LOCAL-TABLES.md is required before it
+    exists.
+  - No live Resend API call in the test suite. The
+    ReqwestHttpClient tests hit http://127.0.0.1:1 (a closed
+    port), and the adapter tests use MockHttpClient.
+  - No Mocean adapter.
+  - No new dependency. reqwest (with blocking) was already in
+    shared/Cargo.toml.
 
 ---
 
 ## Where we go next
 
-Phase 3: test_connection command + real HttpClient + factory
-registration. Roughly:
+Phase 4 candidates, in dependency order:
 
-  - Add a real HttpClient implementation backed by
-    reqwest::blocking (already a dependency with the blocking
-    feature enabled; first use in this crate).
-  - Register the Resend factory in ConnectorRegistry under code
-    "resend-email".
-  - Add the Tauri command in the Client binary that wires
-    test_connection to the ConnectorAdapter trait.
-  - Verify the HTTP shape against the live Resend API and correct
-    the fixtures in resend_email.rs if reality differs.
-  - Prerequisite for live testing: a Resend verified sending
-    domain, OR use onboarding@resend.dev as the from. A
-    @gmail.com from-address will be rejected by Resend.
+  1. LOCAL-TABLES.md amendment (CONNECTOR-MODEL.md Section 14 A3)
+     adding local_connectors and compliance_rules tables. This is
+     a hard blocker for Phase 5 (credential write path) and Phase
+     7 (compliance page). It is a spec-only slice, like Phase 3's
+     Section 7.4 amendment.
 
-Full connector arc, in the numbering used since Phase 0:
-Phase 4 = Connectors.tsx alignment; Phase 5 = Tier 2 credential
-local write; Phase 6 = Zone 3 audit record; Phase 7 = compliance
-rules page; Phase 8 = agent send command; ... Phase 15 =
-acceptance. See CONNECTOR-MODEL.md Sections 14.2, 14.3 for the
-B/C item lists.
+  2. Client Dashboard Connectors.tsx alignment (CONNECTOR-MODEL
+     Section 14.2 B1, B2). Frontend only. No local table needed.
+
+  3. Tier 2 credential local write path (Section 14.2 B3). Needs
+     local_connectors (item 1 above).
+
+Full connector arc, still on the numbering from the plan the
+founder adopted after Phase 1:
+
+  Phase 4 = Connectors.tsx alignment; Phase 5 = Tier 2 credential
+  local write; Phase 6 = Zone 3 audit record; Phase 7 = compliance
+  rules page; Phase 8 = agent send command; ... Phase 15 =
+  acceptance.
 
 ---
 
 ## Known loose ends
 
-Build warnings (pre-existing, not from Phase 2):
+Build warnings (pre-existing, not from Phase 3):
 
   - shared/src/db.rs:4 -- unused import
     `use serde_json::Value as JsonValue;`
-  - shared/tests/sync_engine.rs:92 -- `let mut conn_b_test`
-    does not need `mut`.
-  Both predate Phase 2. Recorded so a future session does not
-  misattribute them to a recent change. Small cleanup slice
-  candidate.
+  - shared/tests/sync_engine.rs:92 -- `let mut conn_b_test` does
+    not need `mut`.
+  Both predate Phase 1. Small cleanup slice candidate.
 
 Documentation:
 
   - CONNECTOR-MODEL.md Section 9.3 and Section 14 item A2 are
     stale: they describe the created_by defect as open, but
     Phase 0 applied the A2 amendment and recomputed V6 to the
-    109-byte payload. Frozen document; a proper fix runs through
-    the amendment process. Cosmetic.
+    109-byte payload. Cosmetic. A proper fix runs through the
+    amendment process.
 
   - SYNC-TEST-VECTORS-v1.md header note is stale: it describes V6
     as PENDING. The V6 entry and summary table correctly say
@@ -171,25 +184,25 @@ Code:
 
   - The /api/auth/login response contract is load-bearing for the
     local store. No backend-side test guards it, and no local
-    check refuses to originate when user_id is empty. A future
-    slice should add both.
+    check refuses to originate when user_id is empty.
 
   - The logout blocks in both binaries do not delete the user_id
     key. Cosmetic.
 
 Environment:
 
-  - Cloud has 8 untracked junk files left from an earlier slice:
+  - Cloud has 8 untracked junk files from an earlier slice:
     b7-meta-check.cjs, build-6b2b-listener.txt, build-6b2b.txt,
     check-columns.ts, relay-check.cjs, test-6b2b-listener.txt,
-    test-6b2b.txt, test-output.txt. A future cleanup commit
-    should delete them.
+    test-6b2b.txt, test-output.txt.
 
-  - .env files in the repo contain live credentials
-    (RESEND_API_KEY, VITE_GEMINI_API_KEY, JWT_SECRET,
-    DATABASE_URL with password). Rotation is deferred until
-    pre-launch. Recorded so pre-launch work includes rotating
-    every key in .env and moving them out of the repo.
+  - .env files in the repo contain live credentials. Rotation is
+    deferred until pre-launch. Recorded so pre-launch work
+    includes rotating every key and moving them out of the repo.
+
+  - Resend sending: for a live test_connection call from Phase 4+
+    onward, a @gmail.com from-address will be rejected by Resend.
+    Either verify a domain or use onboarding@resend.dev.
 
 ---
 
