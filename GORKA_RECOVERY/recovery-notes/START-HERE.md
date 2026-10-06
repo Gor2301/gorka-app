@@ -1812,3 +1812,108 @@ See DECISIONS.md (October 6 entry), HANDOFF.md, SESSION-LOG.md for
 full details.
 
 End of update.
+
+
+
+
+================================================================
+
+Update 
+—
+ October 6, 2026 (CONNECTOR-MODEL.md amendments A1
+—
+A4 applied)
+
+================================================================
+
+
+
+WHAT THIS SESSION DID
+
+
+
+Applied all four CONNECTOR-MODEL.md Section 14 specification-level blockers. Four commits. No code. The connector implementation slice is unblocked at the specification level.
+
+
+
+THE FOUR BLOCKERS, NOW CLOSED
+
+
+
+  A1  SYNC-ARCHITECTURE.md v1.6  commit f96421e
+
+  A2  SYNC-ARCHITECTURE.md v1.5  commit 836d9af
+
+  A3  LOCAL-TABLES.md v1.4       commit 2273396
+
+  A4  CLOUD-TABLES.md note       commit 7667648
+
+
+
+A1 SUMMARY
+
+
+
+Three CONNECTOR event types added to SYNC-ARCHITECTURE.md: CONNECTOR_ENABLED (0x0005), CONNECTOR_DISABLED (0x0006), CONNECTOR_CREDENTIAL_REPLACED (0x0007). Entity type 0x06 (connector) added. New subsections 25.14, 25.15, 25.16 define the wire format, validation, and application rules for the three event types. Old Section 25.14 renamed to Section 25.17. Section 25.12.1 cross-reference extended to include Sections 25.14 through 25.16. Section 30.3 records that the three new event types have no test vectors yet.
+
+
+
+A2 SUMMARY
+
+
+
+created_by added to COMMUNICATION_LOGGED at TLV type code 0x5006. The field was already defined in Sections 25.13.1, 25.13.9, and 25.13.11 but was missing from the payload wire format table in 25.11.3 and from the validation and application rules in 25.11.4 and 25.11.5. The V6 test vector is marked PENDING. Rust and Node.js V6 recomputation is a separate slice.
+
+
+
+A3 SUMMARY
+
+
+
+The existing local_connectors table was corrected in place to the CONNECTOR-MODEL.md Section 6.3 shape. credentials_encrypted (TEXT) became credential_value (BLOB); settings (JSON) became configuration (TEXT); status vocabulary CONNECTED|DISCONNECTED became ENABLED|DISABLED; organization_id, tier, and source_device_id were added. The main summary table was brought current at 23 tables. A new Category F (Compliance Operational Tables) was added with F.1 compliance_rules. The founder chose option (a) — amend in place rather than add a second table, on the reasoning that local_connectors is already the logical connector record and a second table would create ambiguity.
+
+
+
+A4 SUMMARY
+
+
+
+Verification, not amendment. The organization_audit_events table supports ZONE_3_CONNECTION_ACKNOWLEDGED without schema change. Its columns (eventType, organizationId, actorId, actorName, details, timestamp) map to every field CONNECTOR-MODEL.md Section 13.5 requires. CONNECTOR-MODEL.md Section 14 A4 blocker replaced with a VERIFIED note. CLOUD-TABLES.md Section 4.4 gained a clarification note about the timestamp/createdAt naming.
+
+
+
+STATE AT END OF SESSION
+
+
+
+  Main machine:  7667648, clean, pushed.
+
+  Cloud machine: 36dc292 or later, behind. Needs git pull.
+
+  GitHub:        7667648.
+
+
+
+WHAT REMAINS
+
+
+
+  1. Documentation batch commit (this entry plus HANDOFF, SESSION-LOG, DECISIONS).
+
+  2. On cloud: git pull. Brings cloud to 7667648.
+
+  3. Then the implementation-phase work, per CONNECTOR-MODEL.md Section 14.
+
+  4. V6 vector recomputation (A2 follow-up) is its own small slice.
+
+
+
+See DECISIONS.md (October 6 entry), HANDOFF.md, SESSION-LOG.md for
+
+full details.
+
+
+
+End of update.
+
+

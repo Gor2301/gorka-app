@@ -4023,3 +4023,134 @@ Same as the recovery's standard for specifications: write one section, send for 
   - No frozen document amended.
 
 End of entry.
+
+
+
+
+================================================================
+
+SESSION 
+—
+ October 6, 2026 (CONNECTOR-MODEL.md amendments A1 through A4)
+
+================================================================
+
+
+
+WHAT THIS SESSION DID
+
+
+
+Applied all four CONNECTOR-MODEL.md Section 14 specification-level blockers in one session: A1, A2, A3, A4. Four commits, no code. The connector implementation slice is unblocked at the specification level.
+
+
+
+THE FOUR AMENDMENTS, IN ORDER APPLIED
+
+
+
+A2 — commit 836d9af. SYNC-ARCHITECTURE.md v1.5. created_by added to COMMUNICATION_LOGGED at TLV type code 0x5006. The field was already defined in Sections 25.13.1, 25.13.9, and 25.13.11 but was missing from the payload wire format table in 25.11.3 and from the validation and application rules in 25.11.4 and 25.11.5. The V6 test vector is marked PENDING in SYNC-TEST-VECTORS-v1.md. CONNECTOR-MODEL.md Section 14 A2 was updated from HARD BLOCKER to SPECIFICATION APPLIED.
+
+
+
+The A2 edit method: line-based PowerShell script. The first attempt used String.Replace on multi-line patterns. It silently failed on four of eight edits because SYNC-ARCHITECTURE.md uses a doubled-newline format (content, three blank lines, content). The script assumed single newlines. Reverted to line-based edits with explicit line indices and a sanity check before any write. Applied clean on the second run.
+
+
+
+A1 — commits f96421e and one intermediate. SYNC-ARCHITECTURE.md v1.6. A1 ran in three sub-steps. A1a inserted the three new subsections 25.14, 25.15, 25.16 before the old Section 25.14, and renamed the old Section 25.14 to Section 25.17. A1b applied the small cross-reference edits: Section 9.2 changed from "exactly four event types" to "exactly seven" and gained three CONNECTOR bullets; Section 22.13.2 gained entity type 0x06 (connector); Section 22.13.3 gained event type codes 0x0005, 0x0006, and 0x0007; Section 25.12.1's two cross-references were extended to include Sections 25.14 through 25.16; Section 30.3 gained a note recording that the three new event types have no test vectors yet. A1c was folded into A1b: the header bumped from v1.5 to v1.6 and the v1.6 amendment paragraph was added. A residual numbering bug was found and fixed during A1b: two sub-headers inside Section 25.17 still read 25.14.1 and 25.14.2 from before the A1a rename; they were corrected to 25.17.1 and 25.17.2.
+
+
+
+A3 — commit 2273396. LOCAL-TABLES.md v1.4. The existing local_connectors table (Category B.1) was corrected in place to the CONNECTOR-MODEL.md Section 6.3 shape. credentials_encrypted (TEXT) became credential_value (BLOB); settings (JSON) became configuration (TEXT); status vocabulary CONNECTED|DISCONNECTED became ENABLED|DISABLED; organization_id, tier, and source_device_id were added. The main summary table was brought current at 23 tables; it had not previously listed Amendment 1's two Agent Operational additions (calendar_events, debtor_relations). A new Category F (Compliance Operational Tables) was added with F.1 compliance_rules holding the local rules read by the compliance enforcement layer. Amendment 2 record appended.
+
+
+
+A4 — commit 7667648. Zone 3 audit record verification. The organization_audit_events table (CLOUD-TABLES.md Section 4.4) supports ZONE_3_CONNECTION_ACKNOWLEDGED without schema change. The event uses existing columns: eventType, organizationId, actorId, actorName, details, timestamp. CONNECTOR-MODEL.md Section 14 A4 blocker replaced with a VERIFIED note. CLOUD-TABLES.md Section 4.4 gained a clarification note recording that the table's timestamp column is the same column CONNECTOR-MODEL.md Section 13.5 calls createdAt. No schema change, no cloud table changed.
+
+
+
+THE A3 DECISION
+
+
+
+A3 had a design choice: amend local_connectors in place, or leave it and add a second table. The founder chose (a) — amend in place. Reason: local_connectors is already the logical connector record defined by CONNECTOR-MODEL.md Section 6.3. Adding a second table would leave two tables representing the same concept, creating ambiguity about which is authoritative. The pre-sync local_connectors held no production data, so correction in place was safe. The "no existing table is changed" wording in CONNECTOR-MODEL.md Section 14 A3 was superseded by this decision; the A3 entry itself was not corrected in this session and remains an open item.
+
+
+
+THE METHOD THIS SESSION USED
+
+
+
+Line-based PowerShell edits. Each script performed a sanity check on the target lines before any write. If the check failed, the script aborted with no write. If the check passed, edits were made from highest line index to lowest to prevent line shifts from invalidating later indices. A backup was written before every edit. Every change was verified with findstr afterward, using unique search strings. No string-match pattern was used for edits after the A2 lesson; only anchored line indices.
+
+
+
+THE TWO HELPER-FILE PATTERNS
+
+
+
+Two styles of PowerShell script were used. The "read" scripts opened the file for reading only and printed numbered windows for inspection. The "edit" scripts made changes to the disk. Read scripts were deleted after use. Edit scripts were deleted after use. Backups were deleted after the changes were verified and committed. By end of session, no helper files remain in the working tree; git status shows only the four documentation files being modified by this batch.
+
+
+
+COMMITS THIS SESSION
+
+
+
+  836d9af  A2 applied (created_by in COMMUNICATION_LOGGED)
+
+  f96421e  A1 applied (three CONNECTOR event types)
+
+  2273396  A3 applied (local_connectors corrected, compliance_rules added)
+
+  7667648  A4 applied (Zone 3 audit record verified)
+
+
+
+STATE AT END OF SESSION
+
+
+
+  Main machine:  7667648, clean, pushed.
+
+  Cloud machine: 36dc292 or later, behind. Needs git pull.
+
+  GitHub:        7667648.
+
+
+
+NEXT WORK
+
+
+
+  1. Documentation batch commit (this entry plus HANDOFF, START-HERE, DECISIONS).
+
+  2. On cloud: git pull. Brings cloud to 7667648.
+
+  3. Then the implementation-phase work, per CONNECTOR-MODEL.md Section 14.
+
+  4. The V6 vector recomputation (A2 follow-up) is its own small slice: update SYNC-TEST-VECTORS-v1.md, verify/index.mjs, and the Rust test.
+
+
+
+RULE COMPLIANCE
+
+
+
+  - No production touched.
+
+  - No cloud schema change.
+
+  - No CI/CD touched (release.yml unchanged).
+
+  - Invariant held.
+
+  - No code changed.
+
+  - Four frozen documents amended through their amendment processes: SYNC-ARCHITECTURE.md (v1.5, v1.6), LOCAL-TABLES.md (v1.4), CLOUD-TABLES.md (clarification note only), CONNECTOR-MODEL.md (Section 14 A2 and A4 entries updated).
+
+
+
+End of entry.
+
+
