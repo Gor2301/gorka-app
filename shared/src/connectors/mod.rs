@@ -133,8 +133,10 @@ mod tests {
         }
     }
 
-    fn test_factory(_cred: ConnectorCredential) -> Box<dyn ConnectorAdapter> {
-        Box::new(TestAdapter)
+    fn test_factory(
+        _cred: ConnectorCredential,
+    ) -> Result<Box<dyn ConnectorAdapter>, ConnectorError> {
+        Ok(Box::new(TestAdapter))
     }
 
     fn sample_credential() -> ConnectorCredential {
@@ -171,13 +173,13 @@ mod tests {
 
         {
             let factory = reg.factory("test").expect("registered");
-            let adapter = factory(sample_credential());
+            let adapter = factory(sample_credential()).expect("factory ok");
             assert_eq!(adapter.code(), "test");
         }
 
         // Registry still holds the same factory after the adapter is gone.
         let factory = reg.factory("test").expect("still registered");
-        let adapter = factory(sample_credential());
+        let adapter = factory(sample_credential()).expect("factory ok");
         assert_eq!(adapter.code(), "test");
     }
 
