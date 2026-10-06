@@ -454,6 +454,10 @@ Source: Support spec v2.3.
 
 
 
+Note: CONNECTOR-MODEL.md Section 13.5 calls this table's timestamp column ``createdAt``. The two names refer to the same column. The Zone 3 acknowledgment (eventType = ZONE\_3\_CONNECTION\_ACKNOWLEDGED) uses this table without schema change; no amendment is required. This note is a clarification only.
+
+
+
 Source: Support spec v2.3.
 
 

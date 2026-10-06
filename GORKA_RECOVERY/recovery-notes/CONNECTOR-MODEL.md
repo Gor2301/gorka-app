@@ -8108,7 +8108,34 @@ A4. CLOUD-TABLES.md verification — the organization\_audit\_events
 
 
 
-&#x20;   BLOCKER for the Zone 3 audit record (Section 13.5).
+&#x20;   VERIFIED October 6, 2026. The organization\_audit\_events
+
+
+
+&#x20;   table's columns support the ZONE\_3\_CONNECTION\_ACKNOWLEDGED
+
+
+
+&#x20;   event without schema change. The event uses the existing
+
+
+
+&#x20;   columns: eventType, organizationId, actorId, actorName,
+
+
+
+&#x20;   details, and timestamp. See the clarification note at
+
+
+
+&#x20;   CLOUD-TABLES.md Section 4.4.
+
+
+
+&#x20;   The A4 blocker is cleared at the specification level.
+
+
+
 
 
 
