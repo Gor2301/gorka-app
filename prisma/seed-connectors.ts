@@ -89,6 +89,21 @@ const connectors = [
     iconUrl: null,
     documentationUrl: 'https://ai.google.dev/docs',
   },
+  {
+    code: 'custom-api',
+    mvpStatus: 'LIVE',
+    name: 'Custom API',
+    description: 'Connect any HTTP API using your own credentials.',
+    category: 'DATA',
+    provider: 'Your provider',
+    isManagedByGorka: false,
+    isActive: true,
+    lifecycleStatus: 'ACTIVE',
+    pricingModel: 'PASS_THROUGH',
+    pricingConfig: { currency: 'USD', unitLabel: 'request', markupPercent: 0 },
+    iconUrl: null,
+    documentationUrl: null,
+  },
 ];
 
 async function main() {

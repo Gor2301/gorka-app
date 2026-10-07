@@ -334,6 +334,33 @@ fn get_debtor_count(
 }
 
 #[command]
+fn write_local_connector_credential(
+    connector_code: String,
+    tier: String,
+    configuration: String,
+    credential_bytes: Vec<u8>,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    let input = gorka_shared::connectors::local_record::LocalConnectorInput {
+        connector_code,
+        tier,
+        status: "ENABLED".to_string(),
+        credential_value: credential_bytes,
+        configuration,
+    };
+    gorka_shared::connectors::local_record::upsert_local_connector(
+        conn,
+        &organization_id,
+        "local-device",
+        input,
+    )
+}
+
+#[command]
 fn get_dashboard_stats(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
@@ -787,6 +814,7 @@ fn main() {
             search_debtors,
             get_debtor_count,
             get_dashboard_stats,
+        write_local_connector_credential,
             get_debts,
             insert_debt,
             update_debt,
