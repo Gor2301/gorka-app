@@ -33,12 +33,13 @@ export const connectorsService = {
 
   async enable(
     connectorCode: string,
-    options?: { zone3Acknowledged?: boolean },
+    options?: { zone3Acknowledged?: boolean; tier1Acknowledged?: boolean },
   ): Promise<EnablementRow | null> {
     const body = await api.post<any>('/connectors/enable', {
       connectorCode,
       credentialsLocation: 'LOCAL',
       zone3Acknowledged: options?.zone3Acknowledged === true,
+      tier1Acknowledged: options?.tier1Acknowledged === true,
     });
     return body?.data ?? null;
   },
