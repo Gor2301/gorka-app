@@ -352,7 +352,7 @@ fn write_local_connector_credential(
         credential_value: credential_bytes,
         configuration,
     };
-    gorka_shared::connectors::local_record::upsert_local_connector(
+    gorka_shared::connectors::local_record::upsert_local_connector_with_event(
         conn,
         &organization_id,
         "local-device",
@@ -814,7 +814,7 @@ fn main() {
             search_debtors,
             get_debtor_count,
             get_dashboard_stats,
-        write_local_connector_credential,
+            write_local_connector_credential,
             get_debts,
             insert_debt,
             update_debt,
