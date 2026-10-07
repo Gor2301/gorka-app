@@ -7,6 +7,7 @@ export interface CatalogEntry {
   category: 'SMS' | 'VOICE' | 'EMAIL' | 'AI' | 'PUSH';
   provider: string;
   isManagedByGorka: boolean;
+  mvpStatus: 'LIVE' | 'COMING_SOON';
 }
 
 export interface EnablementRow {

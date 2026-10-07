@@ -348,6 +348,7 @@ model ConnectorCatalog {
   category          String
   provider          String
   isManagedByGorka  Boolean  @default(true) @map("is_managed_by_gorka")
+  mvpStatus         String   @default("COMING_SOON") @map("mvp_status")
   isActive          Boolean  @default(true) @map("is_active")
   lifecycleStatus   String   @default("ACTIVE") @map("lifecycle_status")
   pricingModel      String   @default("PASS_THROUGH") @map("pricing_model")

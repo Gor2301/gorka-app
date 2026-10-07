@@ -16,6 +16,7 @@ const prisma = new PrismaClient();
 const connectors = [
   {
     code: 'twilio-sms',
+    mvpStatus: 'COMING_SOON',
     name: 'Twilio SMS',
     description: 'Send SMS through Twilio.',
     category: 'SMS',
@@ -30,6 +31,7 @@ const connectors = [
   },
   {
     code: 'twilio-voice',
+    mvpStatus: 'COMING_SOON',
     name: 'Twilio Voice',
     description: 'Place voice calls through Twilio.',
     category: 'VOICE',
@@ -44,6 +46,7 @@ const connectors = [
   },
   {
     code: 'resend-email',
+    mvpStatus: 'LIVE',
     name: 'Resend Email',
     description: 'Send transactional and bulk email through Resend.',
     category: 'EMAIL',
@@ -58,6 +61,7 @@ const connectors = [
   },
   {
     code: 'mocean-sms',
+    mvpStatus: 'COMING_SOON',
     name: 'Mocean SMS',
     description: 'Send SMS through Mocean for regional coverage.',
     category: 'SMS',
@@ -72,6 +76,7 @@ const connectors = [
   },
   {
     code: 'gemini-ai',
+    mvpStatus: 'COMING_SOON',
     name: 'Gemini AI',
     description: 'AI completion, analysis, and recommendations.',
     category: 'AI',
@@ -98,6 +103,7 @@ async function main() {
         category: c.category,
         provider: c.provider,
         isManagedByGorka: c.isManagedByGorka,
+        mvpStatus: c.mvpStatus,
         isActive: c.isActive,
         lifecycleStatus: c.lifecycleStatus,
         pricingModel: c.pricingModel,

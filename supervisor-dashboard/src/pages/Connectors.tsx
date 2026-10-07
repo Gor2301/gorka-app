@@ -181,7 +181,18 @@ export default function Connectors() {
                 )}
 
                 <div className="flex flex-wrap gap-2">
-                  {!isConnected && isTier1 && (
+                  {!isConnected && catalog.mvpStatus === 'COMING_SOON' && (
+                    <button
+                      disabled
+                      title="This connector is coming soon."
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-500 text-sm rounded-lg cursor-not-allowed"
+                    >
+                      <Power className="w-4 h-4" />
+                      Coming soon
+                    </button>
+                  )}
+
+                  {!isConnected && catalog.mvpStatus === 'LIVE' && isTier1 && (
                     <button
                       onClick={() => handleConnect(row)}
                       disabled={isBusy}
@@ -192,7 +203,7 @@ export default function Connectors() {
                     </button>
                   )}
 
-                  {!isConnected && !isTier1 && (
+                  {!isConnected && catalog.mvpStatus === 'LIVE' && !isTier1 && (
                     <button
                       disabled
                       title="Local credential storage will be available in a future update."
