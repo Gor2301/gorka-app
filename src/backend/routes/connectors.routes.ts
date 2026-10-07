@@ -9,6 +9,7 @@ const enableSchema = z.object({
   connectorCode: z.string().min(1),
   credentialsLocation: z.enum(['CLOUD', 'LOCAL']),
   zone3Acknowledged: z.boolean().optional(),
+  tier1Acknowledged: z.boolean().optional(),
 });
 
 const disableSchema = z.object({
@@ -66,7 +67,7 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
       });
     }
 
-    const { connectorCode, credentialsLocation, zone3Acknowledged } = parsed.data;
+     const { connectorCode, credentialsLocation, zone3Acknowledged, tier1Acknowledged } = parsed.data;
 
     if (credentialsLocation === 'CLOUD') {
       return res.status(400).json({
@@ -125,6 +126,17 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
         });
       }
 
+      if (tier1Acknowledged === true) {
+        await tx.organizationAuditEvent.create({
+          data: {
+            organizationId: user.organizationId,
+            eventType: 'TIER1_CONNECTION_ACKNOWLEDGED',
+            actorId: user.id,
+            actorName: user.email ?? null,
+            details: { connectorCode, tier: 'TIER1' },
+          },
+        });
+      }
       return upserted;
     });
 
