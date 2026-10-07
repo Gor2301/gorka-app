@@ -11,7 +11,6 @@ pub mod http;
 pub mod http_reqwest;
 pub mod resend_email;
 pub mod local_record;
-pub mod resend_email;
 
 /// The credential and configuration a factory passes to an adapter.
 ///
