@@ -1,37 +1,30 @@
 # RESUME HERE
 
-**Updated:** 2026-10-07 (B3 shipped: BYOP flow works end to end. Connection Center spec added.)
-**Main machine:** 4fa8eb8
-**Cloud machine:** 4fa8eb8 (last verified green)
-**GitHub:** 4fa8eb8
+**Updated:** 2026-10-07 (Zone 3 declaration gate for BYOP + audit row.)
+**Main machine:** 35ad007
+**Cloud machine:** 35ad007 (last verified green)
+**GitHub:** 35ad007
 
 ---
 
 ## Where we are
 
-The Connection Center works. The Connectors page shows two
-sections (GORKA built-in, Bring your own), the demo flow is
-verified end to end: BYOP credential entry stores locally and
-flips the row to CONNECTED; Tier 1 Connect/Disconnect works.
+The Connection Center works end to end. The Connectors page
+shows two sections (GORKA built-in, Bring your own). The BYOP
+flow now goes through a Zone 3 declaration gate before the
+credential form, and each accepted declaration writes one row
+to organization_audit_events (cloud). Tier 1 Connect/Disconnect
+still works, unchanged.
 
-The session covered more than planned: a Connection Center
-spec, B3 (local credential write plus the BYOP flow), and four
-bug fixes discovered while demo-testing on cloud.
+This session added B4b: the Zone 3 declaration for the BYOP
+path.
 
 Commits added this session, newest first:
 
+  35ad007  Zone 3 declaration gate for BYOP enable + audit row
+  df7bc1d  SESSION-HANDOFF.md: companion brief for next session
+  8e1bc20  RESUME-HERE.md: B3 shipped, Connection Center verified
   4fa8eb8  ConfigurationModal: inline styles
-  98a3aa6  Connectors page: inline styles
-  b0fc230  Fix: Tailwind content paths + strip Vite template CSS
-  937508a  Fix: route api token through Tauri; derive page title
-  d8c8509  Fix: remove duplicate pub mod resend_email
-  9eb3c79  B3: local credential write + BYOP flow + two-section page
-  6ded653  CONNECTION-CENTER.md: model spec (v0.1 draft)
-  db31e84  RESUME-HERE.md: mvpStatus shipped, Trip A partial
-  5d1a63c  Connector catalog: add mvpStatus flag
-  d13ca82  RESUME-HERE.md: Phase 5 closed
-  68e775e  Phase 5b: align Connectors.tsx (B1, B2)
-  62d332f  Phase 5a: CONNECTOR event wire encoders and decoders
 
 ---
 
@@ -39,83 +32,82 @@ Commits added this session, newest first:
 
 Connectors page:
   - Two sections. "GORKA built-in" and "Bring your own".
-  - Six catalog rows visible.
   - Resend Email: LIVE, Connect/Disconnect flips status. Works.
   - Twilio SMS, Twilio Voice, Mocean SMS, Gemini AI: COMING_SOON,
     disabled button.
-  - Custom API (BYOP): LIVE, Add my credentials -> modal -> submit
-    -> stores locally -> CONNECTED -> Disable -> DISCONNECTED.
-    Works.
+  - Custom API (BYOP): LIVE. Add my credentials -> DeclarationModal
+    -> I understand & connect -> ConfigurationModal -> Save ->
+    stores locally -> CONNECTED -> Disable -> DISCONNECTED. Works.
+    Cancel on the declaration writes nothing.
+
+Zone 3 declaration (B4b):
+  - Renders with header "Third-party connection", red warning
+    block ("You are responsible for this third party."), purple
+    commitment block ("GORKA's commitment"), Cancel and
+    "I understand & connect".
+  - Cancel writes no audit row (verified: count stayed at 1).
+  - Accept writes exactly one row per enablement, with
+    eventType='ZONE_3_CONNECTION_ACKNOWLEDGED', correct
+    organizationId, actorId, actorName, and
+    details={ connectorCode, tier: 'TIER2' } (verified: count 2,
+    newest row fresh, timestamped).
 
 Header title:
   - Reads "Connectors" when on /connectors, etc. Derived from route.
 
 Auth:
-  - API calls carry the JWT. Fixed this session. No 401s on
-    Connectors or any other page.
+  - API calls carry the JWT. No 401s on Connectors.
 
 Styling:
   - Client Dashboard does not compile Tailwind utilities.
-    Connectors.tsx and ConfigurationModal.tsx now use inline
-    styles, matching AppShell.tsx. This is why they render
-    correctly. The rest of the app was already inline-styled.
+    Connectors.tsx, ConfigurationModal.tsx, and now
+    DeclarationModal.tsx use inline styles. This is why they
+    render correctly.
 
 ---
 
-## What B3 built
+## What B4b built
 
-  shared/src/connectors/local_record.rs
-    New file. LocalConnectorInput struct and
-    upsert_local_connector(conn, org_id, source_device_id, input).
-    Writes or updates one row in local_connectors.
+  supervisor-dashboard/src/components/Connectors/DeclarationModal.tsx
+    Full rewrite. Tailwind classNames removed in favour of inline
+    styles, matching the rest of the Client Dashboard. Mojibake
+    emojis dropped; uses lucide AlertTriangle and ShieldCheck
+    icons. Button is primary purple #7C3AED. Wording follows
+    CONNECTION-CENTER.md Section 9 Tier 2 declaration.
 
-  shared/src/connectors/mod.rs
-    Adds pub mod local_record;
-
-  src-tauri/src/main.rs
-    New Tauri command write_local_connector_credential. Takes
-    connector_code, tier, configuration, credential_bytes.
-    Reads organization_id from trusted context. Calls the shared
-    function. Registered in generate_handler!.
+  supervisor-dashboard/src/services/connectors.service.ts
+    enable() gains an optional { zone3Acknowledged?: boolean }.
+    Body carries zone3Acknowledged: options?.zone3Acknowledged === true.
 
   supervisor-dashboard/src/pages/Connectors.tsx
-    Full rewrite. Two sections. Inline styles.
+    Added showDeclaration state. handleAddCredentials now opens
+    the declaration, not the config. New handleDeclarationAccept
+    opens the config. handleByopSave passes
+    { zone3Acknowledged: true } to enable(). DeclarationModal
+    mounted before ConfigurationModal.
 
-  supervisor-dashboard/src/components/Connectors/ConfigurationModal.tsx
-    Full rewrite. Inline styles. Removed the VITE_* reads
-    (already done in 5b) and the unused field-set machinery.
-    Renders one "API Key" field for BYOP connectors.
-
-  prisma/seed-connectors.ts
-    Added a sixth row: custom-api, category DATA, LIVE,
-    isManagedByGorka false. This gives the BYOP section
-    something to show.
+  src/backend/routes/connectors.routes.ts
+    enableSchema accepts optional zone3Acknowledged: boolean.
+    The upsert is now wrapped in prisma.$transaction. When
+    zone3Acknowledged === true, a row is written to
+    organizationAuditEvent in the same transaction. Response
+    shape unchanged.
 
 ---
 
-## Fixes discovered on cloud this session
+## Fixes and observations this session
 
-  - api.service.ts read the JWT from localStorage, but the token
-    lives in Rust settings.dat. Every authenticated call returned
-    401. Fixed: uses invoke('get_auth_token').
-  - AppShell.tsx hardcoded "Dashboard" as the header title.
-    Fixed: derives from useLocation().
-  - tailwind.config.js content array did not include
-    supervisor-dashboard/src. Tailwind utilities never generated.
-    Fixed (partially) but the Client Dashboard still does not
-    compile Tailwind, so Connectors.tsx and ConfigurationModal.tsx
-    use inline styles instead of classNames.
-  - mod.rs had a duplicate `pub mod resend_email;` after a scripted
-    insert. Fixed.
+  - None. The slice implemented as planned. The audit query
+    already had 1 row before the cancel test because an earlier
+    accept had run during the initial click-through; the cancel
+    test used that as the baseline.
 
 ---
 
 ## Known open items
 
-  - Client Dashboard Tailwind pipeline. tailwind.config.js now
-    includes the path, but utilities still do not compile. Do not
-    block on it. Connectors and ConfigurationModal use inline
-    styles. Other pages work as they were.
+  - Client Dashboard Tailwind pipeline. Still not fixed.
+    Inline styles are the workaround. Do not block on it.
 
   - backend RESEND_API_KEY. The backend reads
     process.env.RESEND_API_KEY. The .env file has
@@ -130,16 +122,14 @@ Styling:
     stale. Always use --schema=prisma/schema.cloud.prisma plus the
     pooler DATABASE_URL override.
 
+  - CONNECTION-CENTER.md Section 14 A3 wording: the phrase "no
+    existing table is changed" was superseded by the in-place
+    correction of local_connectors. Cosmetic; correct in a docs
+    pass.
+
 ---
 
 ## What was deferred from earlier Trips
-
-  B4b  Zone 3 declaration. No trigger exists in the current
-       catalog (no external_api row, no live code path opens
-       DeclarationModal). Reopens when the Connection Center
-       gains a generic-API row, which it now has: custom-api.
-       So B4b is now buildable. Consider: wire the Zone 3
-       declaration to the custom-api BYOP path.
 
   B7-static  Backend logging review. Docs-only. Not done.
 
@@ -147,34 +137,41 @@ Styling:
        events. Test-only, no source change. Two-phase cloud
        build. Not done.
 
-  5a spec reconciliation  CONNECTOR-MODEL.md Section 14 A3 said
-       "no existing table is changed" but A3 actually corrected
-       local_connectors in place. Cosmetic; the A3 entry should
-       be corrected in a docs pass.
+  V6 recompute  A2 added created_by to COMMUNICATION_LOGGED at
+       TLV type 0x5006 and marked the V6 vector PENDING. The
+       Rust and Node.js V6 implementations need recomputing and
+       the vectors file updated. Small dedicated slice.
+
+  Tier 1 declaration  The GORKA-managed path (resend-email) has
+       no declaration gate yet. Separate slice. CONNECTION-CENTER.md
+       Section 9 defines both declarations; only Tier 2 is wired.
 
 ---
 
 ## Where we go next (candidate order)
 
-  1. Zone 3 declaration for the custom-api BYOP path. This is
-     now the natural next slice: the custom-api row exists, the
-     BYOP modal opens, and the missing piece is the declaration
-     shown before the modal and the acknowledgment written to
-     organization_audit_events. Small commit, one route or one
-     parameter on /connectors/enable, one modal reuse, one call.
+  1. First non-Resend adapter. Twilio SMS is the natural pick.
+     Mirror shared/src/connectors/resend_email.rs. Register in
+     the factory. Flip twilio-sms mvpStatus to LIVE in the seed.
+     Its own slice, one cloud trip.
 
-  2. First non-Resend adapter. Twilio SMS is the natural pick.
-     Its own slice. Then flip twilio-sms mvpStatus to LIVE in
-     the seed.
+  2. V6 recompute (A2 follow-up). Update
+     SYNC-TEST-VECTORS-v1.md, verify/index.mjs, and the Rust
+     test. Small slice. Run before or alongside the connector
+     implementation.
 
-  3. B7-static, 5a-vectors. Docs-only and test-only. Can be
+  3. Tier 1 declaration gate for resend-email. Small, mirrors
+     B4b. Reuses the same audit eventType or a variant such as
+     TIER1_CONNECTION_ACKNOWLEDGED. Decide the variant before
+     writing.
+
+  4. B7-static, 5a-vectors. Docs-only and test-only. Can be
      folded into any session.
 
-  4. Connector event origination. When a connector is enabled
+  5. Connector event origination. When a connector is enabled
      through the UI, originate a CONNECTOR_ENABLED event so the
-     enablement reaches other devices. This needs the B3 write
-     path to also write to sync_events. Its own slice; needs
-     care because it touches the sync engine.
+     enablement reaches other devices. Touches the sync engine.
+     Its own slice.
 
 ---
 
@@ -204,8 +201,7 @@ placeholder row that gives the BYOP section something to show.
 - Sanity-check before write. Abort on failure. Verify with
   findstr after every edit.
 - PowerShell here-strings: leave a blank line before the
-  closing '@, or the next line merges with the last. This bit
-  us once in 5a.
+  closing '@, or the next line merges with the last.
 - npx prisma db push always needs --schema=prisma/schema.cloud.prisma
   plus the pooler DATABASE_URL override.
 - Backend start needs the inline DATABASE_URL and RESEND_API_KEY.
