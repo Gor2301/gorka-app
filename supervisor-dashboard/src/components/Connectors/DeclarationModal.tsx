@@ -1,10 +1,13 @@
 import { AlertTriangle, ShieldCheck, X } from 'lucide-react';
 
+type DeclarationTier = 'TIER1' | 'TIER2';
+
 interface DeclarationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAccept: () => void;
   connectorName: string;
+  tier: DeclarationTier;
 }
 
 const overlayStyle: React.CSSProperties = {
@@ -37,12 +40,12 @@ const headerStyle: React.CSSProperties = {
   borderBottom: '1px solid #e5e7eb',
 };
 
-const headerLeftStyle: React.CSSProperties = {
+const headerLeftStyle = (tier: DeclarationTier): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   gap: '10px',
-  color: '#dc2626',
-};
+  color: tier === 'TIER1' ? '#2563eb' : '#dc2626',
+});
 
 const headerTitleStyle: React.CSSProperties = {
   fontSize: '15px',
@@ -81,6 +84,11 @@ const listStyle: React.CSSProperties = {
   paddingLeft: '18px',
 };
 
+const boxTitleStyle: React.CSSProperties = {
+  fontWeight: 600,
+  margin: 0,
+};
+
 const warningStyle: React.CSSProperties = {
   backgroundColor: '#fef2f2',
   border: '1px solid #fecaca',
@@ -91,9 +99,14 @@ const warningStyle: React.CSSProperties = {
   lineHeight: 1.5,
 };
 
-const warningTitleStyle: React.CSSProperties = {
-  fontWeight: 600,
-  margin: 0,
+const infoStyle: React.CSSProperties = {
+  backgroundColor: '#eff6ff',
+  border: '1px solid #bfdbfe',
+  color: '#1e40af',
+  borderRadius: '8px',
+  padding: '12px 14px',
+  fontSize: '13px',
+  lineHeight: 1.5,
 };
 
 const commitStyle: React.CSSProperties = {
@@ -144,15 +157,23 @@ const acceptBtnStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-export function DeclarationModal({ isOpen, onClose, onAccept, connectorName }: DeclarationModalProps) {
+export function DeclarationModal({
+  isOpen,
+  onClose,
+  onAccept,
+  connectorName,
+  tier,
+}: DeclarationModalProps) {
   if (!isOpen) return null;
+
+  const isTier1 = tier === 'TIER1';
 
   return (
     <div style={overlayStyle}>
       <div style={modalStyle}>
         <div style={headerStyle}>
-          <div style={headerLeftStyle}>
-            <AlertTriangle size={18} />
+          <div style={headerLeftStyle(tier)}>
+            {isTier1 ? <ShieldCheck size={18} /> : <AlertTriangle size={18} />}
             <h2 style={headerTitleStyle}>Third-party connection</h2>
           </div>
           <button onClick={onClose} style={closeBtnStyle} aria-label="Close">
@@ -165,16 +186,27 @@ export function DeclarationModal({ isOpen, onClose, onAccept, connectorName }: D
             You are about to connect GORKA to <span style={introNameStyle}>{connectorName}</span>.
           </p>
 
-          <div style={warningStyle}>
-            <p style={warningTitleStyle}>You are responsible for this third party.</p>
-            <ul style={listStyle}>
-              <li>{connectorName} is outside GORKA's control.</li>
-              <li>GORKA does not guarantee their security, compliance, or data handling.</li>
-              <li>You are responsible for any data transmitted to them.</li>
-              <li>You have reviewed their terms.</li>
-              <li>You may disconnect at any time.</li>
-            </ul>
-          </div>
+          {isTier1 ? (
+            <div style={infoStyle}>
+              <p style={boxTitleStyle}>How this works</p>
+              <ul style={listStyle}>
+                <li>GORKA provides and manages the credentials for {connectorName}.</li>
+                <li>The credential is delivered securely to your device.</li>
+                <li>Messages are sent directly from your device to {connectorName}.</li>
+              </ul>
+            </div>
+          ) : (
+            <div style={warningStyle}>
+              <p style={boxTitleStyle}>You are responsible for this third party.</p>
+              <ul style={listStyle}>
+                <li>{connectorName} is outside GORKA's control.</li>
+                <li>GORKA does not guarantee their security, compliance, or data handling.</li>
+                <li>You are responsible for any data transmitted to them.</li>
+                <li>You have reviewed their terms.</li>
+                <li>You may disconnect at any time.</li>
+              </ul>
+            </div>
+          )}
 
           <div style={commitStyle}>
             <p style={commitTitleStyle}>
@@ -182,9 +214,19 @@ export function DeclarationModal({ isOpen, onClose, onAccept, connectorName }: D
               GORKA's commitment
             </p>
             <ul style={listStyle}>
-              <li>Your credential is stored locally on this device, encrypted at rest.</li>
-              <li>The credential never reaches GORKA's cloud.</li>
-              <li>GORKA cannot read your debtor data.</li>
+              {isTier1 ? (
+                <>
+                  <li>Your debtor data never reaches GORKA's cloud.</li>
+                  <li>Messages go directly from your device to {connectorName}.</li>
+                  <li>You may disconnect at any time.</li>
+                </>
+              ) : (
+                <>
+                  <li>Your credential is stored locally on this device, encrypted at rest.</li>
+                  <li>The credential never reaches GORKA's cloud.</li>
+                  <li>GORKA cannot read your debtor data.</li>
+                </>
+              )}
             </ul>
           </div>
         </div>
