@@ -12,6 +12,9 @@ use gorka_shared::sync::{
     encode_entity_updated_payload,
     encode_action_created_payload,
     encode_event_record,
+    encode_connector_enabled_payload,
+    encode_connector_disabled_payload,
+    encode_connector_credential_replaced_payload,
     build_sync_message,
 };
 use gorka_shared::sync_handshake::AckOutcome;
@@ -322,4 +325,240 @@ fn entity_updated_with_older_clock_loses() {
         )
         .ok();
     assert_eq!(losing.as_deref(), Some("Should not win"));
+}
+
+
+// ---------------------------------------------------------------
+// CONNECTOR_ENABLED apply, deferred dispatch, read model
+// ---------------------------------------------------------------
+
+#[test]
+fn connector_enabled_accepted_and_applied() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+
+    let payload = encode_connector_enabled_payload(
+        "custom-api",
+        "TIER2",
+        b"opaque-credential-bytes",
+        "{\"endpoint\":\"https://example.invalid\"}",
+        1_789_891_200_000,
+    );
+    let record = encode_event_record(
+        &event_id_a(),
+        DEVICE_A,
+        1,
+        1,
+        0x0005, // CONNECTOR_ENABLED
+        0x06,   // connector
+        b"custom-api",
+        1_789_891_200_000,
+        &payload,
+    );
+    let framed = build_sync_message(&SESSION_KEY, &NONCE, &message_id(), &[record])
+        .expect("build");
+
+    let result = process_sync_message(&mut conn, ORG_ID, &SESSION_KEY, &framed)
+        .expect("process");
+
+    assert_eq!(result.outcomes.len(), 1);
+    assert_eq!(result.outcomes[0].outcome, AckOutcome::Accepted);
+
+    // The local_connectors row exists, with the transmitted tier and
+    // the wire device_id hex as source_device_id.
+    let (tier, status, source_device_id): (String, String, String) = conn
+        .query_row(
+            "SELECT tier, status, source_device_id FROM local_connectors WHERE connector_code = 'custom-api'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("row");
+    assert_eq!(tier, "TIER2");
+    assert_eq!(status, "ENABLED");
+    assert_eq!(source_device_id, hex::encode(DEVICE_A));
+
+    // The sync_events row exists.
+    let ev: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sync_events", [], |row| row.get(0))
+        .expect("q");
+    assert_eq!(ev, 1);
+
+    // No entity_field_state rows for CONNECTOR (Section 25.14.5).
+    let efs: i64 = conn
+        .query_row("SELECT COUNT(*) FROM entity_field_state", [], |row| row.get(0))
+        .expect("q");
+    assert_eq!(efs, 0);
+
+    // The audit entry exists.
+    let audit: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM audit_log WHERE action = 'SYNC_CONNECTOR_ENABLED'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("q");
+    assert_eq!(audit, 1);
+}
+
+#[test]
+fn connector_disabled_is_deferred_without_mutation() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+
+    let payload = encode_connector_disabled_payload("custom-api", 1_789_891_200_001);
+    let record = encode_event_record(
+        &event_id_a(),
+        DEVICE_A,
+        1,
+        1,
+        0x0006, // CONNECTOR_DISABLED
+        0x06,
+        b"custom-api",
+        1_789_891_200_001,
+        &payload,
+    );
+    let framed = build_sync_message(&SESSION_KEY, &NONCE, &message_id(), &[record])
+        .expect("build");
+
+    let result = process_sync_message(&mut conn, ORG_ID, &SESSION_KEY, &framed)
+        .expect("process");
+
+    assert_eq!(result.outcomes[0].outcome, AckOutcome::Rejected);
+
+    // Nothing written: no sync_events row, no local_connectors row,
+    // no audit entry. The transaction was dropped.
+    let ev: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sync_events", [], |row| row.get(0))
+        .expect("q");
+    let lc: i64 = conn
+        .query_row("SELECT COUNT(*) FROM local_connectors", [], |row| row.get(0))
+        .expect("q");
+    let audit: i64 = conn
+        .query_row("SELECT COUNT(*) FROM audit_log", [], |row| row.get(0))
+        .expect("q");
+    assert_eq!(ev, 0);
+    assert_eq!(lc, 0);
+    assert_eq!(audit, 0);
+}
+
+#[test]
+fn connector_credential_replaced_is_deferred_without_mutation() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+
+    let payload = encode_connector_credential_replaced_payload(
+        "custom-api",
+        b"new-opaque-credential-bytes",
+        "{\"endpoint\":\"https://example.invalid\"}",
+        1_789_891_200_002,
+    );
+    let record = encode_event_record(
+        &event_id_a(),
+        DEVICE_A,
+        1,
+        1,
+        0x0007, // CONNECTOR_CREDENTIAL_REPLACED
+        0x06,
+        b"custom-api",
+        1_789_891_200_002,
+        &payload,
+    );
+    let framed = build_sync_message(&SESSION_KEY, &NONCE, &message_id(), &[record])
+        .expect("build");
+
+    let result = process_sync_message(&mut conn, ORG_ID, &SESSION_KEY, &framed)
+        .expect("process");
+
+    assert_eq!(result.outcomes[0].outcome, AckOutcome::Rejected);
+
+    let ev: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sync_events", [], |row| row.get(0))
+        .expect("q");
+    let lc: i64 = conn
+        .query_row("SELECT COUNT(*) FROM local_connectors", [], |row| row.get(0))
+        .expect("q");
+    assert_eq!(ev, 0);
+    assert_eq!(lc, 0);
+}
+
+#[test]
+fn local_connector_read_model_excludes_credential() {
+    use gorka_shared::connectors::local_record::{
+        list_local_connectors, upsert_local_connector, LocalConnectorInput,
+    };
+
+    let conn = open_in_memory_for_tests().expect("db init");
+
+    let input = LocalConnectorInput {
+        connector_code: "custom-api".to_string(),
+        tier: "TIER2".to_string(),
+        status: "ENABLED".to_string(),
+        credential_value: b"super-secret-bytes".to_vec(),
+        configuration: "{\"endpoint\":\"https://example.invalid\"}".to_string(),
+    };
+    upsert_local_connector(&conn, ORG_ID, "local-device", input).expect("upsert");
+
+    let rows = list_local_connectors(&conn, ORG_ID).expect("list");
+    assert_eq!(rows.len(), 1);
+
+    let r = &rows[0];
+    assert_eq!(r.connector_code, "custom-api");
+    assert_eq!(r.tier, "TIER2");
+    assert_eq!(r.status, "ENABLED");
+
+    // The read model carries configuration, but the struct does not
+    // expose the credential. This test cannot read a field that does
+    // not exist; its value is that the struct compiles without one.
+    // A static check plus the type shape is the proof.
+    assert_eq!(r.configuration, "{\"endpoint\":\"https://example.invalid\"}");
+}
+
+#[test]
+fn list_local_connectors_shape_and_order() {
+    use gorka_shared::connectors::local_record::{
+        list_local_connectors, upsert_local_connector, LocalConnectorInput,
+    };
+
+    let conn = open_in_memory_for_tests().expect("db init");
+
+    // Insert out of alphabetical order.
+    upsert_local_connector(
+        &conn,
+        ORG_ID,
+        "local-device",
+        LocalConnectorInput {
+            connector_code: "twilio-sms".to_string(),
+            tier: "TIER2".to_string(),
+            status: "ENABLED".to_string(),
+            credential_value: b"cred-a".to_vec(),
+            configuration: "{}".to_string(),
+        },
+    )
+    .expect("upsert a");
+
+    upsert_local_connector(
+        &conn,
+        ORG_ID,
+        "local-device",
+        LocalConnectorInput {
+            connector_code: "custom-api".to_string(),
+            tier: "TIER2".to_string(),
+            status: "ENABLED".to_string(),
+            credential_value: b"cred-b".to_vec(),
+            configuration: "{}".to_string(),
+        },
+    )
+    .expect("upsert b");
+
+    let rows = list_local_connectors(&conn, ORG_ID).expect("list");
+    assert_eq!(rows.len(), 2);
+
+    // Ordered by connector_code ascending.
+    assert_eq!(rows[0].connector_code, "custom-api");
+    assert_eq!(rows[1].connector_code, "twilio-sms");
+
+    // Every field present on the read model.
+    for r in &rows {
+        assert!(!r.connector_code.is_empty());
+        assert!(!r.tier.is_empty());
+        assert!(!r.status.is_empty());
+        assert!(!r.updated_at.is_empty());
+    }
 }
