@@ -9,6 +9,7 @@ use std::fmt;
 
 pub mod http;
 pub mod http_reqwest;
+pub mod mocean_sms;
 pub mod resend_email;
 pub mod twilio_sms;
 pub mod local_record;
@@ -107,6 +108,7 @@ pub fn build_default_registry() -> ConnectorRegistry {
     let mut registry = ConnectorRegistry::new();
     registry.register("resend-email", crate::connectors::resend_email::factory);
     registry.register("twilio-sms", crate::connectors::twilio_sms::factory);
+    registry.register("mocean-sms", crate::connectors::mocean_sms::factory);
     registry
 }
 
@@ -220,6 +222,12 @@ mod tests {
     fn build_default_registry_contains_twilio_sms() {
         let reg = build_default_registry();
         assert!(reg.factory("twilio-sms").is_some());
+    }
+
+    #[test]
+    fn build_default_registry_contains_mocean_sms() {
+        let reg = build_default_registry();
+        assert!(reg.factory("mocean-sms").is_some());
     }
 
     #[test]
