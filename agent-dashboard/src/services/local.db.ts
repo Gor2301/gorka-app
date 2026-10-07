@@ -256,6 +256,15 @@ export interface UpcomingFollowup {
   due_date: string;
 }
 
+export interface LocalConnector {
+  connector_code: string;
+  tier: string;
+  status: string;
+  configuration: string;
+  source_device_id: string;
+  updated_at: string;
+}
+
 // --- Local DB ---
 
 export const localDB = {
@@ -557,6 +566,12 @@ export const localDB = {
       startDate,
       endDate,
     });
+  },
+
+  // --- Connectors --------------------------------------------------
+
+  async listLocalConnectors(): Promise<LocalConnector[]> {
+    return await invoke<LocalConnector[]>('list_local_connectors');
   },
 
   // --- Sync engine -------------------------------------------------

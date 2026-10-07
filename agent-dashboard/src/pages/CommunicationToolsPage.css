@@ -2,13 +2,36 @@
  *
  * Empty-state pattern matches DebtorsPage.css: centered card
  * body, muted icon above the paragraph, muted paragraph text.
- * The spec 11.8 sentence is the only copy on the page.
+ * The spec 11.8 sentence is the only copy in the empty state.
+ *
+ * Populated state: one card per enabled connector. Connector
+ * code as title, tier as a muted label, status as a badge. No
+ * credential, no configuration value, no device id.
  */
 
 .communication-tools-page {
   padding: var(--space-content-padding);
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.communication-tools-page__error {
+  margin-bottom: var(--space-grid-gap);
+}
+
+.communication-tools-page__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: var(--space-grid-gap-sm);
+}
+
+.communication-tools-page__state-text {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
 }
 
 .communication-tools-page__empty {
@@ -26,4 +49,53 @@
   margin: 0;
   font-size: var(--font-size-body);
   color: var(--color-text-muted);
+}
+
+.communication-tools-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-grid-gap);
+}
+
+.communication-tools-page__card {
+  padding: var(--space-card-padding, 16px);
+}
+
+.communication-tools-page__card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-grid-gap-sm);
+  margin-bottom: var(--space-grid-gap-sm);
+}
+
+.communication-tools-page__card-title {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.communication-tools-page__card-tier {
+  font-size: var(--font-size-small, 12px);
+  color: var(--color-text-muted);
+}
+
+.communication-tools-page__card-body {
+  display: flex;
+  align-items: center;
+}
+
+.communication-tools-page__badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: var(--font-size-small, 12px);
+  background: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.communication-tools-page__badge--enabled {
+  background: var(--color-success-bg, #e6f4ea);
+  color: var(--color-success, #1e7e34);
 }
