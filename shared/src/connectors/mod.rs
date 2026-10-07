@@ -10,6 +10,7 @@ use std::fmt;
 pub mod http;
 pub mod http_reqwest;
 pub mod resend_email;
+pub mod twilio_sms;
 pub mod local_record;
 
 /// The credential and configuration a factory passes to an adapter.
@@ -105,6 +106,7 @@ impl ConnectorRegistry {
 pub fn build_default_registry() -> ConnectorRegistry {
     let mut registry = ConnectorRegistry::new();
     registry.register("resend-email", crate::connectors::resend_email::factory);
+    registry.register("twilio-sms", crate::connectors::twilio_sms::factory);
     registry
 }
 
@@ -212,6 +214,12 @@ mod tests {
     fn build_default_registry_contains_resend() {
         let reg = build_default_registry();
         assert!(reg.factory("resend-email").is_some());
+    }
+
+    #[test]
+    fn build_default_registry_contains_twilio_sms() {
+        let reg = build_default_registry();
+        assert!(reg.factory("twilio-sms").is_some());
     }
 
     #[test]
