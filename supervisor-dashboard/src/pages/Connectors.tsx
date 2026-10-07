@@ -164,6 +164,7 @@ export default function Connectors() {
   const [error, setError] = useState<string | null>(null);
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const [showDeclaration, setShowDeclaration] = useState(false);
+  const [declarationTier, setDeclarationTier] = useState<'TIER1' | 'TIER2'>('TIER2');
   const [showConfig, setShowConfig] = useState(false);
   const [selectedCatalog, setSelectedCatalog] = useState<CatalogEntry | null>(null);
 
@@ -194,14 +195,24 @@ export default function Connectors() {
     load();
   }, []);
 
-  const handleConnect = async (row: DisplayRow) => {
+  const handleConnect = (row: DisplayRow) => {
     if (busyCode) return;
-    setBusyCode(row.catalog.code);
+    setSelectedCatalog(row.catalog);
+    setDeclarationTier('TIER1');
+    setShowDeclaration(true);
+  };
+
+  const handleTier1Confirm = async () => {
+    if (!selectedCatalog || busyCode) return;
+    const catalog = selectedCatalog;
+    setBusyCode(catalog.code);
     try {
-      await connectorsService.enable(row.catalog.code);
+      await connectorsService.enable(catalog.code, { tier1Acknowledged: true });
+      setShowDeclaration(false);
+      setSelectedCatalog(null);
       await load();
     } catch (err: any) {
-      alert('Failed to connect ' + row.catalog.name + ': ' + (err?.message || 'Unknown error'));
+      alert('Failed to connect ' + catalog.name + ': ' + (err?.message || 'Unknown error'));
     } finally {
       setBusyCode(null);
     }
@@ -223,11 +234,16 @@ export default function Connectors() {
 
   const handleAddCredentials = (row: DisplayRow) => {
     setSelectedCatalog(row.catalog);
+    setDeclarationTier('TIER2');
     setShowDeclaration(true);
   };
 
   const handleDeclarationAccept = () => {
     setShowDeclaration(false);
+    if (declarationTier === 'TIER1') {
+      handleTier1Confirm();
+      return;
+    }
     setShowConfig(true);
   };
 
@@ -384,6 +400,7 @@ export default function Connectors() {
         onClose={() => { setShowDeclaration(false); setSelectedCatalog(null); }}
         onAccept={handleDeclarationAccept}
         connectorName={selectedCatalog?.name || ''}
+        tier={declarationTier}
       />
 
       <ConfigurationModal
