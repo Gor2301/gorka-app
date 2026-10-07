@@ -1,5 +1,5 @@
 RESUME-HERE.md — Full Chat Summary and Handoff
-Version 2.0 — written at close of the Connector Enablement Sync slice.
+Version 2.1 — written at close of the Tier 1 Declaration Gate slice.
 
 This one document is both the summary of this chat and the resume state.
 Save it at GORKA_RECOVERY\recovery-notes\RESUME-HERE.md. Open it at the start
@@ -9,13 +9,14 @@ of the next chat. Everything needed to resume without reconnaissance is here.
 1. MACHINE STATE AT CLOSE
 ================================================================
 
-MAIN:    HEAD b435e55. Pushed. origin/main = b435e55. Clean tree except
-         untracked .bak files and CHAT-HANDOFF-DUMP.txt / make-dump.ps1.
-CLOUD:   b435e55 after last pull. Build PASS, tests 112/112, vectors 9/9.
-         Cloud machine was closed after the demo.
+MAIN:    HEAD 6cad294. Pushed. origin/main = 6cad294. Clean tree except
+         untracked CHAT-HANDOFF-DUMP.txt and make-dump.ps1.
+CLOUD:   6cad294 after last pull. Build PASS, tests 112/112, vectors 9/9.
+         Cloud machine was closed after the Slice 1 demo.
 
-Ten commits landed this session, above the prior origin/main of 8991746:
+Fifteen commits landed since the prior origin/main of 8991746.
 
+Slice C — Connector enablement sync (ten commits, HEAD b435e55):
   b435e55  tests: CONNECTOR_ENABLED apply, deferred dispatch, read-model exclusion
   59e69cd  agent-dashboard: Communication Tools reads local_connectors
   0d5d88c  agent: add list_local_connectors command
@@ -26,6 +27,15 @@ Ten commits landed this session, above the prior origin/main of 8991746:
   947b00a  sync_engine: add CONNECTOR event and connector entity name maps
   868a047  sync_pipeline: accept CONNECTOR_ENABLED, defer DISABLED and REPLACED
   e195d46  sync_events: add CONNECTOR event and entity constants
+
+Handoff doc:
+  7ca2ae8  RESUME-HERE: v2.0, Slice C closed, run commands fixed
+
+Slice 1 — Tier 1 declaration gate (four commits, HEAD 6cad294):
+  6cad294  connectors.routes: Tier 1 acknowledgement writes audit row
+  a025f47  connectors.service: enable() gains tier1Acknowledged
+  d313b55  Connectors.tsx: Tier 1 Resend connect opens declaration gate
+  8ad418d  DeclarationModal: accept tier prop and render Tier 1 variant
 
 Safe resume check:
 
@@ -70,6 +80,37 @@ WHAT SHIPPED
 - shared/tests/sync_pipeline.rs — five new tests (see §3).
 
 ================================================================
+2b. SLICE 1 — TIER 1 DECLARATION GATE — COMPLETE
+================================================================
+
+GOAL (achieved)
+Mirror the B4b Zone 3 declaration gate for Tier 1 connectors. The
+Client connects resend-email through a declaration modal. On accept,
+the enable request carries tier1Acknowledged: true; the backend
+writes one organization_audit_events row with eventType =
+'TIER1_CONNECTION_ACKNOWLEDGED' in the same transaction as the
+client_connectors upsert. Cancel writes nothing.
+
+WHAT SHIPPED
+- DeclarationModal.tsx accepts a `tier` prop ('TIER1' | 'TIER2').
+  Tier 1 renders a blue info box ("How this works") and a Tier 1
+  commitment list. Tier 2 path unchanged.
+- Connectors.tsx: handleConnect opens the declaration with tier='TIER1'
+  and handleDeclarationAccept routes to handleTier1Confirm. The BYOP
+  path (handleAddCredentials) still opens tier='TIER2'.
+- connectors.service.ts: enable() gains optional { tier1Acknowledged?: boolean }.
+- connectors.routes.ts: enableSchema accepts optional tier1Acknowledged.
+  Conditional organizationAuditEvent.create with eventType =
+  'TIER1_CONNECTION_ACKNOWLEDGED', details = { connectorCode, tier: 'TIER1' },
+  inside the same prisma.$transaction as the upsert.
+
+DESIGN DECISION — audit event name
+Distinct event type, not a reuse of ZONE_3_CONNECTION_ACKNOWLEDGED.
+Tier 1 is honest disclosure, Tier 2 is a warning. Two declarations,
+one per tier. One audit event type per tier makes compliance queries
+trivial without JSONB extraction.
+
+================================================================
 3. VERIFICATION
 ================================================================
 
@@ -96,11 +137,26 @@ PROVEN LIVE (screenshots taken)
                     green ENABLED badge. No credential, no configuration
                     value, no device id.
 
-NOT YET PROVEN — DO THIS FIRST NEXT SESSION
-  Restart test. Close the Agent window, relaunch
-  `cargo run --bin gorka-agent`, log in, unlock, open Communication Tools.
-  The card must still be there. That proves the row is on disk in SQLCipher,
-  not in memory. One command. Do it before calling the slice fully closed.
+PROVEN LIVE — SLICE C RESTART TEST
+  Agent was closed, then relaunched via `cargo run --bin gorka-agent`,
+  logged in, unlocked, opened Communication Tools. The custom-api card
+  persisted with TIER2 / ENABLED. The row lives in the Agent's SQLCipher
+  local_connectors table, not in memory. Slice C fully closed.
+
+PROVEN LIVE — SLICE 1
+  Client: Resend Email → Connect → Tier 1 declaration (blue "How this
+  works") → "I understand & connect". Card flips to CONNECTED.
+  Cloud DB query (check-audit.mjs against the pooler DATABASE_URL):
+    one row, eventType = TIER1_CONNECTION_ACKNOWLEDGED,
+    actorName = test@example.com,
+    details = {"tier":"TIER1","connectorCode":"resend-email"}.
+  Total audit rows after test: 4 (1 Tier 1 + 3 Zone 3 from earlier sessions).
+
+NOT YET PROVEN
+  Cancel-negative for Tier 1. Was not run. The code path is structurally
+  identical to Tier 2's (verified in B4b). Run before the next Tier 1
+  change: disconnect Resend, click Connect, click Cancel, verify no new
+  audit row.
 
 ================================================================
 4. KNOWN BEHAVIORS BY DESIGN — NOT BUGS
@@ -116,7 +172,12 @@ TIER 1 CONNECTORS DO NOT SYNC
   resend-email (and twilio-sms when its form exists) connect on the Client but
   do not appear on the Agent. By design. Only the BYOP Tier 2 path calls
   write_local_connector_credential, which is the event-originating write.
-  Tier 1 sync lands with the Tier 1 declaration gate slice.
+  Tier 1 sync is a future slice.
+
+TIER 1 AUDIT EVENT NAME
+  TIER1_CONNECTION_ACKNOWLEDGED is distinct from
+  ZONE_3_CONNECTION_ACKNOWLEDGED. Do not merge them. Different
+  declarations, different legal weight, different audit rows.
 
 ================================================================
 5. SECURITY — ACTION REQUIRED
@@ -149,6 +210,12 @@ LAYOUT FACTS (these cost real time to rediscover):
     already running, or the Tauri window loads an empty page.
   - Client vite binds 5173. Agent vite binds 5174. Agent tauri.conf.json
     expects 5174. If 5173 is occupied, the ports shift and the Agent fails.
+  - The root .env points DATABASE_URL at the DIRECT Supabase host
+    (db.<ref>.supabase.co:5432), which is NOT reachable from the cloud
+    machine. Every cloud command that touches the DB must set DATABASE_URL
+    inline to the pooler URL. Prisma Client does NOT auto-load .env when a
+    script is run directly with `node`; import 'dotenv/config' at the top of
+    the script, or set the variable in the shell first.
 
 FIVE TERMINALS. Order matters.
 
@@ -399,37 +466,33 @@ DONE (prior sessions)
              Cloud-verified at bf73b5b.
 
 DONE (this session)
-  Slice C — Connector enablement sync. Ten commits, b435e55.
-  See §2 and §3.
+  Slice C — Connector enablement sync. Ten commits, b435e55. §2.
+  Slice 1 — Tier 1 declaration gate. Four commits, 6cad294. §2b.
+  Agent restart test — passed. §3.
 
 IN FLIGHT
-  None. Slice C is code-complete and pushed. Only the restart test (§3)
-  remains to close it fully.
+  None. Both slices complete, pushed, live-verified.
 
 REMAINING — DEPENDENCY ORDER, NOT SCHEDULE
   1. Rotate credentials. §5. Supabase pooler password, Resend key.
-  2. Agent restart test. §3. One command. Closes Slice C fully.
-  3. SYNC-ARCHITECTURE.md amendment — resolve §25.15.5/§25.16.5 vs §12.9.
+  2. SYNC-ARCHITECTURE.md amendment — resolve §25.15.5/§25.16.5 vs §12.9.
      Then CONNECTOR_DISABLED and CONNECTOR_CREDENTIAL_REPLACED origination
      and apply.
-  4. Tier 1 declaration gate for resend-email — mirrors B4b. Decide the
-     audit event name (TIER1_CONNECTION_ACKNOWLEDGED or reuse). Small.
-  5. Send-from-agent slice (Twilio SMS) — test_connection Tauri command;
+  3. Send-from-agent slice (Twilio SMS) — test_connection Tauri command;
      send Tauri command; send modal on the Agent's debtor profile; flip
      twilio-sms mvpStatus to LIVE. First time a whole chain fires end to end.
-  6. Compliance rules page (B5, B6) — Client Dashboard page writing
+  4. Compliance rules page (B5, B6) — Client Dashboard page writing
      compliance_rules locally.
-  7. Compliance enforcement layer — preflight check in the send flow.
-  8. Second send path (Resend email) — proves the pattern generalises.
-  9. Copilot command (C3, C4) + AI boundary layer — the largest remaining
+  5. Compliance enforcement layer — preflight check in the send flow.
+  6. Second send path (Resend email) — proves the pattern generalises.
+  7. Copilot command (C3, C4) + AI boundary layer — the largest remaining
      block. Redaction rules, placeholder system, Gemini adapter, structural
      tests.
- 10. Tier 1 credential transit verification (B7) — review-only. Confirm the
+  8. Tier 1 credential transit verification (B7) — review-only. Confirm the
      backend does not log, persist, or trace credentials during /enable.
- 11. Acceptance — end-to-end: enable a connector, send a message, verify
+  9. Acceptance — end-to-end: enable a connector, send a message, verify
      communication row, sync event, compliance checks, credential never left
      the device.
-
 DOCS-ONLY / TEST-ONLY (fold into any session)
   - V6 stale lines in SYNC-TEST-VECTORS-v1.md (two "PENDING" lines). Docs pass.
   - Mocean SMS HTTP shape confirm against current docs before first live send.
@@ -445,8 +508,8 @@ DOCS-ONLY / TEST-ONLY (fold into any session)
 15. OPEN ITEMS
 ================================================================
 
-  - Restart test not yet run (§3).
   - Credentials not yet rotated (§5).
+  - Cancel-negative for Tier 1 not yet run (§3).
   - .bak files in working tree, untracked. Delete at leisure:
       shared/src/connectors/local_record.rs.bak
       shared/src/sync_engine.rs.bak
