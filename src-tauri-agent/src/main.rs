@@ -235,6 +235,17 @@ fn get_debtor_count(
 }
 
 #[command]
+fn list_local_connectors(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<gorka_shared::connectors::local_record::LocalConnectorRow>, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    gorka_shared::connectors::local_record::list_local_connectors(conn, &organization_id)
+}
+
+#[command]
 fn get_related_debtor_roles(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
@@ -860,6 +871,7 @@ fn main() {
             delete_debtor,
             search_debtors,
             get_debtor_count,
+            list_local_connectors,
             get_related_debtor_roles,
             get_debtor_debt_totals,
             insert_related_debtor,
