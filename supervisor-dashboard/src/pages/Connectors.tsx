@@ -4,6 +4,7 @@ import type { CatalogEntry, EnablementRow } from '../services/connectors.service
 import { invoke } from '@tauri-apps/api/core';
 import { RefreshCw } from 'lucide-react';
 import { ConfigurationModal } from '../components/Connectors/ConfigurationModal';
+import { DeclarationModal } from '../components/Connectors/DeclarationModal';
 
 interface DisplayRow {
   catalog: CatalogEntry;
@@ -162,6 +163,7 @@ export default function Connectors() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyCode, setBusyCode] = useState<string | null>(null);
+  const [showDeclaration, setShowDeclaration] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [selectedCatalog, setSelectedCatalog] = useState<CatalogEntry | null>(null);
 
@@ -221,6 +223,11 @@ export default function Connectors() {
 
   const handleAddCredentials = (row: DisplayRow) => {
     setSelectedCatalog(row.catalog);
+    setShowDeclaration(true);
+  };
+
+  const handleDeclarationAccept = () => {
+    setShowDeclaration(false);
     setShowConfig(true);
   };
 
@@ -235,7 +242,7 @@ export default function Connectors() {
         configuration: JSON.stringify(config),
         credentialBytes,
       });
-      await connectorsService.enable(selectedCatalog.code);
+      await connectorsService.enable(selectedCatalog.code, { zone3Acknowledged: true });
       setShowConfig(false);
       setSelectedCatalog(null);
       await load();
@@ -371,6 +378,13 @@ export default function Connectors() {
           <div style={{ color: '#6b7280', fontSize: '13px' }}>No bring-your-own connectors yet.</div>
         )}
       </section>
+
+      <DeclarationModal
+        isOpen={showDeclaration}
+        onClose={() => { setShowDeclaration(false); setSelectedCatalog(null); }}
+        onAccept={handleDeclarationAccept}
+        connectorName={selectedCatalog?.name || ''}
+      />
 
       <ConfigurationModal
         isOpen={showConfig}

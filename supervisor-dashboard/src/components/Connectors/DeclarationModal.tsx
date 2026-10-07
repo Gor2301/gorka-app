@@ -1,5 +1,4 @@
-
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, X } from 'lucide-react';
 
 interface DeclarationModalProps {
   isOpen: boolean;
@@ -8,73 +7,195 @@ interface DeclarationModalProps {
   connectorName: string;
 }
 
+const overlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 50,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '16px',
+  backgroundColor: 'rgba(0,0,0,0.4)',
+};
+
+const modalStyle: React.CSSProperties = {
+  backgroundColor: 'white',
+  borderRadius: '12px',
+  width: '440px',
+  maxWidth: '90vw',
+  maxHeight: '90vh',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+};
+
+const headerStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '16px 20px',
+  borderBottom: '1px solid #e5e7eb',
+};
+
+const headerLeftStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  color: '#dc2626',
+};
+
+const headerTitleStyle: React.CSSProperties = {
+  fontSize: '15px',
+  fontWeight: 600,
+  margin: 0,
+};
+
+const closeBtnStyle: React.CSSProperties = {
+  padding: '4px',
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+};
+
+const bodyStyle: React.CSSProperties = {
+  padding: '20px',
+  overflowY: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '14px',
+};
+
+const introStyle: React.CSSProperties = {
+  fontSize: '13px',
+  color: '#374151',
+  margin: 0,
+};
+
+const introNameStyle: React.CSSProperties = {
+  fontWeight: 600,
+  color: '#111827',
+};
+
+const listStyle: React.CSSProperties = {
+  margin: '6px 0 0 0',
+  paddingLeft: '18px',
+};
+
+const warningStyle: React.CSSProperties = {
+  backgroundColor: '#fef2f2',
+  border: '1px solid #fecaca',
+  color: '#991b1b',
+  borderRadius: '8px',
+  padding: '12px 14px',
+  fontSize: '13px',
+  lineHeight: 1.5,
+};
+
+const warningTitleStyle: React.CSSProperties = {
+  fontWeight: 600,
+  margin: 0,
+};
+
+const commitStyle: React.CSSProperties = {
+  backgroundColor: '#f4f0ff',
+  border: '1px solid #ddd6fe',
+  color: '#4c1d95',
+  borderRadius: '8px',
+  padding: '12px 14px',
+  fontSize: '13px',
+  lineHeight: 1.5,
+};
+
+const commitTitleStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontWeight: 600,
+  margin: 0,
+};
+
+const footerStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  padding: '16px 20px',
+  borderTop: '1px solid #e5e7eb',
+  justifyContent: 'flex-end',
+};
+
+const cancelBtnStyle: React.CSSProperties = {
+  padding: '8px 14px',
+  fontSize: '13px',
+  fontWeight: 500,
+  borderRadius: '8px',
+  backgroundColor: 'white',
+  color: '#374151',
+  border: '1px solid #e5e7eb',
+  cursor: 'pointer',
+};
+
+const acceptBtnStyle: React.CSSProperties = {
+  padding: '8px 14px',
+  fontSize: '13px',
+  fontWeight: 500,
+  borderRadius: '8px',
+  backgroundColor: '#7C3AED',
+  color: 'white',
+  border: 'none',
+  cursor: 'pointer',
+};
+
 export function DeclarationModal({ isOpen, onClose, onAccept, connectorName }: DeclarationModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-red-600">
-            <AlertTriangle className="w-6 h-6" />
-            <h2 className="text-xl font-bold">THIRD-PARTY CONNECTION DECLARATION</h2>
+    <div style={overlayStyle}>
+      <div style={modalStyle}>
+        <div style={headerStyle}>
+          <div style={headerLeftStyle}>
+            <AlertTriangle size={18} />
+            <h2 style={headerTitleStyle}>Third-party connection</h2>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
-            <X className="w-5 h-5 text-gray-500" />
+          <button onClick={onClose} style={closeBtnStyle} aria-label="Close">
+            <X size={18} color="#6b7280" />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
-          <p className="text-lg font-medium">
-            You are about to connect GORKA to: <span className="text-blue-600">{connectorName}</span>
+        <div style={bodyStyle}>
+          <p style={introStyle}>
+            You are about to connect GORKA to <span style={introNameStyle}>{connectorName}</span>.
           </p>
 
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="font-semibold text-red-700">🔴 IMPORTANT NOTICE:</p>
-            <p className="text-red-700 mt-2">
-              GORKA provides the technical capability to connect to third-party services.
-              However, GORKA does NOT control, and is NOT responsible for:
+          <div style={warningStyle}>
+            <p style={warningTitleStyle}>You are responsible for this third party.</p>
+            <ul style={listStyle}>
+              <li>{connectorName} is outside GORKA's control.</li>
+              <li>GORKA does not guarantee their security, compliance, or data handling.</li>
+              <li>You are responsible for any data transmitted to them.</li>
+              <li>You have reviewed their terms.</li>
+              <li>You may disconnect at any time.</li>
+            </ul>
+          </div>
+
+          <div style={commitStyle}>
+            <p style={commitTitleStyle}>
+              <ShieldCheck size={16} />
+              GORKA's commitment
             </p>
-            <ul className="list-disc list-inside text-red-700 mt-2 space-y-1">
-              <li>The security, privacy, or data handling practices of third parties</li>
-              <li>How third parties store, process, or transmit your data</li>
-              <li>Compliance of third parties with applicable data protection laws</li>
-              <li>Data breaches or security incidents occurring at third parties</li>
+            <ul style={listStyle}>
+              <li>Your credential is stored locally on this device, encrypted at rest.</li>
+              <li>The credential never reaches GORKA's cloud.</li>
+              <li>GORKA cannot read your debtor data.</li>
             </ul>
           </div>
+        </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="font-semibold text-blue-700">✅ By connecting this service, you acknowledge and agree that:</p>
-            <ol className="list-decimal list-inside text-blue-700 mt-2 space-y-1">
-              <li>You have reviewed and accepted the third party's privacy policy</li>
-              <li>You assume all responsibility for any data transmitted</li>
-              <li>You may disconnect this service at any time</li>
-            </ol>
-          </div>
-
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="font-semibold text-green-700">🔒 GORKA's Commitment:</p>
-            <ul className="list-disc list-inside text-green-700 mt-2 space-y-1">
-              <li>Your data remains on your infrastructure by default</li>
-              <li>No data is shared without your explicit consent</li>
-              <li>All third-party credentials are encrypted at rest</li>
-            </ul>
-          </div>
-
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              CANCEL
-            </button>
-            <button
-              onClick={onAccept}
-              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-            >
-              I UNDERSTAND & CONNECT
-            </button>
-          </div>
+        <div style={footerStyle}>
+          <button onClick={onClose} style={cancelBtnStyle}>
+            Cancel
+          </button>
+          <button onClick={onAccept} style={acceptBtnStyle}>
+            I understand & connect
+          </button>
         </div>
       </div>
     </div>

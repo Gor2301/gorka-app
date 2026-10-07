@@ -31,10 +31,14 @@ export const connectorsService = {
     return body?.data?.rows ?? [];
   },
 
-  async enable(connectorCode: string): Promise<EnablementRow | null> {
+  async enable(
+    connectorCode: string,
+    options?: { zone3Acknowledged?: boolean },
+  ): Promise<EnablementRow | null> {
     const body = await api.post<any>('/connectors/enable', {
       connectorCode,
       credentialsLocation: 'LOCAL',
+      zone3Acknowledged: options?.zone3Acknowledged === true,
     });
     return body?.data ?? null;
   },

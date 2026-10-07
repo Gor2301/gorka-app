@@ -8,6 +8,7 @@ const router = Router();
 const enableSchema = z.object({
   connectorCode: z.string().min(1),
   credentialsLocation: z.enum(['CLOUD', 'LOCAL']),
+  zone3Acknowledged: z.boolean().optional(),
 });
 
 const disableSchema = z.object({
@@ -65,7 +66,7 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
       });
     }
 
-    const { connectorCode, credentialsLocation } = parsed.data;
+    const { connectorCode, credentialsLocation, zone3Acknowledged } = parsed.data;
 
     if (credentialsLocation === 'CLOUD') {
       return res.status(400).json({
@@ -88,27 +89,43 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
       });
     }
 
-    const row = await prisma.clientConnector.upsert({
-      where: {
-        organizationId_connectorCode: {
+    const row = await prisma.$transaction(async (tx) => {
+      const upserted = await tx.clientConnector.upsert({
+        where: {
+          organizationId_connectorCode: {
+            organizationId: user.organizationId,
+            connectorCode,
+          },
+        },
+        create: {
           organizationId: user.organizationId,
           connectorCode,
+          status: 'CONNECTED',
+          credentialsLocation,
+          connectedAt: new Date(),
         },
-      },
-      create: {
-        organizationId: user.organizationId,
-        connectorCode,
-        status: 'CONNECTED',
-        credentialsLocation,
-        connectedAt: new Date(),
-      },
-      update: {
-        status: 'CONNECTED',
-        credentialsLocation,
-        connectedAt: new Date(),
-        disconnectedAt: null,
-        suspendedReason: null,
-      },
+        update: {
+          status: 'CONNECTED',
+          credentialsLocation,
+          connectedAt: new Date(),
+          disconnectedAt: null,
+          suspendedReason: null,
+        },
+      });
+
+      if (zone3Acknowledged === true) {
+        await tx.organizationAuditEvent.create({
+          data: {
+            organizationId: user.organizationId,
+            eventType: 'ZONE_3_CONNECTION_ACKNOWLEDGED',
+            actorId: user.id,
+            actorName: user.email ?? null,
+            details: { connectorCode, tier: 'TIER2' },
+          },
+        });
+      }
+
+      return upserted;
     });
 
     return res.status(200).json({ success: true, data: row });
