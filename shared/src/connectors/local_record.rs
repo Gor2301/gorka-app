@@ -5,12 +5,31 @@
 
 use rusqlite::{params, Connection, OptionalExtension};
 
+use crate::sync::encode_connector_enabled_payload;
+use crate::sync_events::{self, ENTITY_CONNECTOR, EVENT_CONNECTOR_ENABLED};
+
 pub struct LocalConnectorInput {
     pub connector_code: String,
     pub tier: String,
     pub status: String,
     pub credential_value: Vec<u8>,
     pub configuration: String,
+}
+
+/// Read-model view of a local_connectors row.
+///
+/// Deliberately omits credential_value. The read model is what
+/// the UI and the sync layer's own inspection helpers consume;
+/// it must never carry the secret. If a future need requires the
+/// credential, read it by a dedicated function whose name says
+/// so, not by widening this struct.
+pub struct LocalConnectorRow {
+    pub connector_code: String,
+    pub tier: String,
+    pub status: String,
+    pub configuration: String,
+    pub source_device_id: String,
+    pub updated_at: String,
 }
 
 pub fn upsert_local_connector(
@@ -70,3 +89,90 @@ pub fn upsert_local_connector(
     Ok(())
 }
 
+/// Write the local record and originate a CONNECTOR_ENABLED event
+/// in one transaction.
+///
+/// The state change and the sync_events row commit or roll back
+/// together (SYNC-ARCHITECTURE.md Section 25.4.1). There is no
+/// state in which one exists without the other.
+///
+/// This is the write path the Client Dashboard's
+/// write_local_connector_credential command uses. Every local
+/// connector write is intended to reach the other devices.
+pub fn upsert_local_connector_with_event(
+    conn: &mut Connection,
+    organization_id: &str,
+    source_device_id: &str,
+    input: LocalConnectorInput,
+) -> Result<(), String> {
+    let enabled_at_ms = chrono::Utc::now().timestamp_millis() as u64;
+
+    // Build the payload before opening the transaction, so any
+    // serialization problem fails before any write.
+    let payload = encode_connector_enabled_payload(
+        &input.connector_code,
+        &input.tier,
+        &input.credential_value,
+        &input.configuration,
+        enabled_at_ms,
+    );
+    let connector_code = input.connector_code.clone();
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    upsert_local_connector(&tx, organization_id, source_device_id, input)?;
+
+    // Section 25.14.5 explicitly says: no entity_field_state rows
+    // for CONNECTOR events. The fields_set argument is empty on
+    // purpose. CONNECTOR records do not participate in field-level
+    // reconciliation.
+    sync_events::originate_event(
+        &tx,
+        organization_id,
+        EVENT_CONNECTOR_ENABLED,
+        ENTITY_CONNECTOR,
+        &connector_code,
+        &payload,
+        &[],
+    )?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Read the enabled connector rows for one organization.
+///
+/// Returns the read model (no credential_value). Rows are ordered
+/// by connector_code so the UI shows a stable list.
+pub fn list_local_connectors(
+    conn: &Connection,
+    organization_id: &str,
+) -> Result<Vec<LocalConnectorRow>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT connector_code, tier, status, configuration, source_device_id, updated_at
+             FROM local_connectors
+             WHERE organization_id = ?1
+             ORDER BY connector_code ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map(params![organization_id], |row| {
+            Ok(LocalConnectorRow {
+                connector_code: row.get(0)?,
+                tier: row.get(1)?,
+                status: row.get(2)?,
+                configuration: row.get(3)?,
+                source_device_id: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
