@@ -1117,6 +1117,9 @@ fn event_type_code(s: &str) -> Result<u16, String> {
         "ENTITY_UPDATED" => Ok(0x0002),
         "ACTION_CREATED" => Ok(0x0003),
         "COMMUNICATION_LOGGED" => Ok(0x0004),
+        "CONNECTOR_ENABLED" => Ok(0x0005),
+        "CONNECTOR_DISABLED" => Ok(0x0006),
+        "CONNECTOR_CREDENTIAL_REPLACED" => Ok(0x0007),
         _ => Err(format!("unknown event_type {}", s)),
     }
 }
@@ -1126,6 +1129,7 @@ fn entity_type_code(s: &str) -> Result<u8, String> {
         "debtor" => Ok(0x01),
         "action" => Ok(0x03),
         "communication" => Ok(0x04),
+        "connector" => Ok(0x06),
         _ => Err(format!("unknown entity_type {}", s)),
     }
 }
