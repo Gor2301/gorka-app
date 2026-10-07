@@ -4,6 +4,7 @@
 // Phase B3 of the Connection Center work.
 
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::Serialize;
 
 use crate::sync::encode_connector_enabled_payload;
 use crate::sync_events::{self, ENTITY_CONNECTOR, EVENT_CONNECTOR_ENABLED};
@@ -23,6 +24,7 @@ pub struct LocalConnectorInput {
 /// it must never carry the secret. If a future need requires the
 /// credential, read it by a dedicated function whose name says
 /// so, not by widening this struct.
+#[derive(Serialize)]
 pub struct LocalConnectorRow {
     pub connector_code: String,
     pub tier: String,
