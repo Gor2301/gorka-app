@@ -12,7 +12,7 @@
 //
 // Nothing here is Tauri-specific.
 
-use rusqlite::{params, Transaction, Connection};
+use rusqlite::{params, Transaction, Connection, OptionalExtension};
 use uuid::Uuid;
 use chrono::Utc;
 
