@@ -24,8 +24,12 @@ use crate::sync_parse::{
     parse_entity_updated_payload,
     parse_action_created_payload,
     parse_communication_logged_payload,
+    parse_connector_enabled_payload,
+    parse_connector_disabled_payload,
+    parse_connector_credential_replaced_payload,
     EventRecord,
 };
+use crate::db;
 
 // ---------------------------------------------------------------
 // Constants
@@ -35,10 +39,14 @@ const EVT_DEBTOR_CREATED: u16 = 0x0001;
 const EVT_ENTITY_UPDATED: u16 = 0x0002;
 const EVT_ACTION_CREATED: u16 = 0x0003;
 const EVT_COMMUNICATION_LOGGED: u16 = 0x0004;
+const EVT_CONNECTOR_ENABLED: u16 = 0x0005;
+const EVT_CONNECTOR_DISABLED: u16 = 0x0006;
+const EVT_CONNECTOR_CREDENTIAL_REPLACED: u16 = 0x0007;
 
 const ENT_DEBTOR: u8 = 0x01;
 const ENT_ACTION: u8 = 0x03;
 const ENT_COMMUNICATION: u8 = 0x04;
+const ENT_CONNECTOR: u8 = 0x06;
 
 // ---------------------------------------------------------------
 // Public types
@@ -125,6 +133,21 @@ fn process_event(
         return Ok(AckOutcome::Rejected);
     }
 
+    // Deferred CONNECTOR apply paths (this slice only).
+    //
+    // Recognized and validated above. Not applied. Terminal reject.
+    // Rationale: SYNC-ARCHITECTURE.md Section 25.15.5 and 25.16.5
+    // contradict Section 12.9 (order independence). Resolution
+    // requires a frozen-doc amendment; not this slice. Returning
+    // Ok(Rejected) is a clean per-event outcome: the transaction
+    // drops, nothing is written, and the batch continues.
+    if matches!(
+        event.event_type,
+        EVT_CONNECTOR_DISABLED | EVT_CONNECTOR_CREDENTIAL_REPLACED
+    ) {
+        return Ok(AckOutcome::Rejected);
+    }
+
     // Accept: advance the clock, append the event.
     advance_logical_clock(&tx, organization_id, event.logical_clock)?;
     append_event_to_log(&tx, organization_id, event)?;
@@ -146,12 +169,18 @@ fn process_event(
 fn valid_event_type(code: u16) -> bool {
     matches!(
         code,
-        EVT_DEBTOR_CREATED | EVT_ENTITY_UPDATED | EVT_ACTION_CREATED | EVT_COMMUNICATION_LOGGED
+        EVT_DEBTOR_CREATED
+            | EVT_ENTITY_UPDATED
+            | EVT_ACTION_CREATED
+            | EVT_COMMUNICATION_LOGGED
+            | EVT_CONNECTOR_ENABLED
+            | EVT_CONNECTOR_DISABLED
+            | EVT_CONNECTOR_CREDENTIAL_REPLACED
     )
 }
 
 fn valid_entity_type(code: u8) -> bool {
-    matches!(code, ENT_DEBTOR | ENT_ACTION | ENT_COMMUNICATION)
+    matches!(code, ENT_DEBTOR | ENT_ACTION | ENT_COMMUNICATION | ENT_CONNECTOR)
 }
 
 // ---------------------------------------------------------------
@@ -207,6 +236,38 @@ fn validate_event_semantics(event: &EventRecord) -> Result<(), String> {
             match p.direction.as_str() {
                 "INBOUND" | "OUTBOUND" => {}
                 _ => return Err("COMMUNICATION_LOGGED: invalid direction".to_string()),
+            }
+        }
+        EVT_CONNECTOR_ENABLED => {
+            let p = parse_connector_enabled_payload(&event.payload)?;
+            if p.connector_code.is_empty() {
+                return Err("CONNECTOR_ENABLED: connector_code is empty".to_string());
+            }
+            match p.tier.as_str() {
+                "TIER1" | "TIER2" => {}
+                _ => return Err("CONNECTOR_ENABLED: invalid tier".to_string()),
+            }
+            if p.credential_value.is_empty() {
+                return Err("CONNECTOR_ENABLED: credential_value is empty".to_string());
+            }
+        }
+        EVT_CONNECTOR_DISABLED => {
+            let p = parse_connector_disabled_payload(&event.payload)?;
+            if p.connector_code.is_empty() {
+                return Err("CONNECTOR_DISABLED: connector_code is empty".to_string());
+            }
+        }
+        EVT_CONNECTOR_CREDENTIAL_REPLACED => {
+            let p = parse_connector_credential_replaced_payload(&event.payload)?;
+            if p.connector_code.is_empty() {
+                return Err(
+                    "CONNECTOR_CREDENTIAL_REPLACED: connector_code is empty".to_string()
+                );
+            }
+            if p.credential_value.is_empty() {
+                return Err(
+                    "CONNECTOR_CREDENTIAL_REPLACED: credential_value is empty".to_string()
+                );
             }
         }
         _ => return Err("unknown event type".to_string()),
@@ -298,6 +359,7 @@ fn advance_logical_clock(
 fn prerequisite_exists(tx: &Transaction, event: &EventRecord) -> Result<bool, String> {
     match event.event_type {
         EVT_DEBTOR_CREATED => Ok(true),
+        EVT_CONNECTOR_ENABLED => Ok(true),
         EVT_ENTITY_UPDATED => {
             let entity_id_str = String::from_utf8(event.entity_id.clone())
                 .map_err(|_| "entity_id not UTF-8".to_string())?;
@@ -391,6 +453,7 @@ fn apply_event(
         EVT_ENTITY_UPDATED => apply_entity_updated(tx, organization_id, event),
         EVT_ACTION_CREATED => apply_action_created(tx, organization_id, event),
         EVT_COMMUNICATION_LOGGED => apply_communication_logged(tx, organization_id, event),
+        EVT_CONNECTOR_ENABLED => apply_connector_enabled(tx, organization_id, event),
         _ => Err("unsupported event type".to_string()),
     }
 }
@@ -592,6 +655,101 @@ fn apply_communication_logged(
     for field in ["debtor_id", "communication_type", "direction", "content"] {
         set_field_winner(tx, "communication", &entity_id_str, field, event)?;
     }
+    Ok(())
+}
+
+// ---------------------------------------------------------------
+// apply_connector_enabled (SYNC-ARCHITECTURE.md Section 25.14.5)
+// ---------------------------------------------------------------
+
+/// Apply a CONNECTOR_ENABLED event.
+///
+/// Per Section 25.14.5:
+///   1. Determine whether a connector local record exists for this
+///      connector_code and this device's organization_id. Insert
+///      if not present; update if present.
+///   2. Write an entry to the application audit log.
+///
+/// Steps 3 (advance the logical clock) and 4 (append the event to
+/// sync_events) are already performed by process_event before this
+/// function is called. They are not repeated here.
+///
+/// No entity_field_state rows are written for CONNECTOR events
+/// (Section 25.14.5). CONNECTOR records do not participate in
+/// field-level reconciliation.
+///
+/// Note on source_device_id: the Client's origination side
+/// currently passes the literal "local-device" as source_device_id
+/// in its local_connectors write. That is a placeholder, not the
+/// wire-origin id. The receiver here stores the real wire
+/// device_id (hex) so the local record reflects the device that
+/// last wrote this connector. The two fields are not expected to
+/// match.
+fn apply_connector_enabled(
+    tx: &Transaction,
+    organization_id: &str,
+    event: &EventRecord,
+) -> Result<(), String> {
+    let connector_code = String::from_utf8(event.entity_id.clone())
+        .map_err(|_| "connector entity_id not UTF-8".to_string())?;
+    let p = parse_connector_enabled_payload(&event.payload)?;
+    let now = ms_to_rfc3339(event.created_at_ms);
+    let source_device_id = hex::encode(&event.device_id);
+
+    let existing_id: Option<String> = tx
+        .query_row(
+            "SELECT id FROM local_connectors WHERE organization_id = ?1 AND connector_code = ?2",
+            params![organization_id, &connector_code],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    match existing_id {
+        Some(id) => {
+            tx.execute(
+                "UPDATE local_connectors SET tier = ?1, status = 'ENABLED', credential_value = ?2, configuration = ?3, source_device_id = ?4, updated_at = ?5 WHERE id = ?6",
+                params![
+                    &p.tier,
+                    &p.credential_value,
+                    &p.configuration,
+                    &source_device_id,
+                    &now,
+                    &id,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        None => {
+            let id = Uuid::new_v4().to_string();
+            tx.execute(
+                "INSERT INTO local_connectors (id, connector_code, organization_id, tier, status, credential_value, configuration, source_device_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, 'ENABLED', ?5, ?6, ?7, ?8, ?8)",
+                params![
+                    &id,
+                    &connector_code,
+                    organization_id,
+                    &p.tier,
+                    &p.credential_value,
+                    &p.configuration,
+                    &source_device_id,
+                    &now,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    // Section 25.14.5 step 2: write an application audit entry.
+    // The audit action name is implementation-level, not a wire
+    // event type. Wire: CONNECTOR_ENABLED. Audit: SYNC_CONNECTOR_ENABLED.
+    db::log_audit(
+        tx,
+        "SYNC_CONNECTOR_ENABLED",
+        Some(&connector_code),
+        1,
+        "Applied CONNECTOR_ENABLED from sync",
+    )?;
+
     Ok(())
 }
 
@@ -825,6 +983,9 @@ fn event_type_string(code: u16) -> Result<&'static str, String> {
         EVT_ENTITY_UPDATED => Ok("ENTITY_UPDATED"),
         EVT_ACTION_CREATED => Ok("ACTION_CREATED"),
         EVT_COMMUNICATION_LOGGED => Ok("COMMUNICATION_LOGGED"),
+        EVT_CONNECTOR_ENABLED => Ok("CONNECTOR_ENABLED"),
+        EVT_CONNECTOR_DISABLED => Ok("CONNECTOR_DISABLED"),
+        EVT_CONNECTOR_CREDENTIAL_REPLACED => Ok("CONNECTOR_CREDENTIAL_REPLACED"),
         _ => Err(format!("unknown event type 0x{:04x}", code)),
     }
 }
@@ -834,6 +995,7 @@ fn entity_type_string(code: u8) -> Result<&'static str, String> {
         ENT_DEBTOR => Ok("debtor"),
         ENT_ACTION => Ok("action"),
         ENT_COMMUNICATION => Ok("communication"),
+        ENT_CONNECTOR => Ok("connector"),
         _ => Err(format!("unknown entity type 0x{:02x}", code)),
     }
 }
