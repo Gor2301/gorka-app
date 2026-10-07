@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { auth } from '../services/local.db';
 import SyncIndicator from './SyncIndicator';
@@ -8,8 +9,37 @@ interface AppShellProps {
   onLogout: () => void;
 }
 
+const PAGE_TITLES: Record<string, string> = {
+  '/': 'Dashboard',
+  '/dashboard': 'Dashboard',
+  '/agents': 'Agents',
+  '/collections': 'Collections',
+  '/upload': 'Data Upload',
+  '/audit': 'Audit Logs',
+  '/permissions': 'Permissions',
+  '/analytics': 'Analytics',
+  '/billing': 'Billing',
+  '/settings': 'Settings',
+  '/compliance': 'Compliance Report',
+  '/data-flow-audit': 'Data Flow Audit',
+  '/calendar': 'Calendar',
+  '/connectors': 'Connectors',
+  '/support': 'Support',
+  '/status': 'GORKA Status',
+  '/my-requests': 'My Requests',
+};
+
+function deriveTitle(pathname: string): string {
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  const seg = pathname.split('/').filter(Boolean)[0];
+  if (seg && PAGE_TITLES['/' + seg]) return PAGE_TITLES['/' + seg];
+  return 'Dashboard';
+}
+
 const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
   const [displayName, setDisplayName] = useState<string>('');
+  const location = useLocation();
+  const title = deriveTitle(location.pathname);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,7 +55,7 @@ const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
         if (cancelled) return;
         setDisplayName(email ?? '');
       } catch {
-        // no-op; displayName stays empty
+        // no-op
       }
     })();
     return () => {
@@ -38,7 +68,6 @@ const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
       <Sidebar onLogout={onLogout} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* CONTENT HEADER */}
         <header style={{
           backgroundColor: 'white',
           borderBottom: '1px solid #e5e7eb',
@@ -50,7 +79,7 @@ const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
           height: '73px'
         }}>
           <h1 style={{ fontSize: '20px', fontWeight: '600', margin: 0 }}>
-            Dashboard
+            {title}
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <SyncIndicator />
@@ -81,7 +110,6 @@ const AppShell: React.FC<AppShellProps> = ({ children, onLogout }) => {
           </div>
         </header>
 
-        {/* CONTENT */}
         <main style={{
           flex: 1,
           padding: '24px',
