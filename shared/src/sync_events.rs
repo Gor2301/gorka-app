@@ -23,12 +23,16 @@ use rand::RngCore;
 pub const ENTITY_DEBTOR: &str = "debtor";
 pub const ENTITY_ACTION: &str = "action";
 pub const ENTITY_COMMUNICATION: &str = "communication";
+pub const ENTITY_CONNECTOR: &str = "connector";
 
 // Event type strings as stored in sync_events.event_type.
 pub const EVENT_DEBTOR_CREATED: &str = "DEBTOR_CREATED";
 pub const EVENT_ENTITY_UPDATED: &str = "ENTITY_UPDATED";
 pub const EVENT_ACTION_CREATED: &str = "ACTION_CREATED";
 pub const EVENT_COMMUNICATION_LOGGED: &str = "COMMUNICATION_LOGGED";
+pub const EVENT_CONNECTOR_ENABLED: &str = "CONNECTOR_ENABLED";
+pub const EVENT_CONNECTOR_DISABLED: &str = "CONNECTOR_DISABLED";
+pub const EVENT_CONNECTOR_CREDENTIAL_REPLACED: &str = "CONNECTOR_CREDENTIAL_REPLACED";
 
 /// Ensure the sync_state row exists. Generates the 16-byte local
 /// replica identifier on first call and stores it in
