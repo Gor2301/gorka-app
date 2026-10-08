@@ -1,4 +1,4 @@
-.send-sms-modal__overlay {
+.send-message-modal__overlay {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -9,7 +9,7 @@
   background-color: rgba(0, 0, 0, 0.4);
 }
 
-.send-sms-modal {
+.send-message-modal {
   background-color: white;
   border-radius: 12px;
   width: 480px;
@@ -20,7 +20,7 @@
   overflow: hidden;
 }
 
-.send-sms-modal__header {
+.send-message-modal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -28,14 +28,14 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-.send-sms-modal__title {
+.send-message-modal__title {
   font-size: 15px;
   font-weight: 600;
   margin: 0;
   color: var(--color-text);
 }
 
-.send-sms-modal__close {
+.send-message-modal__close {
   padding: 4px;
   background: none;
   border: none;
@@ -43,7 +43,7 @@
   color: var(--color-text-muted);
 }
 
-.send-sms-modal__body {
+.send-message-modal__body {
   padding: 20px;
   overflow-y: auto;
   display: flex;
@@ -51,27 +51,27 @@
   gap: 14px;
 }
 
-.send-sms-modal__muted {
+.send-message-modal__muted {
   margin: 0;
   font-size: 13px;
   color: var(--color-text-muted);
 }
 
-.send-sms-modal__field {
+.send-message-modal__field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.send-sms-modal__label {
+.send-message-modal__label {
   font-size: 12px;
   font-weight: 500;
   color: var(--color-text-muted);
 }
 
-.send-sms-modal__input,
-.send-sms-modal__select,
-.send-sms-modal__textarea {
+.send-message-modal__input,
+.send-message-modal__select,
+.send-message-modal__textarea {
   width: 100%;
   padding: 8px 10px;
   font-size: 13px;
@@ -81,18 +81,18 @@
   box-sizing: border-box;
 }
 
-.send-sms-modal__textarea {
+.send-message-modal__textarea {
   resize: vertical;
   min-height: 100px;
 }
 
-.send-sms-modal__hint {
+.send-message-modal__hint {
   font-size: 11px;
   color: var(--color-text-muted);
   text-align: right;
 }
 
-.send-sms-modal__footer {
+.send-message-modal__footer {
   display: flex;
   gap: 8px;
   padding: 16px 20px;

@@ -24,7 +24,7 @@ import DebtEditModal from '@/components/DebtEditModal';
 import ActionEditModal from '@/components/ActionEditModal';
 import CommunicationEditModal from '@/components/CommunicationEditModal';
 import RelationEditModal, { RelationRole } from '@/components/RelationEditModal';
-import SendSmsModal from '@/components/SendSmsModal';
+import SendMessageModal from '@/components/SendMessageModal';
 import './DebtorProfilePage.css';
 
 const DOCUMENT_CATEGORIES: { value: string; label: string }[] = [
@@ -925,10 +925,9 @@ export default function DebtorProfilePage() {
       </Card>
 
       {showSendSms && debtor && id && (
-        <SendSmsModal
+        <SendMessageModal
           debtorId={id}
           debtorName={`${debtor.name} ${debtor.surname}`.trim()}
-          initialPhone={debtor.phone || ''}
           onClose={() => setShowSendSms(false)}
           onSent={() => {
             setShowSendSms(false);
