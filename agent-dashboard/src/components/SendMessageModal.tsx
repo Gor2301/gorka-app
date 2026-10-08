@@ -50,6 +50,7 @@ export default function SendMessageModal({
   const [debtorPhone, setDebtorPhone] = useState('');
   const [debtorEmail, setDebtorEmail] = useState('');
   const [to, setTo] = useState('');
+  const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -61,7 +62,13 @@ export default function SendMessageModal({
           localDB.listLocalConnectors(),
           localDB.getDebtor(debtorId),
         ]);
-        const enabled = rows.filter((r) => r.status === 'ENABLED');
+        const enabled = rows.filter(
+          (r) =>
+            r.status === 'ENABLED' &&
+            (r.connector_code.endsWith('-sms') ||
+              r.connector_code.endsWith('-email') ||
+              r.connector_code.endsWith('-voice')),
+        );
         setConnectors(enabled);
         const phone = debtor.phone ?? '';
         const email = debtor.email ?? '';
@@ -86,6 +93,7 @@ export default function SendMessageModal({
   const handleConnectorChange = (newCode: string) => {
     setSelectedCode(newCode);
     setTo(defaultRecipientFor(newCode, debtorPhone, debtorEmail));
+    setSubject('');
   };
 
   const handleSend = async () => {
@@ -95,6 +103,11 @@ export default function SendMessageModal({
     }
     if (!to.trim()) {
       setError('Recipient is required.');
+      return;
+    }
+    const isEmail = selectedCode.endsWith('-email');
+    if (isEmail && !subject.trim()) {
+      setError('Subject is required for email.');
       return;
     }
     if (!body.trim()) {
@@ -109,6 +122,7 @@ export default function SendMessageModal({
         connectorCode: selectedCode,
         debtorId,
         to: to.trim(),
+        subject: isEmail ? subject.trim() : null,
         body: body.trim(),
       };
       await localDB.sendConnectorMessage(input);
@@ -126,6 +140,7 @@ export default function SendMessageModal({
   const recipientPlaceholder = selectedCode
     ? recipientPlaceholderFor(selectedCode)
     : '';
+  const isEmail = selectedCode.endsWith('-email');
 
   return (
     <div className="send-message-modal__overlay">
@@ -181,6 +196,19 @@ export default function SendMessageModal({
                   placeholder={recipientPlaceholder}
                 />
               </label>
+
+              {isEmail && (
+                <label className="send-message-modal__field">
+                  <span className="send-message-modal__label">Subject</span>
+                  <input
+                    type="text"
+                    className="send-message-modal__input"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Subject"
+                  />
+                </label>
+              )}
 
               <label className="send-message-modal__field">
                 <span className="send-message-modal__label">Message</span>
