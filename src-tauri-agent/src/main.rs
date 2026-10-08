@@ -236,7 +236,6 @@ fn get_debtor_count(
 }
 
 #[command]
-#[command]
 fn list_local_connectors(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
