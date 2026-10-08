@@ -1,18 +1,23 @@
 RESUME-HERE.md — Full Chat Summary and Handoff
-Version 2.2 — written at close of the Send-from-Agent (Twilio SMS) code slice.
+Version 2.3 — written at close of the planning session for Slice 5.
 
 This one document is both the summary of this chat and the resume state.
 Save it at GORKA_RECOVERY\recovery-notes\RESUME-HERE.md. Open it at the start
 of the next chat. Everything needed to resume without reconnaissance is here.
 
+READ ALONGSIDE
+  GORKA_RECOVERY/recovery-notes/SLICE-5-SPEC.md — the implementation-ready
+  spec for the next slice. Paste both files into the new chat.
+
 ================================================================
 1. MACHINE STATE AT CLOSE
 ================================================================
 
-MAIN:    HEAD 03a7a67. Pushed. origin/main = 03a7a67. Clean tree except
+MAIN:    HEAD 602008f. Pushed. origin/main = 602008f. Clean tree except
          untracked CHAT-HANDOFF-DUMP.txt and make-dump.ps1.
-CLOUD:   03a7a67 after last pull. Build PASS (Agent 2 / Client 3 / shared 9
-         warnings). Tests 112/112. Live demo NOT run — see §2c.
+CLOUD:   at 03a7a67 after last pull. Will pick up 602008f on next pull.
+         Build PASS, tests 112/112. Live demo of Slice 4 not yet run
+         (unblocked by Slice 5 — see §2c).
 
 Commits since the prior origin/main of 8991746:
 
@@ -48,6 +53,9 @@ Slice 4 — Send-from-agent (Twilio SMS) (seven commits, HEAD 03a7a67):
   bcea29f  agent: add test_connector_connection and send_connector_message
   5a78569  connectors: derive Serialize on SendResult
   4093cc0  local_record: add read_local_connector_credential
+
+Handoff doc v2.2:
+  602008f  RESUME-HERE: v2.2, Slice 4 code complete, live demo deferred
 
 Safe resume check:
 
@@ -89,7 +97,7 @@ WHAT SHIPPED
   card per row, exact spec 11.8 sentence preserved as empty state.
 - agent-dashboard/src/pages/CommunicationToolsPage.css — grid, card, badge
   classes added; empty-state classes unchanged.
-- shared/tests/sync_pipeline.rs — five new tests (see §3).
+- shared/tests/sync_pipeline.rs — five new tests.
 
 ================================================================
 2b. SLICE 1 — TIER 1 DECLARATION GATE — COMPLETE
@@ -118,26 +126,23 @@ WHAT SHIPPED
 
 DESIGN DECISION — audit event name
 Distinct event type, not a reuse of ZONE_3_CONNECTION_ACKNOWLEDGED.
-Tier 1 is honest disclosure, Tier 2 is a warning. Two declarations,
-one per tier. One audit event type per tier makes compliance queries
-trivial without JSONB extraction.
+One audit event type per tier.
 
 ================================================================
 2c. SLICE 4 — SEND-FROM-AGENT (TWILIO SMS) — CODE COMPLETE
 ================================================================
 
 GOAL (achieved in code)
-An Agent user, on a debtor profile, clicks Send SMS next to the phone.
-A modal opens. On send, the Agent reads the twilio-sms credential from
-its local SQLCipher, calls the Twilio adapter, receives a provider
-message id, and writes a communications row. That row originates a
+An Agent user, on a debtor profile, opens a modal, composes a message.
+On send, the Agent reads the connector's credential from its local
+SQLCipher, calls the provider adapter, receives a provider message id,
+and writes a communications row. That row originates a
 COMMUNICATION_LOGGED sync event, which propagates back to the Client.
 
 WHAT SHIPPED
 - shared/src/connectors/local_record.rs: read_local_connector_credential.
   Returns Option<LocalConnectorSecret> with credential_value and parsed
-  configuration. The struct name makes the secret explicit; no other
-  read path returns credential_value.
+  configuration. The struct name makes the secret explicit.
 - shared/src/connectors/mod.rs: SendResult derives Serialize so Tauri
   commands can return it to the frontend.
 - src-tauri-agent/src/main.rs: test_connector_connection and
@@ -156,33 +161,40 @@ WHAT SHIPPED
   phone row, modal mount, refresh on send.
 - prisma/seed-connectors.ts: twilio-sms mvpStatus flipped COMING_SOON → LIVE.
 
-LIVE DEMO — NOT RUN. Blocked by a missing code path.
-  The Client UI routes connectors by catalog.isManagedByGorka:
-    Tier 1 (isManagedByGorka: true) → Connect button → /api/connectors/enable
-      → audit row + cloud client_connectors CONNECTED. Does NOT write
-      local_connectors. Does NOT originate CONNECTOR_ENABLED.
-    Tier 2 (isManagedByGorka: false) → Add my credentials → the
-      write_local_connector_credential Tauri command → local write + event.
-  twilio-sms is isManagedByGorka: true, so clicking Connect on the Client
-  does not deliver the credential to the Agent. The Agent's Send modal
-  finds zero SMS connectors and the demo stalls at the modal step.
+LIVE DEMO — DEFERRED, UNBLOCKED BY SLICE 5
+  Root cause of the deferral: the Client UI routes connectors by
+  catalog.isManagedByGorka. Tier 1 connectors go through
+  /api/connectors/enable, which writes an audit row but does NOT write
+  local_connectors or originate CONNECTOR_ENABLED. twilio-sms is
+  isManagedByGorka:true, so the credential never reaches the Agent.
 
-  This is NOT a bug in Slice 4. It is the gap between Tier 1's UI path
-  (built, writes audit only) and Tier 1's credential provisioning path
-  (not built, funded phase). Tier 1 credential transit from GORKA cloud
-  to the Client device is the missing slice.
+  Slice 5 builds the missing paths — Tier 1 credential delivery and a
+  provider-specific BYOP form — and the demo becomes runnable. See
+  SLICE-5-SPEC.md.
 
-  THREE WAYS FORWARD — pick one when the next session opens:
-    A. Build the Tier 1 provisioning slice. Largest, most correct.
-    B. Flip twilio-sms isManagedByGorka to false temporarily, use the BYOP
-       path, enter real Twilio credentials in the ConfigurationModal.
-       Works today, contradicts the founder's model, needs unwinding.
-    C. Invoke write_local_connector_credential directly from the Client
-       Tauri devtools console. Proves the wire path; requires real Twilio
-       credentials for the send to hit the network.
+================================================================
+2d. SLICE 5 — PLANNED, NOT STARTED
+================================================================
 
-  RECOMMENDATION: A. Build the provisioning slice. It is the missing
-  piece and it is the path the product is designed to use.
+SLICE-5-SPEC.md is the implementation-ready spec. Summary:
+
+  Goal: both channels (Tier 1 + BYOP) for every connector, plus an
+  Agent Communication card on the debtor profile that lists every enabled
+  connector grouped by channel.
+
+  Eleven commits in five groups. TypeScript and backend only. No Rust.
+  No schema migration. No seed change.
+
+  Locked decisions:
+    Two buttons on one card (Connect (GORKA) + Use my own account).
+    Backend stores GORKA credentials in environment variables (MVP
+    shortcut, documented).
+    Resend Tier 1 live. Twilio Tier 1 dormant (env vars unset).
+    Voice: "coming soon" placeholder modal only.
+    Agent Communication card grouped by channel.
+
+  See SLICE-5-SPEC.md for the full spec, file list, commit order,
+  demo script, and first actions.
 
 ================================================================
 3. VERIFICATION
@@ -215,10 +227,9 @@ PROVEN LIVE (screenshots taken)
   and details {"tier":"TIER1","connectorCode":"resend-email"}.
 
 NOT YET PROVEN
-  Cancel-negative for Tier 1. The code path is structurally identical to
-  Tier 2's (verified in B4b). Run before the next Tier 1 change: disconnect
-  Resend, click Connect, click Cancel, verify no new audit row.
-  Slice 4 live demo. Blocked. See §2c.
+  Cancel-negative for Tier 1. Run before the next Tier 1 change:
+  disconnect Resend, click Connect, click Cancel, verify no new audit row.
+  Slice 4 live demo. Unblocked by Slice 5.
 
 ================================================================
 4. KNOWN BEHAVIORS BY DESIGN — NOT BUGS
@@ -230,16 +241,15 @@ CLIENT DISABLE DOES NOT REACH THE AGENT
   event and returns Ok(AckOutcome::Rejected) — nothing is written, the batch
   continues. Pending the SYNC-ARCHITECTURE.md amendment in §7.
 
-TIER 1 CONNECTORS DO NOT SYNC
-  resend-email (and twilio-sms) connect on the Client but do not appear on the
-  Agent. By design. Only the BYOP Tier 2 path calls
-  write_local_connector_credential, which is the event-originating write.
-  Tier 1 sync is the provisioning slice in §14 item 2.
+TIER 1 CONNECTORS DO NOT SYNC — UNTIL SLICE 5
+  Before Slice 5, resend-email (and twilio-sms) connect on the Client but do
+  not appear on the Agent. Only the BYOP Tier 2 path calls
+  write_local_connector_credential. Slice 5 adds the Tier 1 credential
+  delivery so this becomes false.
 
 TIER 1 AUDIT EVENT NAME
   TIER1_CONNECTION_ACKNOWLEDGED is distinct from
-  ZONE_3_CONNECTION_ACKNOWLEDGED. Do not merge them. Different
-  declarations, different legal weight, different audit rows.
+  ZONE_3_CONNECTION_ACKNOWLEDGED. Do not merge them.
 
 ================================================================
 5. SECURITY — ACTION REQUIRED
@@ -254,15 +264,19 @@ log twice. Both are compromised. Rotate:
 Do this before the next live run. Never paste either value into a chat again.
 Every command in §6 uses placeholders.
 
+NEW IN SLICE 5
+  Backend env vars GORKA_RESEND_API_KEY and GORKA_RESEND_FROM will hold
+  GORKA's own Resend credential. These are also secrets. Handle with the
+  same discipline. Never paste them into a chat.
+
 ================================================================
 6. RUN COMMANDS — THE FIXED RUNBOOK
 ================================================================
 
 This section exists because an earlier version of this file lacked it and
-every new chat re-derived these commands. Do not delete it. Do not guess.
-Values are placeholders — fill them in yourself.
+every new chat re-derived these commands. Do not delete it.
 
-LAYOUT FACTS (these cost real time to rediscover):
+LAYOUT FACTS
   - The repo root C:\gorka-app IS the Client Dashboard. Its package.json is
     named "supervisor-dashboard". There is NO supervisor-dashboard\ folder.
   - The backend has NO package.json. It runs directly from root.
@@ -290,19 +304,20 @@ Terminal 1 — Backend
     cd /d C:\gorka-app
     set DATABASE_URL=<pooler url>
     set RESEND_API_KEY=<resend key>
+    set GORKA_RESEND_API_KEY=<gorka resend key>       (Slice 5+)
+    set GORKA_RESEND_FROM=<from address>              (Slice 5+)
     npx tsx src/backend/index.ts
   Wait for "listening on port 3000". Leave running.
 
 Terminal 2 — Client vite
     cd /d C:\gorka-app
     npm run dev
-  Wait for "Local: http://localhost:5173/". Leave running.
+  Wait for "Local: http://localhost:5173/".
 
 Terminal 3 — Agent vite
     cd /d C:\gorka-app\agent-dashboard
     npm run dev
-  Wait for "Local: http://localhost:XXXX/". It must be 5174. If it is not,
-  stop — something else is on 5173.
+  Wait for "Local: http://localhost:5174/". If it is not 5174, stop.
 
 Terminal 4 — Client Tauri window
     cd /d C:\gorka-app
@@ -314,22 +329,7 @@ Terminal 5 — Agent Tauri window
     cargo run --bin gorka-agent
   Window opens. Log in, unlock.
 
-ALTERNATIVE (one command per app, spawns its own vite):
-    Client:  cd /d C:\gorka-app            &&  npm run tauri:dev
-    Agent:   cd /d C:\gorka-app\src-tauri-agent && npx tauri dev
-  The five-terminal form is preferred for a demo — the vite port lines stay
-  visible.
-
-DEMO SEQUENCE — SLICE C (works today)
-  Client: Connectors page. Custom API card. If CONNECTED, click Disable.
-          Click Add my credentials. Zone 3 declaration opens. Accept.
-          Enter a dummy credential. Save.
-  Agent:  Communication Tools. Card appears within 2-3 seconds.
-          custom-api, TIER2, ENABLED. No credential shown.
-  Proof:  Restart the Agent (Terminal 5). Log in, unlock. Card persists.
-
-DEMO SEQUENCE — SLICE 4 (blocked, see §2c)
-  Requires Tier 1 provisioning first.
+DEMO SEQUENCE — SLICE 5 (see SLICE-5-SPEC.md §13)
 
 ================================================================
 7. ARCHITECTURE DEFECT — ESCALATED, NOT FIXED
@@ -339,32 +339,24 @@ SYNC-ARCHITECTURE.md §12.9 states the order-independence invariant: same
 accepted events produce the same final state, regardless of arrival order.
 
 §25.15.5 and §25.16.5 (CONNECTOR_DISABLED, CONNECTOR_CREDENTIAL_REPLACED)
-contain arrival-order-dependent behavior: "REPLACED on a missing row is a
-no-op, and a later ENABLED wins." That can produce different final states
-depending on arrival order.
-
-The defect is confirmed by reading the document. §12.9 is a hard invariant
-with no carve-out. §25.14.6 concedes the violation in writing: "The MVP does
-not add a deterministic protocol-order tie-break for CONNECTOR records,
-because the deployment model rules out the case."
+contain arrival-order-dependent behavior. §25.14.6 concedes the violation
+in writing: "The MVP does not add a deterministic protocol-order tie-break
+for CONNECTOR records, because the deployment model rules out the case."
 
 RESOLUTION TAKEN (Slice C)
 The slice narrowed to CONNECTOR_ENABLED only. DISABLED and REPLACED are
 recognized, validated, and deferred. The deferred guard returns
 Ok(AckOutcome::Rejected) — not Err, because Err propagates out of
-process_sync_message and kills the whole batch. Ok(Rejected) is a clean
-per-event outcome: the transaction drops, nothing is written, the batch
-continues.
+process_sync_message and kills the whole batch.
 
 THREE OPTIONS — DECISION STILL OPEN
   A. Restore conformance. Add winning_logical_clock / winning_device_id /
-     winning_sequence columns to local_connectors. Every CONNECTOR event's
-     apply compares its protocol tuple against the stored tuple using §12.6.
-     Earlier tuple loses; state does not change. DISABLED becomes soft-delete.
-     §25.14.6's punt is deleted. Requires a migration, a LOCAL-TABLES.md edit,
-     three section amendments, and a code slice.
-  B. Amend §12.9 to carve out CONNECTOR records. One sentence. Permanently
-     weakens a MUST clause. §25.15.5 and §25.16.5 stay as written.
+     winning_sequence columns to local_connectors. Protocol-order tie-break
+     on every CONNECTOR event. DISABLED becomes soft-delete. §25.14.6's
+     punt is deleted. Requires migration + LOCAL-TABLES.md + three section
+     amendments + a code slice.
+  B. Amend §12.9 to carve out CONNECTOR records. One sentence. Weakens a
+     MUST clause permanently.
   C. Tombstone table. Same tie-break as A, DISABLED writes a tombstone row.
      Overkill for single-origination-source deployment.
 
@@ -391,82 +383,76 @@ RECEIVING BEHAVIOR (§25.14.5)
   Write audit entry SYNC_CONNECTOR_ENABLED.
   Advance logical clock (done by process_event).
   Append to sync_events (done by process_event).
-  No entity_field_state rows — §25.14.5 excludes CONNECTOR from field-level
-  reconciliation.
+  No entity_field_state rows.
 
 RECONNAISSANCE FINDINGS — DO NOT RE-DERIVE
-  - Parsers already exist in shared/src/sync_parse.rs for all three CONNECTOR
-    payloads. Encoders in shared/src/sync.rs. Both committed.
+  - Parsers in shared/src/sync_parse.rs for all three CONNECTOR payloads.
+    Encoders in shared/src/sync.rs. Both committed.
   - upsert_local_connector does NOT open a transaction; rusqlite::Transaction
     derefs to Connection, so calling it inside a caller-owned tx works.
   - originate_event requires an open transaction and does not commit.
   - JSON.stringify is NOT RFC 8785. Adequate for the current single-key config.
-  - §25.14.4 does not require connector_code to exist in the catalog. The
-    pipeline accepts any non-empty code. UI must handle unknown codes.
-  - §25.14.5 says store payload.tier as transmitted. Receiver does not re-derive.
-  - Client's source_device_id is the placeholder "local-device". The receiver
-    stores the real wire device_id hex. The two need not match.
+  - §25.14.4 does not require connector_code to exist in the catalog.
+  - §25.14.5 says store payload.tier as transmitted.
+  - Client's source_device_id is the placeholder "local-device".
   - process_event returns Result<AckOutcome, String>. Err propagates out of
     process_sync_message via ?.
-  - log_audit signature: fn log_audit(conn: &Connection, action: &str,
-    debtor_id: Option<&str>, record_count: i64, details: &str)
-    at shared/src/db.rs:735. Writes to table audit_log, column action.
+  - log_audit: fn log_audit(conn: &Connection, action: &str, debtor_id:
+    Option<&str>, record_count: i64, details: &str) at shared/src/db.rs:735.
   - communications::insert_communication ALREADY originates a
-    COMMUNICATION_LOGGED sync event (lines 140 and 198). The send path does
-    not need to originate it again.
-  - shared/src/connectors/http_reqwest.rs is production-ready. Real
-    reqwest::blocking client, 30s connect / 60s read timeouts.
+    COMMUNICATION_LOGGED sync event (lines 140 and 198).
+  - shared/src/connectors/http_reqwest.rs is production-ready.
   - Twilio credential JSON is {"accountSid","authToken"}. Config is {"from"}.
-    The adapter validates both at construction.
+  - Resend credential JSON is {"apiKey"}. Config is {"from"}.
 
 ================================================================
 9. ENDPOINTS
 ================================================================
 
-src/backend/routes/connectors.routes.ts, mounted at /api/connectors behind
-authenticateToken:
+src/backend/routes/connectors.routes.ts, mounted at /api/connectors:
 
   GET   /api/connectors          caller's org enablements
   GET   /api/connectors/catalog  active catalog rows
   POST  /api/connectors/enable   { connectorCode, credentialsLocation:'LOCAL',
                                    zone3Acknowledged?: boolean,
                                    tier1Acknowledged?: boolean }
+                                 Slice 5 adds: response includes optional
+                                 `credential` field for Tier 1 connectors.
   POST  /api/connectors/disable  { connectorCode }
 
-Other relevant routes: POST /api/auth/login, GET /api/auth/me,
-POST /api/metrics/sync, POST /api/activity/sync, GET /api/boundary-proofs,
-POST /api/connector-usage/sync, GET /api/billing/*, GET /api/licenses/*,
-POST /api/licenses/set-plan.
+Other routes: POST /api/auth/login, GET /api/auth/me, POST /api/metrics/sync,
+POST /api/activity/sync, GET /api/boundary-proofs, POST /api/connector-usage/sync,
+GET /api/billing/*, GET /api/licenses/*, POST /api/licenses/set-plan.
 
-No new endpoints in Slice C or Slice 4. Credential sync is device-to-device;
-GORKA cloud is not on the path.
+No new endpoints in Slice 5. Credential sync is device-to-device.
 
 ================================================================
 10. FILE INVENTORY
 ================================================================
 
-REFERENCE FILES (on disk, needed for context)
-  shared/src/sync.rs              encoders (all three CONNECTOR encoders)
-  shared/src/sync_parse.rs        parsers (all three CONNECTOR parsers)
+REFERENCE FILES
+  shared/src/sync.rs              encoders
+  shared/src/sync_parse.rs        parsers
   shared/src/sync_handshake.rs    AckOutcome enum
-  shared/src/db.rs                log_audit at line 735; audit_log at 746
-  shared/src/connectors/mod.rs    ConnectorAdapter trait, ConnectorCredential,
-                                  SendRequest, SendResult (now Serialize),
+  shared/src/db.rs                log_audit at 735; audit_log at 746
+  shared/src/connectors/mod.rs    ConnectorAdapter, ConnectorCredential,
+                                  SendRequest, SendResult (Serialize),
                                   ConnectorRegistry, build_default_registry
-  shared/src/connectors/http.rs, http_reqwest.rs   HttpClient trait + real client
-  shared/src/connectors/resend_email.rs   adapter pattern
-  shared/src/connectors/twilio_sms.rs     adapter, production-ready
-  shared/src/connectors/mocean_sms.rs     adapter, HTTP shape unconfirmed
-  shared/src/communications.rs    insert_communication + delete_communication
-  shared/src/storage.rs           AppStorage
-  src-tauri-agent/src/auth.rs     get_organization_id
-  src-tauri-agent/src/main.rs     generate_handler! block
+  shared/src/connectors/http.rs, http_reqwest.rs
+  shared/src/connectors/resend_email.rs
+  shared/src/connectors/twilio_sms.rs
+  shared/src/connectors/mocean_sms.rs
+  shared/src/communications.rs
+  shared/src/storage.rs
+  src-tauri-agent/src/auth.rs
+  src-tauri-agent/src/main.rs
   agent-dashboard/src/pages/DebtorProfilePage.tsx
-                                  Phone row: Send SMS button; modal mount
-  prisma/seed-connectors.ts       six connector rows
+  agent-dashboard/src/components/SendSmsModal.tsx (Slice 4, will be replaced)
+  prisma/seed-connectors.ts
 
 RECOVERY DOCUMENTS
-  GORKA_RECOVERY/recovery-notes/RESUME-HERE.md       this file
+  GORKA_RECOVERY/recovery-notes/RESUME-HERE.md       this file (v2.3)
+  GORKA_RECOVERY/recovery-notes/SLICE-5-SPEC.md      next slice spec
   GORKA_RECOVERY/recovery-notes/CONNECTION-CENTER.md model spec
   GORKA_RECOVERY/recovery-notes/CONNECTOR-MODEL.md   older spec
   GORKA_RECOVERY/recovery-notes/SYNC-ARCHITECTURE.md v1.6
@@ -475,13 +461,12 @@ RECOVERY DOCUMENTS
   GORKA_RECOVERY/recovery-notes/AGENT-APP-SPEC.md    v1.3
   GORKA_RECOVERY/recovery-notes/GORKA-MVP-SCOPE.md   v1.1
   GORKA_RECOVERY/recovery-notes/MULTI-USER-CONCEPT.md v2.0
-  GORKA_RECOVERY/recovery-notes/RECOVERY-RULES.md    14 rules
+  GORKA_RECOVERY/recovery-notes/RECOVERY-RULES.md
 
-SCHEMA
-  prisma/schema.cloud.prisma
-    OrganizationAuditEvent    line 280
-    ConnectorCatalog          line 343
-    ClientConnector           line 364
+SCHEMA (prisma/schema.cloud.prisma)
+  OrganizationAuditEvent    line 280
+  ConnectorCatalog          line 343
+  ClientConnector           line 364
 
 SEED (prisma/seed-connectors.ts)
   twilio-sms     LIVE           isManagedByGorka: true
@@ -495,10 +480,10 @@ SEED (prisma/seed-connectors.ts)
 11. ADAPTOR INVENTORY vs CATALOG
 ================================================================
 
-  resend-email    LIVE          adapter yes            Tier 1 Connect (declaration)
-  twilio-sms      LIVE          adapter yes            Tier 1 Connect (no form yet)
+  resend-email    LIVE          adapter yes            Tier 1 + BYOP (Slice 5)
+  twilio-sms      LIVE          adapter yes            Tier 1 (dormant) + BYOP (Slice 5)
   mocean-sms      COMING_SOON   adapter yes            no UI yet
-  twilio-voice    COMING_SOON   no adapter             none
+  twilio-voice    COMING_SOON   no adapter             placeholder (Slice 5)
   gemini-ai       COMING_SOON   no adapter             none
   custom-api      LIVE          no adapter (placeholder) BYOP + Zone 3
 
@@ -521,6 +506,24 @@ Adding a row is a data edit. Adding an adapter is a code slice.
     warning. Both are wired.
   - Connector catalog changes are data operations, not code.
 
+AGENT-FACING UX VISION (locked 2026-10-08, drives Slice 5)
+  Two distinct Agent pages, two distinct jobs:
+
+  Communication Tools page — the GLANCE.
+    Shows every enabled connector. The agent's morning orientation.
+    Read-only. Unchanged from Slice C.
+
+  Debtor Profile page — the ACTION SURFACE.
+    Where the agent works. All enabled connectors reachable from here.
+    Grouped by channel (SMS, Email, Voice). Agent chooses a connector,
+    the action modal opens with that connector preselected.
+
+  Sync keeps both pages honest. Admin changes the set on the Client,
+  both Agent pages update.
+
+  Do not add per-connector actions to the Communication Tools page. That
+  page is a status view. Acting happens from the debtor profile.
+
 ================================================================
 13. WORKING RULES
 ================================================================
@@ -534,17 +537,14 @@ Adding a row is a data edit. Adding an adapter is a code slice.
     String.Replace on recovery documents.
   - findstr treats spaces as OR. Use /C:"literal" for exact matches.
   - Verify with findstr after every edit. git diff before commit.
-  - One commit per coherent change. Multi-commit slices are fine; all pushed
-    before the single cloud trip.
+  - One commit per coherent change. Multi-commit slices are fine.
   - npx prisma db push always needs --schema=prisma/schema.cloud.prisma plus
     the pooler DATABASE_URL override.
-  - PowerShell here-strings: blank line before closing '@.
   - When giving commands to the founder: open-file command first
     (notepad <path>), then the edit content, then the verify command. One file
     at a time. Do not batch.
   - Whole-file replacement: output the whole file. Do not do incremental
-    anchor edits across many turns. They produce wrong-file edits and stale
-    state.
+    anchor edits across many turns. They produce wrong-file edits.
   - When in doubt, stop and ask. Do not guess.
 
 ================================================================
@@ -554,7 +554,7 @@ Adding a row is a data edit. Adding an adapter is a code slice.
 DONE (prior sessions)
   gorka-shared::connectors skeleton (trait, types, registry).
   Adapters: resend-email (live-verified), twilio-sms (production-ready),
-            mocean-sms (unit-tested, HTTP shape unconfirmed).
+            mocean-sms (unit-tested).
   B1, B2  Connectors.tsx alignment.
   B3      Tier 2 credential local write.
   B4      Zone 3 audit record (BYOP path).
@@ -564,38 +564,31 @@ DONE (prior sessions)
   Slice C    Connector enablement sync. §2.
   Slice 1    Tier 1 declaration gate. §2b.
   Agent restart test — passed.
-
-DONE (this session)
-  Slice 4 — Send-from-agent (Twilio SMS), code only. §2c.
-  Live demo deferred; see §2c for the blocker.
+  Slice 4    Send-from-agent (Twilio SMS), code only. §2c.
 
 IN FLIGHT
-  None. Everything pushed.
+  None.
+
+NEXT
+  SLICE 5 — Both channels + Agent Communication card. §2d and
+  SLICE-5-SPEC.md. Implementation-ready.
 
 REMAINING — DEPENDENCY ORDER, NOT SCHEDULE
-  1. Rotate credentials. §5. Supabase pooler password, Resend key.
-  2. TIER 1 PROVISIONING SLICE. Blocks the Slice 4 demo. Design: how does a
-     GORKA-managed connector's credential travel from GORKA's cloud to the
-     Client device, and how does the Client's write_local_connector_credential
-     get called from the Tier 1 Connect path? This is the missing piece. §2c.
-  3. SYNC-ARCHITECTURE.md amendment — resolve §25.15.5/§25.16.5 vs §12.9.
+  1. Rotate credentials. §5.
+  2. SLICE 5. §2d. Eleven commits. TypeScript + backend only.
+  3. Slice 4 live demo. After 2.
+  4. SYNC-ARCHITECTURE.md amendment — resolve §25.15.5/§25.16.5 vs §12.9.
      Then CONNECTOR_DISABLED and CONNECTOR_CREDENTIAL_REPLACED origination
      and apply.
-  4. Slice 4 live demo. After 2.
-  5. Compliance rules page (B5, B6) — Client Dashboard page writing
-     compliance_rules locally.
+  5. Compliance rules page (B5, B6).
   6. Compliance enforcement layer — preflight check in the send flow.
   7. Second send path (Resend email) — proves the pattern generalises.
-  8. Copilot command (C3, C4) + AI boundary layer — the largest remaining
-     block. Redaction rules, placeholder system, Gemini adapter, structural
-     tests.
+  8. Copilot command (C3, C4) + AI boundary layer — largest block.
   9. Tier 1 credential transit verification (B7) — review-only.
- 10. Acceptance — end-to-end: enable a connector, send a message, verify
-     communication row, sync event, compliance checks, credential never left
-     the device.
+ 10. Acceptance — end-to-end.
 
-DOCS-ONLY / TEST-ONLY (fold into any session)
-  - V6 stale lines in SYNC-TEST-VECTORS-v1.md (two "PENDING" lines).
+DOCS-ONLY / TEST-ONLY
+  - V6 stale lines in SYNC-TEST-VECTORS-v1.md.
   - Mocean SMS HTTP shape confirm against current docs.
   - CONNECTION-CENTER.md §14 A3 wording.
   - 5a-vectors — three CONNECTOR event hex vectors.
@@ -608,25 +601,22 @@ DOCS-ONLY / TEST-ONLY (fold into any session)
 
   - Credentials not yet rotated (§5).
   - Cancel-negative for Tier 1 not yet run (§3).
-  - Slice 4 live demo deferred, blocked by the missing Tier 1 provisioning
-    path (§2c).
+  - Slice 4 live demo — runs after Slice 5.
   - Cloud cargo build needs TMP/TEMP override (§6).
   - .bak files in working tree, untracked. Delete at leisure.
   - CHAT-HANDOFF-DUMP.txt and make-dump.ps1 untracked at root.
   - Client disable does not propagate to Agent (§4).
-  - Tier 1 connectors do not sync (§4).
   - Mocean SMS HTTP shape unconfirmed against current docs.
   - twilio-voice and gemini-ai adapters not built.
-  - Tier 1 provisioning — funded phase.
   - SYNC-ARCHITECTURE §7 A/B/C decision — not made.
 
 ================================================================
 16. HOW TO USE THIS FILE
 ================================================================
 
-  At the start of a new chat: paste this file. That is the brief.
-  At slice end: rewrite it in place. Do not append.
+  At the start of a new chat: paste this file AND SLICE-5-SPEC.md. That is
+  the brief. Both together are self-contained.
+  At slice end: rewrite this file in place. Do not append.
   If the chat dies unexpectedly: this file is stale by at most one operation.
-  Paste it.
 
 End of RESUME-HERE.md
