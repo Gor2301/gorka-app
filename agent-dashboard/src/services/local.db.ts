@@ -265,6 +265,21 @@ export interface LocalConnector {
   updated_at: string;
 }
 
+export interface SendResult {
+  success: boolean;
+  provider_message_id: string | null;
+  provider_status: string | null;
+  provider_response: any;
+}
+
+export interface SendConnectorMessageInput {
+  connectorCode: string;
+  debtorId: string;
+  to: string;
+  body: string;
+  subject?: string | null;
+}
+
 // --- Local DB ---
 
 export const localDB = {
@@ -572,6 +587,22 @@ export const localDB = {
 
   async listLocalConnectors(): Promise<LocalConnector[]> {
     return await invoke<LocalConnector[]>('list_local_connectors');
+  },
+
+  async testConnectorConnection(connectorCode: string): Promise<void> {
+    await invoke('test_connector_connection', { connectorCode });
+  },
+
+  async sendConnectorMessage(
+    input: SendConnectorMessageInput,
+  ): Promise<SendResult> {
+    return await invoke<SendResult>('send_connector_message', {
+      connectorCode: input.connectorCode,
+      debtorId: input.debtorId,
+      to: input.to,
+      body: input.body,
+      subject: input.subject ?? null,
+    });
   },
 
   // --- Sync engine -------------------------------------------------
