@@ -36,7 +36,10 @@ function getGorkaCredential(
       const apiKey = process.env.GORKA_RESEND_API_KEY;
       const from = process.env.GORKA_RESEND_FROM;
       if (!apiKey || !from) return null;
-      return { value: apiKey, configuration: { from } };
+      return {
+        value: JSON.stringify({ apiKey }),
+        configuration: { from },
+      };
     }
     case 'twilio-sms': {
       const accountSid = process.env.GORKA_TWILIO_ACCOUNT_SID;
