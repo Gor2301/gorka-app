@@ -117,6 +117,20 @@ const btnPrimaryStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+const btnGhostStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  padding: '8px 14px',
+  fontSize: '13px',
+  fontWeight: 500,
+  borderRadius: '8px',
+  backgroundColor: 'white',
+  color: '#374151',
+  border: '1px solid #e5e7eb',
+  cursor: 'pointer',
+};
+
 const btnDangerStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -207,7 +221,28 @@ export default function Connectors() {
     const catalog = selectedCatalog;
     setBusyCode(catalog.code);
     try {
-      await connectorsService.enable(catalog.code, { tier1Acknowledged: true });
+      const result = await connectorsService.enable(catalog.code, {
+        tier1Acknowledged: true,
+      });
+
+      if (!result.credential) {
+        setShowDeclaration(false);
+        setSelectedCatalog(null);
+        alert('GORKA-managed ' + catalog.name + ' is not configured on this server.');
+        await load();
+        return;
+      }
+
+      const credentialBytes = Array.from(
+        new TextEncoder().encode(result.credential.value),
+      );
+      await invoke('write_local_connector_credential', {
+        connectorCode: catalog.code,
+        tier: 'TIER1',
+        configuration: JSON.stringify(result.credential.configuration),
+        credentialBytes,
+      });
+
       setShowDeclaration(false);
       setSelectedCatalog(null);
       await load();
@@ -297,13 +332,22 @@ export default function Connectors() {
           )}
 
           {!isConnected && catalog.mvpStatus === 'LIVE' && isTier1 && (
-            <button
-              style={btnPrimaryStyle}
-              onClick={() => handleConnect(row)}
-              disabled={isBusy}
-            >
-              {isBusy ? 'Connecting...' : 'Connect'}
-            </button>
+            <>
+              <button
+                style={btnPrimaryStyle}
+                onClick={() => handleConnect(row)}
+                disabled={isBusy}
+              >
+                {isBusy ? 'Connecting...' : 'Connect (GORKA)'}
+              </button>
+              <button
+                style={btnGhostStyle}
+                onClick={() => handleAddCredentials(row)}
+                disabled={isBusy}
+              >
+                Use my own account
+              </button>
+            </>
           )}
 
           {!isConnected && catalog.mvpStatus === 'LIVE' && !isTier1 && (
@@ -312,7 +356,7 @@ export default function Connectors() {
               onClick={() => handleAddCredentials(row)}
               disabled={isBusy}
             >
-              Add my credentials
+              Use my own account
             </button>
           )}
 
