@@ -5,11 +5,15 @@ import { invoke } from '@tauri-apps/api/core';
 import { RefreshCw } from 'lucide-react';
 import { ConfigurationModal } from '../components/Connectors/ConfigurationModal';
 import { DeclarationModal } from '../components/Connectors/DeclarationModal';
+import { ResendByopModal } from '../components/Connectors/ResendByopModal';
+import { TwilioByopModal } from '../components/Connectors/TwilioByopModal';
 
 interface DisplayRow {
   catalog: CatalogEntry;
   enablement: EnablementRow | null;
 }
+
+type ByopModalKind = 'resend' | 'twilio' | 'generic' | null;
 
 const pageStyle: React.CSSProperties = {
   padding: '24px',
@@ -172,6 +176,12 @@ const refreshBtnStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+function byopModalKindFor(code: string): Exclude<ByopModalKind, null> {
+  if (code === 'resend-email') return 'resend';
+  if (code === 'twilio-sms') return 'twilio';
+  return 'generic';
+}
+
 export default function Connectors() {
   const [rows, setRows] = useState<DisplayRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,7 +189,7 @@ export default function Connectors() {
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const [showDeclaration, setShowDeclaration] = useState(false);
   const [declarationTier, setDeclarationTier] = useState<'TIER1' | 'TIER2'>('TIER2');
-  const [showConfig, setShowConfig] = useState(false);
+  const [byopModal, setByopModal] = useState<ByopModalKind>(null);
   const [selectedCatalog, setSelectedCatalog] = useState<CatalogEntry | null>(null);
 
   const load = async () => {
@@ -279,7 +289,8 @@ export default function Connectors() {
       handleTier1Confirm();
       return;
     }
-    setShowConfig(true);
+    if (!selectedCatalog) return;
+    setByopModal(byopModalKindFor(selectedCatalog.code));
   };
 
   const handleByopSave = async (config: Record<string, any>, credentials: Record<string, any>) => {
@@ -294,12 +305,17 @@ export default function Connectors() {
         credentialBytes,
       });
       await connectorsService.enable(selectedCatalog.code, { zone3Acknowledged: true });
-      setShowConfig(false);
+      setByopModal(null);
       setSelectedCatalog(null);
       await load();
     } catch (err: any) {
       alert('Failed to save credentials: ' + (err?.message || String(err)));
     }
+  };
+
+  const closeByopModal = () => {
+    setByopModal(null);
+    setSelectedCatalog(null);
   };
 
   const renderCard = (row: DisplayRow) => {
@@ -447,9 +463,25 @@ export default function Connectors() {
         tier={declarationTier}
       />
 
+      <ResendByopModal
+        isOpen={byopModal === 'resend'}
+        onClose={closeByopModal}
+        onSave={handleByopSave}
+        connectorName={selectedCatalog?.name || ''}
+        provider={selectedCatalog?.provider || ''}
+      />
+
+      <TwilioByopModal
+        isOpen={byopModal === 'twilio'}
+        onClose={closeByopModal}
+        onSave={handleByopSave}
+        connectorName={selectedCatalog?.name || ''}
+        provider={selectedCatalog?.provider || ''}
+      />
+
       <ConfigurationModal
-        isOpen={showConfig}
-        onClose={() => { setShowConfig(false); setSelectedCatalog(null); }}
+        isOpen={byopModal === 'generic'}
+        onClose={closeByopModal}
         onSave={handleByopSave}
         connectorName={selectedCatalog?.name || ''}
         provider={selectedCatalog?.provider || ''}
