@@ -1,0 +1,64 @@
+.communication-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.communication-card__heading {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-text);
+}
+
+.communication-card__muted {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.communication-card__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.communication-card__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.communication-card__group-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.communication-card__buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.communication-card__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  background-color: white;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.communication-card__button:hover {
+  border-color: #7C3AED;
+  color: #7C3AED;
+}

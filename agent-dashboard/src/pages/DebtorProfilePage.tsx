@@ -24,7 +24,7 @@ import DebtEditModal from '@/components/DebtEditModal';
 import ActionEditModal from '@/components/ActionEditModal';
 import CommunicationEditModal from '@/components/CommunicationEditModal';
 import RelationEditModal, { RelationRole } from '@/components/RelationEditModal';
-import SendMessageModal from '@/components/SendMessageModal';
+import CommunicationCard from '@/components/CommunicationCard';
 import './DebtorProfilePage.css';
 
 const DOCUMENT_CATEGORIES: { value: string; label: string }[] = [
@@ -79,7 +79,6 @@ export default function DebtorProfilePage() {
   const [error, setError] = useState('');
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [showSendSms, setShowSendSms] = useState(false);
   const photoUrlRef = useRef<string | null>(null);
 
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -593,19 +592,7 @@ export default function DebtorProfilePage() {
             </div>
             <div>
               <span className="debtor-profile__label">Phone</span>
-              <div className="debtor-profile__value">
-                {debtor.phone || '-'}
-                {debtor.phone && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowSendSms(true)}
-                    title="Send SMS"
-                  >
-                    Send SMS
-                  </Button>
-                )}
-              </div>
+              <div className="debtor-profile__value">{debtor.phone || '-'}</div>
             </div>
             <div>
               <span className="debtor-profile__label">Created</span>
@@ -624,6 +611,14 @@ export default function DebtorProfilePage() {
       </Card>
 
          {!isRelated && (
+        <Card>
+          <CommunicationCard
+            debtorId={debtor.id}
+            debtorName={`${debtor.name} ${debtor.surname}`.trim()}
+            onSent={handleCommunicationSaved}
+          />
+        </Card>
+
         <Card>
           <div className="debtor-profile__card-header">
             <h2 className="debtor-profile__card-heading">Debts</h2>
@@ -924,17 +919,6 @@ export default function DebtorProfilePage() {
         </div>
       </Card>
 
-      {showSendSms && debtor && id && (
-        <SendMessageModal
-          debtorId={id}
-          debtorName={`${debtor.name} ${debtor.surname}`.trim()}
-          onClose={() => setShowSendSms(false)}
-          onSent={() => {
-            setShowSendSms(false);
-            handleCommunicationSaved();
-          }}
-        />
-      )}
 
       {showEdit && (
         <DebtorEditModal
