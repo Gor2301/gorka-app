@@ -16,7 +16,7 @@ const prisma = new PrismaClient();
 const connectors = [
   {
     code: 'twilio-sms',
-    mvpStatus: 'COMING_SOON',
+    mvpStatus: 'LIVE',
     name: 'Twilio SMS',
     description: 'Send SMS through Twilio.',
     category: 'SMS',
