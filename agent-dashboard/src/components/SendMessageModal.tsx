@@ -201,7 +201,7 @@ export default function SendMessageModal({
         </div>
 
         <div className="send-message-modal__footer">
-          <Button variant="secondary" onClick={onClose} disabled={sending}>
+          <Button variant="ghost" onClick={onClose} disabled={sending}>
             Cancel
           </Button>
           <Button

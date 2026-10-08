@@ -27,7 +27,7 @@ export default function CallComingSoonModal({ onClose }: CallComingSoonModalProp
           </p>
         </div>
         <div className="call-coming-soon-modal__footer">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
         </div>
