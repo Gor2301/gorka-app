@@ -178,3 +178,56 @@ pub fn list_local_connectors(
     }
     Ok(out)
 }
+
+/// The credential material and parsed configuration for one enabled
+/// connector on this device.
+///
+/// The name says explicitly that this struct carries the secret.
+/// No other read function on local_connectors returns
+/// credential_value; this one must only be called by code whose
+/// purpose is to use the credential against the provider — for
+/// example the Agent's send command. It must never be called from a
+/// UI read path.
+pub struct LocalConnectorSecret {
+    pub credential_value: Vec<u8>,
+    pub configuration: serde_json::Value,
+}
+
+/// Read the credential and configuration for one enabled connector.
+///
+/// Returns Ok(None) if the connector is not enabled for this
+/// organization, or if its status is not 'ENABLED'.
+///
+/// The stored configuration string is parsed into a serde_json::Value
+/// before return; malformed JSON in storage is an error, not a
+/// silent None.
+pub fn read_local_connector_credential(
+    conn: &Connection,
+    organization_id: &str,
+    connector_code: &str,
+) -> Result<Option<LocalConnectorSecret>, String> {
+    let raw: Option<(Vec<u8>, String)> = conn
+        .query_row(
+            "SELECT credential_value, configuration
+             FROM local_connectors
+             WHERE organization_id = ?1
+               AND connector_code = ?2
+               AND status = 'ENABLED'",
+            params![organization_id, connector_code],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    let Some((credential_value, configuration_json)) = raw else {
+        return Ok(None);
+    };
+
+    let configuration: serde_json::Value = serde_json::from_str(&configuration_json)
+        .map_err(|e| format!("Stored connector configuration is not valid JSON: {}", e))?;
+
+    Ok(Some(LocalConnectorSecret {
+        credential_value,
+        configuration,
+    }))
+}
