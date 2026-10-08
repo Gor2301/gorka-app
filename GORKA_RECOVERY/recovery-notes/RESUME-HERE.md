@@ -1,13 +1,24 @@
 RESUME-HERE.md — Full Chat Summary and Handoff
-Version 2.3 — written at close of the planning session for Slice 5.
+Version 2.4 — written at close of Slice 5.
+
+STRUCTURE OF THIS FILE
+  Sections 1–16 are the v2.3 snapshot. Preserved as-is, on purpose.
+  They are the plan as it stood before Slice 5 ran. Read them for the
+  baseline: what we intended, what we assumed, what we thought was next.
+  APPENDIX A (after §16) is the v2.4 update: what Slice 5 actually
+  shipped, what running it taught us, the redesigned plan, new open
+  items, and process amendments.
+  Where the appendix and the body conflict, the appendix wins. The body
+  stays visible so drift is easy to see.
 
 This one document is both the summary of this chat and the resume state.
 Save it at GORKA_RECOVERY\recovery-notes\RESUME-HERE.md. Open it at the start
 of the next chat. Everything needed to resume without reconnaissance is here.
 
 READ ALONGSIDE
-  GORKA_RECOVERY/recovery-notes/SLICE-5-SPEC.md — the implementation-ready
-  spec for the next slice. Paste both files into the new chat.
+  GORKA_RECOVERY/recovery-notes/SLICE-5-SPEC.md — the spec Slice 5
+  implemented. Kept as the historical record of what Slice 5 was meant
+  to be.
 
 ================================================================
 1. MACHINE STATE AT CLOSE
@@ -618,5 +629,296 @@ DOCS-ONLY / TEST-ONLY
   the brief. Both together are self-contained.
   At slice end: rewrite this file in place. Do not append.
   If the chat dies unexpectedly: this file is stale by at most one operation.
+
+================================================================
+APPENDIX A — SLICE 5 CLOSE (added v2.4, 2026-10-09)
+================================================================
+
+A.0 — WHY THIS APPENDIX EXISTS
+
+  Sections 1–16 above are the v2.3 snapshot. They were written before
+  Slice 5 ran. Several of their assumptions turned out to be wrong, and
+  the plan in §14 was rewritten as a result. Both versions are kept so
+  the drift is visible and the old plan can be consulted if a question
+  arises about what we thought before.
+
+  Where the body and the appendix conflict, the appendix wins.
+
+================================================================
+A.1 — MACHINE STATE AT SLICE 5 CLOSE
+================================================================
+
+MAIN:    HEAD 9358b60 plus the appendix commit that follows it.
+         Pushed through 9358b60. Clean tree except untracked
+         CHAT-HANDOFF-DUMP.txt and make-dump.ps1.
+CLOUD:   at 9358b60. Slice 5 built, tested, and live-verified.
+         Cloud is currently closed.
+
+Slice 5 commits (13 code commits, cdde504..9358b60):
+
+  cdde504  backend: return GORKA Tier 1 credential from enable
+  c56c699  connectors.service: enable returns credential alongside row
+  5d98815  Connectors.tsx: two buttons on Tier 1 cards; write Tier 1 credential
+  638ffdf  client: ResendByopModal
+  a56dead  client: TwilioByopModal
+  b052d62  Connectors.tsx: route by code to the right BYOP modal
+  a6179ba  agent: SendMessageModal (replaces SendSmsModal)
+  6357779  agent: CommunicationCard and CallComingSoonModal; mount on debtor profile
+  f505bd8  DebtorProfilePage: fix JSX sibling error from CommunicationCard mount
+  daf01dd  agent: fix Button variant (ghost, not secondary)
+  61b01ae  backend: wrap GORKA Resend credential as JSON envelope ({apiKey})
+  3d593aa  agent: SendMessageModal collects a subject for email; filter dropdown
+  9358b60  agent: derive communication type from connector channel
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -6
+    git status --short
+
+================================================================
+A.2 — WHAT SLICE 5 SHIPPED
+================================================================
+
+GOAL (achieved, live-verified)
+  Two channels for every connector. Tier 1 delivers GORKA's credential
+  from the backend to the admin's device; BYOP collects the admin's own
+  credential. Both converge at write_local_connector_credential. Agent
+  debtor profile gains a Communication card grouped by channel.
+
+  The v2.3 §2d entry titled "SLICE 5 — PLANNED, NOT STARTED" is now
+  historical. Read it for what Slice 5 was supposed to be. Read §A.3
+  below for what running it actually revealed.
+
+================================================================
+A.3 — FINDINGS — WHAT RUNNING THE CODE TAUGHT US
+================================================================
+
+This is the section the body of the file could not have. Every entry
+below was discovered by doing the thing, not by planning it.
+
+F1. REGISTRATION / ONBOARDING IS A HARD GAP, NOT A LATER FEATURE
+    Slice 5's demo could not send until `user_id` was added by hand to
+    the Agent's settings.dat. Root cause: the Agent's auth flow writes
+    `user_id` on login, but the pilot's Agent had never run a real
+    login — it was hand-populated with mock values, and `user_id` was
+    not among them.
+    Bigger picture: the whole registration path is unbuilt.
+      - No marketing-site registration exists. There is no way for an
+        admin to create an organization through the product.
+      - No admin-creates-agent-user flow exists. AGENT-APP-SPEC §4
+        says "credentials the admin has provided" but never says how.
+      - Every current login is either a real backend login against a
+        manually seeded user, or a hand-populated settings.dat.
+    This is not a Slice 5 defect. It is a subsystem that predates
+    Slice 5 and was standing in the way the whole time.
+
+F2. SLICE 4 SHIPPED A LATENT TYPE ERROR
+    SendSmsModal.tsx used Button variant="secondary", which ButtonVariant
+    (agent-dashboard/src/components/primitives/Button.tsx) does not
+    accept. It is 'primary' | 'ghost' | 'danger'. Never compiled because
+    Slice 4 did not run `npm run build` on agent-dashboard. Fixed in
+    daf01dd.
+
+F3. SLICE 4'S RUST SEND HARDCODED COMMUNICATION TYPE AS "SMS"
+    send_connector_message wrote r#type: "SMS".to_string() unconditionally.
+    When Slice 5 generalized the UI to email, the adapter was sending
+    emails but the communications rows said SMS. Fixed in 9358b60 with
+    communication_type_for(connector_code) → SMS/EMAIL/CALL.
+
+F4. THE RESEND CREDENTIAL FORMAT DISAGREED WITH THE ADAPTER
+    SLICE-5-SPEC §5 said the backend should return the Resend API key
+    as raw UTF-8 bytes. The Rust adapter (resend_email.rs) parses the
+    credential as JSON and expects {"apiKey": "..."}. Twilio was
+    already correct because the spec said to JSON-wrap it. Fixed in
+    61b01ae by wrapping the Resend value in the same shape.
+
+F5. EMAIL NEEDS A SUBJECT — SLICE 4'S MODAL NEVER HAD ONE
+    SendMessageModal was generalized from SMS, where subject does not
+    exist. Resend returns HTTP 422 with "Missing `subject` field" when
+    it is absent. Fixed in 3d593aa by adding a Subject input shown only
+    when the selected connector ends in -email.
+
+F6. COMPILE-TIME AND DEMO-TIME DEFECTS ARE DIFFERENT CLASSES
+    Two bugs (F7, F8 below) were caught by `npm run build`. Three bugs
+    (F3, F4, F5) were caught only by actually running the send against
+    a real provider. cargo and node verify caught none of the five.
+    This is why the cloud trip rule in §A.7 exists.
+
+F7. JSX SIBLING ERROR (compile-time)
+    CommunicationCard was placed inside {!isRelated && (...)} in
+    DebtorProfilePage, giving that JSX expression two children. tsc
+    error TS2657. Fixed in f505bd8 by moving CommunicationCard out of
+    the conditional.
+
+F8. BUTTON VARIANT (compile-time)
+    See F2. Fixed in daf01dd.
+
+F9. COMMUNICATION TOOLS PAGE DOES NOT RE-RENDER ON SYNC
+    Newly-enabled connectors appear on the Agent's Communication Tools
+    page only after a manual refresh. The page reads on mount only. Sync
+    delivers within seconds — the rendering does not follow. Small UX
+    gap, not a correctness bug.
+
+F10. VITE WATCHER DIES WHEN CARGO REBUILDS
+    Root vite.config.ts watches the whole repo including target/. During
+    cargo build it hits EBUSY on target\debug\deps\gorka_agent.exe and
+    the vite process crashes. Restarting Terminal 2 recovers it. Proper
+    fix: add server.watch.ignored for **/target/** in vite.config.ts.
+    Not done.
+
+F11. THE AGENT'S settings.dat IS HAND-POPULATED
+    The demo depends on a hand-edited settings.dat with a hardcoded
+    user_id. If that file is lost, the Agent hits "No user ID found" on
+    the first send. Recorded here so a future session knows why the
+    Agent can log in "for real" and still depend on a stale artifact.
+
+================================================================
+A.4 — DEVIATIONS FROM SLICE-5-SPEC
+================================================================
+
+D1. Commit count. Spec §11 planned 11 commits. Delivered 13 (plus the
+    appendix commit). The extra two are compile-time fixes (f505bd8,
+    daf01dd); the extra three are demo-driven fixes (61b01ae, 3d593aa,
+    9358b60). Neither class existed in the spec's plan.
+
+D2. Commit grouping. Spec Groups 3 and 4 were merged. The card owns
+    the modal and the placeholder; splitting produced commits where
+    nothing mounted what was built.
+
+D3. .css files for the two BYOP modals. Spec §10 listed .css files.
+    Delivered inline-styled, matching the sibling ConfigurationModal.tsx.
+
+D4. Credential gate. Spec §5 described the credential as returned "for
+    connectors where the backend holds a GORKA credential." Delivered
+    with an additional tier1Acknowledged === true gate.
+
+D5. Twilio SID pattern. Spec §6 said "starts with AC". Delivered with
+    ^AC[0-9a-fA-F]{32}$.
+
+D6. The spec's claim that the Agent's send path was unchanged was wrong.
+    See F3. This is the one deviation that is a spec error, not a spec
+    gap.
+
+================================================================
+A.5 — REVISED PLAN
+================================================================
+
+This section supersedes v2.3 §14's "REMAINING — DEPENDENCY ORDER" list.
+The old list treated registration as a solved prerequisite. It is not.
+Everything downstream of the send path depends on identity working.
+
+DONE (all prior sessions, plus Slice 5)
+  gorka-shared::connectors skeleton. All three adapters.
+  B1, B2, B3, B4, B4b, C5. Session A.
+  Slice C    Connector enablement sync.
+  Slice 1    Tier 1 declaration gate.
+  Slice 4    Send-from-agent (Twilio SMS) — code complete; live-verified
+             through the Resend Email path on 2026-10-08.
+  SLICE 5    Both channels + Agent Communication card. Code-verified on
+             cloud and live-verified 2026-10-08.
+
+IN FLIGHT
+  None.
+
+NEXT — RECOMMENDED, IN ORDER
+
+  1. REGISTRATION / ONBOARDING.
+     The registration gap (F1) is the top blocker. Nothing else lands on
+     a real client without it. Its own slice, or likely its own block of
+     slices. Deserves a planning session before any code.
+     Deliverables to scope:
+       - Marketing-site registration: admin creates an organization.
+       - Organization creation writes the first user (role CLIENT or OWNER).
+       - Admin-creates-agent-user flow: invite, initial password, role
+         assignment. Nothing in AGENT-APP-SPEC or MULTI-USER-CONCEPT
+         covers this today.
+       - Enrollment package export UI on the Client (AGENT-APP-SPEC §12
+         open item: "export_enrollment_package exists but has no UI").
+       - Frozen doc amendments likely required:
+         MULTI-USER-CONCEPT §5 (device identity), AGENT-APP-SPEC §4.
+
+  2. SYNC-ARCHITECTURE.md §7 A/B/C decision (unchanged from v2.3 §7).
+     Then CONNECTOR_DISABLED and CONNECTOR_CREDENTIAL_REPLACED
+     origination and apply.
+
+  3. B7 credential-transit review (CONNECTOR-MODEL.md §14.2 item B7).
+
+  4. Cancel-negative for Tier 1 (v2.3 §3 NOT PROVEN).
+
+REMAINING — DEPENDENCY ORDER, NOT SCHEDULE
+  1. Compliance rules page (B5, B6).
+  2. Compliance enforcement layer — preflight check in the send flow.
+  3. Twilio SMS BYOP send. Same adapter pattern as Resend; different
+     adapter. Small verification slice.
+  4. Copilot command (C3, C4) + AI boundary layer — largest block.
+  5. Acceptance — end-to-end.
+
+DOCS-ONLY / TEST-ONLY (additive to v2.3 §14's list)
+  - vite.config.ts: server.watch.ignored for **/target/** (F10).
+  - V6 stale lines in SYNC-TEST-VECTORS-v1.md.
+  - Mocean SMS HTTP shape confirm.
+  - CONNECTION-CENTER.md §14 A3 wording.
+  - 5a-vectors — three CONNECTOR event hex vectors.
+  - Registry invariant test (C6).
+
+================================================================
+A.6 — NEW OPEN ITEMS (additive to v2.3 §15)
+================================================================
+
+  - REGISTRATION / ONBOARDING GAP. Top of the list. §A.5 NEXT item 1.
+  - Agent settings.dat user_id was added by hand for the demo. §F11.
+    Depends on item above to become a non-issue.
+  - Communication Tools page does not re-render on sync. §F9.
+  - Vite watcher EBUSY on cargo build. §F10.
+  - Slice 4/5 live demo — CLOSED 2026-10-08.
+  - Slice 5 cloud verification — CLOSED 2026-10-08.
+  - All other v2.3 §15 items remain open.
+
+================================================================
+A.7 — PROCESS AMENDMENTS
+================================================================
+
+P1. MAIN CANNOT RUN CARGO. SAC blocks it. All builds, tests, and
+    type-checks run on cloud. v2.3 §6's runbook said "cloud trip"; it
+    did not say main cannot build at all. The distinction matters:
+    main is edit-only.
+
+P2. THE CLOUD TRIP MUST INCLUDE BOTH `npm run build` COMMANDS.
+    Not just cargo. F6 is the reason: cargo and node verify caught
+    none of the five Slice 5 defects. Both `npm run build` commands
+    (root for Client, agent-dashboard for Agent) are the only gate
+    that catches TypeScript errors. Both are `tsc && vite build`; the
+    tsc step is the type-check.
+
+P3. THE CLOUD TRIP IS ALSO THE LIVE DEMO MACHINE. Cloud is not just
+    for compile-verification; it is where the five terminals run.
+    Demo-driven defects (F3, F4, F5) are a distinct class from
+    compile-driven defects (F7, F8). Both classes belong in the close
+    process.
+
+P4. DEMO-DRIVEN FIXES ARE THEIR OWN COMMITS. A defect that only
+    appears when the code runs against a real provider is worth its
+    own commit and its own line in the deviation record. It is
+    evidence about the spec.
+
+P5. RESUME-HERE IS NOW APPEND-ONLY. The v2.3 rule ("At slice end:
+    rewrite this file in place. Do not append.") is superseded. New
+    slices add an appendix; existing sections are not rewritten.
+    Rationale: the v2.4 rewrite destroyed the baseline and made drift
+    invisible. See A.0.
+
+P6. BEFORE EDITING RECOVERY DOCS, THE CURRENT COMMITTED VERSION IS
+    THE SOURCE OF TRUTH. Restore from git if the working copy is
+    uncertain:
+
+        git checkout <commit> -- <path>
+
+    Never edit a recovery doc that might already be modified. The
+    committed version is what future sessions will trust.
+
+================================================================
+END OF APPENDIX A
+================================================================
 
 End of RESUME-HERE.md
