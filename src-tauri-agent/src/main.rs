@@ -276,6 +276,18 @@ fn test_connector_connection(
     Ok(())
 }
 
+fn communication_type_for(connector_code: &str) -> &'static str {
+    if connector_code.ends_with("-sms") {
+        "SMS"
+    } else if connector_code.ends_with("-email") {
+        "EMAIL"
+    } else if connector_code.ends_with("-voice") {
+        "CALL"
+    } else {
+        "NOTE"
+    }
+}
+
 #[command]
 fn send_connector_message(
     connector_code: String,
@@ -328,7 +340,7 @@ fn send_connector_message(
     if result.success {
         let input = gorka_shared::models::CommunicationInput {
             debtor_id,
-            r#type: "SMS".to_string(),
+            r#type: communication_type_for(&connector_code).to_string(),
             direction: "OUTBOUND".to_string(),
             content: Some(body),
             duration: None,
