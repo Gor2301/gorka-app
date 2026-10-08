@@ -31,7 +31,6 @@ use gorka_shared::relations;
 use gorka_shared::enrollment::parse_enrollment_package;
 use gorka_shared::sync_engine::{self, EngineHandle, EngineStatus, DiscoveryConfig};
 use gorka_shared::sync_events;
-use gorka_shared::connectors::ConnectorAdapter;
 
 mod auth;
 
