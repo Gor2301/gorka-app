@@ -16,6 +16,43 @@ const disableSchema = z.object({
   connectorCode: z.string().min(1),
 });
 
+// ─── GORKA Tier 1 credential lookup ───────────────────────────────────
+// Reads GORKA's own provider credentials from environment variables.
+// Returns null when no GORKA credential is configured for the code.
+//
+// The credential is returned to the caller in the enable response body.
+// It is held in process memory for the duration of the request only.
+// It is never persisted, logged, or written to the database. See
+// SLICE-5-SPEC §5 (SECURITY NOTE) and CONNECTOR-MODEL.md §4.5.
+//
+// Encoding: `value` is the provider credential as a UTF-8 string. The
+// client re-encodes it to bytes before calling
+// write_local_connector_credential. `configuration` is JSON.
+function getGorkaCredential(
+  connectorCode: string
+): { value: string; configuration: Record<string, any> } | null {
+  switch (connectorCode) {
+    case 'resend-email': {
+      const apiKey = process.env.GORKA_RESEND_API_KEY;
+      const from = process.env.GORKA_RESEND_FROM;
+      if (!apiKey || !from) return null;
+      return { value: apiKey, configuration: { from } };
+    }
+    case 'twilio-sms': {
+      const accountSid = process.env.GORKA_TWILIO_ACCOUNT_SID;
+      const authToken = process.env.GORKA_TWILIO_AUTH_TOKEN;
+      const from = process.env.GORKA_TWILIO_FROM;
+      if (!accountSid || !authToken || !from) return null;
+      return {
+        value: JSON.stringify({ accountSid, authToken }),
+        configuration: { from },
+      };
+    }
+    default:
+      return null;
+  }
+}
+
 // ─── GET /api/connectors ──────────────────────────────────────────────
 // Returns the caller's enabled connectors.
 //   OWNER  -> all organizations
@@ -52,6 +89,11 @@ router.get('/', async (req: Request, res: Response): Promise<any> => {
 // Enables a connector for the caller's organization.
 // LOCAL credentialsLocation only in this phase. CLOUD is rejected
 // until credential encryption is implemented.
+//
+// Slice 5: when tier1Acknowledged === true and the backend holds a
+// GORKA credential for the requested code, the response body gains a
+// `credential` field. The field is omitted otherwise. The credential
+// is never persisted, logged, or written to the database.
 router.post('/enable', async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
@@ -140,7 +182,20 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
       return upserted;
     });
 
-    return res.status(200).json({ success: true, data: row });
+    const responseBody: {
+      success: boolean;
+      data: unknown;
+      credential?: { value: string; configuration: Record<string, any> };
+    } = { success: true, data: row };
+
+    if (tier1Acknowledged === true) {
+      const gorkaCredential = getGorkaCredential(connectorCode);
+      if (gorkaCredential) {
+        responseBody.credential = gorkaCredential;
+      }
+    }
+
+    return res.status(200).json(responseBody);
   } catch (error) {
     console.error('❌ Connector enable error:', error);
     return res.status(500).json({ success: false, error: 'Failed to enable connector' });
