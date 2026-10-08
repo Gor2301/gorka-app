@@ -31,6 +31,7 @@ use gorka_shared::relations;
 use gorka_shared::enrollment::parse_enrollment_package;
 use gorka_shared::sync_engine::{self, EngineHandle, EngineStatus, DiscoveryConfig};
 use gorka_shared::sync_events;
+use gorka_shared::connectors::ConnectorAdapter;
 
 mod auth;
 
@@ -235,6 +236,7 @@ fn get_debtor_count(
 }
 
 #[command]
+#[command]
 fn list_local_connectors(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
@@ -243,6 +245,106 @@ fn list_local_connectors(
     let db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
     gorka_shared::connectors::local_record::list_local_connectors(conn, &organization_id)
+}
+
+#[command]
+fn test_connector_connection(
+    connector_code: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+
+    let secret = gorka_shared::connectors::local_record::read_local_connector_credential(
+        conn,
+        &organization_id,
+        &connector_code,
+    )?
+    .ok_or_else(|| format!("Connector {} is not enabled on this device", connector_code))?;
+
+    let cred = gorka_shared::connectors::ConnectorCredential {
+        value: secret.credential_value,
+        configuration: secret.configuration,
+    };
+
+    let registry = gorka_shared::connectors::build_default_registry();
+    let factory = registry
+        .factory(&connector_code)
+        .ok_or_else(|| format!("No adapter registered for {}", connector_code))?;
+    let adapter = factory(cred).map_err(|e| e.to_string())?;
+    adapter.test_connection().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[command]
+fn send_connector_message(
+    connector_code: String,
+    debtor_id: String,
+    to: String,
+    body: String,
+    subject: Option<String>,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<gorka_shared::connectors::SendResult, String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let user_id = crate::auth::get_user_id(app.clone())?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+
+    let secret = gorka_shared::connectors::local_record::read_local_connector_credential(
+        conn,
+        &organization_id,
+        &connector_code,
+    )?
+    .ok_or_else(|| format!("Connector {} is not enabled on this device", connector_code))?;
+
+    let from = secret
+        .configuration
+        .get("from")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Connector configuration has no 'from' field".to_string())?
+        .to_string();
+
+    let cred = gorka_shared::connectors::ConnectorCredential {
+        value: secret.credential_value,
+        configuration: secret.configuration,
+    };
+
+    let registry = gorka_shared::connectors::build_default_registry();
+    let factory = registry
+        .factory(&connector_code)
+        .ok_or_else(|| format!("No adapter registered for {}", connector_code))?;
+    let adapter = factory(cred).map_err(|e| e.to_string())?;
+
+    let send_request = gorka_shared::connectors::SendRequest {
+        to: to.clone(),
+        body: body.clone(),
+        subject: subject.clone(),
+        from,
+    };
+
+    let result = adapter.send(&send_request).map_err(|e| e.to_string())?;
+
+    if result.success {
+        let input = gorka_shared::models::CommunicationInput {
+            debtor_id,
+            r#type: "SMS".to_string(),
+            direction: "OUTBOUND".to_string(),
+            content: Some(body),
+            duration: None,
+            data: None,
+        };
+        gorka_shared::communications::insert_communication(
+            conn,
+            &organization_id,
+            input,
+            &user_id,
+        )?;
+    }
+
+    Ok(result)
 }
 
 #[command]
@@ -872,6 +974,8 @@ fn main() {
             search_debtors,
             get_debtor_count,
             list_local_connectors,
+            test_connector_connection,
+            send_connector_message,
             get_related_debtor_roles,
             get_debtor_debt_totals,
             insert_related_debtor,
