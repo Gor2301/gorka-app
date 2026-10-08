@@ -7,6 +7,8 @@
 use std::collections::HashMap;
 use std::fmt;
 
+use serde::Serialize;
+
 pub mod http;
 pub mod http_reqwest;
 pub mod mocean_sms;
@@ -42,7 +44,12 @@ pub struct SendRequest {
 }
 
 /// Section 7.3.
-#[derive(Debug)]
+///
+/// Serialize is derived so a Tauri command can return this struct
+/// to the frontend. The struct carries provider metadata only; it
+/// has no field that could hold a credential or a configuration
+/// secret.
+#[derive(Debug, Serialize)]
 pub struct SendResult {
     pub success: bool,
     pub provider_message_id: Option<String>,
