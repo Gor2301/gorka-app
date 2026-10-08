@@ -610,15 +610,15 @@ export default function DebtorProfilePage() {
         </div>
       </Card>
 
-         {!isRelated && (
-        <Card>
-          <CommunicationCard
-            debtorId={debtor.id}
-            debtorName={`${debtor.name} ${debtor.surname}`.trim()}
-            onSent={handleCommunicationSaved}
-          />
-        </Card>
+      <Card>
+        <CommunicationCard
+          debtorId={debtor.id}
+          debtorName={`${debtor.name} ${debtor.surname}`.trim()}
+          onSent={handleCommunicationSaved}
+        />
+      </Card>
 
+      {!isRelated && (
         <Card>
           <div className="debtor-profile__card-header">
             <h2 className="debtor-profile__card-heading">Debts</h2>
