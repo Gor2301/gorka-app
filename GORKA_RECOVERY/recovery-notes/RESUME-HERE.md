@@ -921,4 +921,551 @@ P6. BEFORE EDITING RECOVERY DOCS, THE CURRENT COMMITTED VERSION IS
 END OF APPENDIX A
 ================================================================
 
+================================================================
+APPENDIX B — CONNECTOR READINESS SPEC, STEP 1 (MEDIUM)
+(added v2.5, 2026-10-09)
+================================================================
+
+B.0 — WHY THIS APPENDIX EXISTS
+
+Appendix A (v2.4) closed Slice 5. The 2026-10-09 session reworked the
+connector UI model and produced a spec for the next slice. That spec
+was originally drafted as a standalone file,
+CONNECTOR-READINESS-SPEC.md. The founder asked for consolidation:
+too many separate specs, direction drifts across them. The standalone
+file was deleted and its content lives here instead.
+
+From v2.5 forward, RESUME-HERE is the single source of state AND the
+current plan. New standalone spec documents only when there is
+genuinely new territory (the AI boundary layer is one such case).
+
+Where this appendix and any earlier section of RESUME-HERE conflict,
+this appendix wins.
+
+================================================================
+B.1 — GOAL
+================================================================
+
+Restructure the Client's Connectors page into:
+
+  GORKA built-in table    catalog rows with isManagedByGorka = true.
+                          One card per row. One button per card:
+                          "Connect (GORKA)".
+
+  BYOP section            three sub-tables, each with its own header
+                          and its own visible boundary:
+                            A. Use my own account          (build now)
+                            B. New connectors — coming soon (placeholder)
+                            C. Data sources — coming soon   (placeholder)
+
+Build Path B: a schema-driven modal. The catalog row carries a
+`credentialSchema` JSON field. One generic modal reads it and renders
+whatever fields the schema names. Adding a connector is a seed edit
+plus an adapter. No new frontend components.
+
+Ship the backend enable-if-absent rule so a second add of the same
+provider is a silent no-op at the database level.
+
+Retire the second button ("Use my own account") on Tier 1 cards and
+the phrase itself. Delete the two Slice 5 per-connector BYOP modals.
+
+================================================================
+B.2 — DECISIONS LOCKED
+================================================================
+
+  1. Rule A. isManagedByGorka decides the table. A vendor appears in
+     exactly one top-level table. Tier 1 vendors are GORKA built-in
+     only. No second button on any card.
+
+  2. Path B. Schema-driven modal, driven by credentialSchema on the
+     catalog row. No per-connector React components.
+
+  3. Q1-B-1. The BYOP sub-table A dropdown reads the catalog, filtered
+     by: credentialSchema is present AND mvpStatus is 'LIVE'. No
+     hardcoded provider list in the frontend.
+
+  4. Q2. Flip mocean-sms mvpStatus from COMING_SOON to LIVE in the
+     seed. Its adapter exists. Its schema will be filled in.
+
+  5. Q3. Three BYOP sub-tables. A is functional. B and C are
+     placeholders (headers, subtitles, disabled buttons).
+
+  6. Q4 + follow-up. Two protections against duplicate adds:
+       a. UI: dropdown hides providers already added.
+       b. Backend: enable-if-absent. A second enable for a
+          (organization, connector) whose row is already CONNECTED
+          is a silent no-op. Returns the existing row. Adds
+          alreadyEnabled: true to the response. No write.
+
+  7. Silent handling of alreadyEnabled. The Client closes the modal
+     and reloads. No popup, no banner.
+
+  8. Voice stays a placeholder. No change.
+
+  9. No Rust change. No sync change. No new event type.
+
+================================================================
+B.3 — FILES CHANGED
+================================================================
+
+EDITED
+  prisma/schema.cloud.prisma
+  prisma/seed-connectors.ts
+  src/backend/routes/connectors.routes.ts
+  supervisor-dashboard/src/services/connectors.service.ts
+  supervisor-dashboard/src/components/Connectors/ConfigurationModal.tsx
+  supervisor-dashboard/src/pages/Connectors.tsx
+
+DELETED
+  supervisor-dashboard/src/components/Connectors/ResendByopModal.tsx
+  supervisor-dashboard/src/components/Connectors/TwilioByopModal.tsx
+
+UNCHANGED
+  supervisor-dashboard/src/components/Connectors/DeclarationModal.tsx
+  Any Rust file.
+  Any sync file.
+  Any other backend route.
+  The Agent's pages and components.
+
+================================================================
+B.4 — SCHEMA CHANGE
+================================================================
+
+In prisma/schema.cloud.prisma, ConnectorCatalog model, add one
+nullable field after documentationUrl (currently line 357):
+
+    credentialSchema  Json?    @map("credential_schema")
+
+Nullable. Existing rows unaffected. One Prisma migration.
+
+================================================================
+B.5 — SEED CHANGE
+================================================================
+
+Two edits to prisma/seed-connectors.ts.
+
+B.5.1 — Add a credentialSchema value to every row object.
+  All six rows receive one. See B.8 for exact values.
+
+B.5.2 — Add credentialSchema to the upsert update block:
+    credentialSchema: c.credentialSchema,
+  Without this, existing rows keep their old null value on re-seed.
+  This exact bug is documented in SESSION-HANDOFF §5.7.
+
+B.5.3 — Flip mocean-sms mvpStatus: 'COMING_SOON' -> 'LIVE'.
+  One line. Nothing else changes in that row.
+
+Do not change any isManagedByGorka value.
+
+================================================================
+B.6 — BACKEND CHANGE
+================================================================
+
+File: src/backend/routes/connectors.routes.ts, POST /enable handler.
+
+Replace the transaction body. New behaviour: enable-if-absent.
+
+  1. Look up the existing client_connectors row for
+     (organizationId, connectorCode).
+
+  2. If the row exists AND status === 'CONNECTED':
+     - Do not write.
+     - Do not create the tier1/zone3 acknowledgement audit row
+       again (re-recording would be a false history).
+     - Build the response with alreadyEnabled: true.
+     - For tier1Acknowledged: still call getGorkaCredential. If
+       configured, include it (fresh device can receive the
+       credential without re-provisioning).
+
+  3. If the row does not exist, or exists with status DISCONNECTED:
+     - Proceed as today: upsert to CONNECTED, write audit row if
+       acknowledged, build response without alreadyEnabled.
+
+Response shape:
+  { success: true, data: <row>, alreadyEnabled?: true,
+    credential?: { value, configuration } }
+
+The unique constraint on (organizationId, connectorCode) stays.
+It is the final safety net; the check above is the intended path.
+
+No schema change. No new column. No new table.
+
+================================================================
+B.7 — CLIENT SERVICE TYPES
+================================================================
+
+File: supervisor-dashboard/src/services/connectors.service.ts
+
+Add:
+
+    export interface CredentialField {
+      name: string;
+      label: string;
+      type: 'password' | 'text' | 'email' | 'tel';
+      required: boolean;
+      placeholder?: string;
+      default?: string;
+    }
+
+    export interface CredentialSchema {
+      credentials: CredentialField[];
+      configuration: CredentialField[];
+    }
+
+Add to CatalogEntry:
+    credentialSchema?: CredentialSchema | null;
+
+Add to EnableResponse:
+    alreadyEnabled?: boolean;
+
+Update the `enable` method's return to include
+`alreadyEnabled: body?.alreadyEnabled`.
+
+No method signature changes.
+
+================================================================
+B.8 — CREDENTIALSCHEMA FORMAT AND VALUES
+================================================================
+
+B.8.1 — Format
+
+{
+  "credentials": [
+    { "name": "apiKey", "label": "API Key", "type": "password",
+      "required": true, "placeholder": "re_..." }
+  ],
+  "configuration": [
+    { "name": "from", "label": "From address", "type": "email",
+      "required": true, "default": "onboarding@resend.dev" }
+  ]
+}
+
+Two arrays. credentials becomes the credential value blob
+(JSON.stringify of the keyed object). configuration becomes the
+configuration blob (JSON.stringify). Matches the existing
+handleByopSave(config, credentials) contract exactly.
+
+Field types supported in the modal: password, text, email, tel.
+Required: boolean. Placeholder and default: optional strings.
+Default pre-populates the input on open.
+
+B.8.2 — Per-connector values
+
+resend-email
+  credentials: [{ name: "apiKey", label: "API Key",
+    type: "password", required: true, placeholder: "re_..." }]
+  configuration: [{ name: "from", label: "From address",
+    type: "email", required: true, default: "onboarding@resend.dev" }]
+
+twilio-sms
+  credentials: [{ name: "accountSid", label: "Account SID",
+    type: "text", required: true, placeholder: "AC..." },
+    { name: "authToken", label: "Auth Token", type: "password",
+    required: true }]
+  configuration: [{ name: "from", label: "From number",
+    type: "tel", required: true, placeholder: "+1..." }]
+
+mocean-sms
+  credentials: [{ name: "apiKey", label: "API Key",
+    type: "password", required: true },
+    { name: "apiSecret", label: "API Secret", type: "password",
+    required: true }]
+  configuration: [{ name: "from", label: "Sender name",
+    type: "text", required: true, default: "GORKA" }]
+
+twilio-voice (COMING_SOON; schema recorded now, no adapter yet)
+  credentials: [{ name: "accountSid", ... }, { name: "authToken", ... }]
+  configuration: [{ name: "from", ... }]
+
+gemini-ai (COMING_SOON; schema recorded now, no adapter yet)
+  credentials: [{ name: "apiKey", label: "API Key",
+    type: "password", required: true }]
+  configuration: []
+
+custom-api
+  credentials: [{ name: "apiKey", label: "API Key",
+    type: "password", required: true }]
+  configuration: []
+
+Note on twilio-voice and gemini-ai: placeholders documenting intent.
+Their adapters, when built, revise the schema if the shape differs.
+
+================================================================
+B.9 — CONFIGURATIONMODAL REWRITE
+================================================================
+
+File: supervisor-dashboard/src/components/Connectors/ConfigurationModal.tsx
+
+Current state: hardcoded credentialFields with a single apiKey input.
+
+New state: render from a credentialSchema prop.
+
+Props:
+  isOpen: boolean
+  onClose: () => void
+  onSave: (config: Record<string, any>,
+           credentials: Record<string, any>) => void
+  connectorName: string
+  provider: string
+  credentialSchema: CredentialSchema | null   <-- new
+
+Render:
+  - If credentialSchema null or empty, disabled message + disabled
+    submit.
+  - Section "Credentials" per credentials[].
+  - Section "Configuration" per configuration[] (omit if empty).
+  - Input by type: password, text, email, tel.
+  - label from field.label with red * if required.
+  - placeholder from field.placeholder if present.
+  - default from field.default on open only.
+  - required attribute if field.required.
+
+State: two Record<string, any> objects, initialized on open from
+each field's default (or empty string). Reset on close.
+
+On submit: onSave(configuration, credentials). Same order as today.
+
+Styling unchanged.
+
+================================================================
+B.10 — CONNECTORS.TSX RESTRUCTURE
+================================================================
+
+File: supervisor-dashboard/src/pages/Connectors.tsx
+
+10.1 — Remove imports of ResendByopModal and TwilioByopModal.
+       Add `import type { CredentialSchema } ...`.
+10.2 — Remove ByopModalKind and byopModalKindFor.
+10.3 — Replace byopModal state with:
+         showConfigModal: boolean
+         selectedByopProvider: string
+10.4 — Layout
+       Header row unchanged.
+       SECTION 1: GORKA built-in — title, subtitle, cards one
+         button each (see B.11).
+       SECTION 2: Bring your own — title, subtitle, three stacked
+         sub-tables A, B, C.
+         A. "Use my own account" — <select> + [Add] above a grid;
+            empty-state if no BYOP entries.
+         B. "New connectors" — disabled button "Add (coming soon)".
+         C. "Data sources" — disabled button "Add (coming soon)".
+10.5 — Dropdown eligibility
+       const byopEligible = rows.filter(r =>
+         r.catalog.credentialSchema &&
+         r.catalog.mvpStatus === 'LIVE' &&
+         (!r.enablement || r.enablement.status !== 'CONNECTED')
+       );
+       Under the seed after B.5.3: resend-email, twilio-sms,
+       mocean-sms.
+10.6 — Handlers
+       handleConnect, handleTier1Confirm, handleDisconnect:
+         unchanged, except handleTier1Confirm early-returns when
+         result.alreadyEnabled.
+       handleByopProviderSelect: sets selectedByopProvider.
+       handleByopAdd: opens Zone 3 declaration (TIER2); on accept
+         opens the schema-driven modal.
+       handleByopSave(config, credentials): same body as today,
+         reads selectedByopProvider for the code.
+       closeConfigModal: resets both.
+10.7 — Modal mounts
+       DeclarationModal: two triggers (Tier 1 connect; BYOP add).
+       ConfigurationModal: gains credentialSchema prop.
+       Remove ResendByopModal and TwilioByopModal mounts.
+
+================================================================
+B.11 — GORKA BUILT-IN CARD
+================================================================
+
+  Not connected, LIVE:      one button "Connect (GORKA)"
+  Not connected, COMING_SOON: disabled "Coming soon"
+  Connected:                button "Disconnect"
+  (no second button on any card)
+
+================================================================
+B.12 — BYOP CARD
+================================================================
+
+Same card shape as GORKA built-in.
+  Connected: button "Disconnect"
+
+A BYOP card appears when:
+  - the org's client_connectors row for that code exists, AND
+  - the code's catalog row has a credentialSchema, AND
+  - the code is not already rendered in the GORKA built-in table.
+
+Under Rule A: one vendor, one card. If an admin BYOPs resend-email
+(Tier 1 vendor), the GORKA built-in Resend card shows CONNECTED and
+no second card appears. Correct. The path used is not displayed on
+the card; it is recorded in the local record and the audit event.
+
+================================================================
+B.13 — CLOUD TRIP
+================================================================
+
+One cloud trip after the code commits are pushed.
+
+  cd /d C:\gorka-app && git pull && set TMP=C:\cargo-tmp && set TEMP=C:\cargo-tmp && set DATABASE_URL=<pooler url> && npx prisma db push --schema=prisma\schema.cloud.prisma && npx prisma generate --schema=prisma\schema.cloud.prisma && npx tsx prisma/seed-connectors.ts && cargo build --workspace && cargo test --workspace && node verify\index.mjs && cd supervisor-dashboard && npm run build && cd ..\agent-dashboard && npm run build && cd ..
+
+Expected:
+  prisma db push    adds one nullable column. No destructive prompts.
+  prisma generate   regenerates the client with credentialSchema.
+  seed              six rows updated; mocean-sms mvpStatus = LIVE.
+  cargo build       cache hit; no Rust touched.
+  cargo test        unchanged.
+  node verify       9/9 unchanged.
+  npm run build x2  both pass.
+
+Do not run prisma db push without --schema. Do not answer Y to any
+drop-table prompt; if one appears, stop and report.
+
+================================================================
+B.14 — LIVE TEST
+================================================================
+
+Five terminals on cloud. Backend with GORKA_RESEND_API_KEY and
+GORKA_RESEND_FROM set. GORKA_TWILIO_* unset.
+
+CLIENT — Connectors page
+  1. Page loads. Two sections with visible boundary.
+  2. GORKA built-in: five cards, one button each.
+  3. No card has a second button. No "Use my own account" text.
+  4. BYOP: three sub-tables visible (A functional, B and C
+     placeholders with disabled buttons).
+  5. Tier 1 Resend: Connect -> declaration -> CONNECTED.
+  6. Resend Disconnect -> DISCONNECTED.
+  7. Tier 1 Twilio SMS: Connect -> error "not configured".
+     (Dormant-Tier-1 regression.)
+  8. Tier 1 Mocean SMS: Connect -> error "not configured".
+
+BYOP sub-table A
+  9. Dropdown shows Resend Email, Twilio SMS, Mocean SMS.
+ 10. Pick Resend -> Add -> declaration -> schema modal
+     (API Key + From). Fill, save. Card appears CONNECTED.
+ 11. Dropdown hides Resend.
+ 12. GORKA built-in Resend also shows CONNECTED (same row).
+ 13. Stale-tab re-add: silent no-op, single card.
+
+ 14-16. Repeat for Mocean, then Twilio as BYOP.
+ 17. Dropdown empties.
+
+AGENT — regression only
+ 18. Communication Tools page renders the same set.
+ 19. Open a debtor. Communication card renders.
+ 20. Optional: send via a working connector. Confirm unchanged.
+
+If any step fails, STOP and report. Do not improvise during the
+live test.
+
+================================================================
+B.15 — OUT OF SCOPE — FLAGGED FOR LATER SLICES
+================================================================
+
+  B.15.1 Reinstall / lost local credential. Admin enables Resend
+    Tier 1 on Device A. Reinstalls. Local DB empty. Card shows
+    CONNECTED from the cloud row. No local credential. No re-fetch
+    button. Pre-existing gap, own slice.
+  B.15.2 Generic HTTP adapter (Step 1.5). Makes sub-tables B and C
+    real. Detailed in §B.16.
+  B.15.3 Data-source display surface. Sub-table C, when built,
+    returns structured data. No display surface today.
+  B.15.4 Credential rotation. No "Reconnect" button. Admin
+    Disconnects, then Adds again. Current model.
+  B.15.5 Optimistic locking. The enable-if-absent rule (B.6)
+    closes duplicate-add. Concurrent overwrite from two tabs is
+    still possible. A `version` column + 409 response is the
+    standard fix. Deferred.
+  B.15.6 Tier indicator on connected cards. Not shown today.
+
+================================================================
+B.16 — STEP 1.5 (NEXT SLICE AFTER THIS ONE): GENERIC HTTP ADAPTER
+================================================================
+
+Recorded here so the next session does not re-derive it.
+
+B.16.1 — Why "paste credentials" is not enough.
+The credential is data. It says "here is a key". It does not say
+what to do with it. To make the HTTP call, the Agent needs compiled
+code that knows: URL, auth style (Bearer / Basic / header / query),
+body shape (JSON / form / query), and response mapping. Today that
+knowledge lives in each provider's Rust adapter. No adapter in the
+registry = nothing to call.
+
+B.16.2 — Four pieces of work.
+  1. Description format (schema + seed): ~1 hour.
+  2. Generic Rust adapter (generic_http.rs): 3-5 hours including
+     credential-leak regression test.
+  3. Admin form (method / URL / auth / body / response mapping):
+     4-6 hours usable; ~30 min for a raw JSON textarea (defeats
+     the point).
+  4. SSRF guardrails (HTTPS-only, IP deny-list): ~1 hour.
+     Decision for the founder: the Agent making outbound calls to
+     admin-supplied URLs is a new network capability. Not a default.
+
+B.16.3 — Realistic costs.
+  Full version: 10-16 hours. Multi-session.
+  Narrow version: 6-10 hours including cloud trip and live test.
+  Ultra-narrow: 3-4 hours, UX bad enough to undercut the point.
+
+B.16.4 — Why not in Step 1.
+  Step 1 is 4-6 hours and ships now. Step 1.5 is a day of work and
+  needs its own spec. Folding it in stalls Step 1.
+
+B.16.5 — custom-api has no adapter today.
+  custom-api is a catalog row (isManagedByGorka=false, LIVE). The
+  card shows a button. It looks like it works. There is no adapter
+  behind it. Nothing sends. Step 1 hides it (it is not in the
+  BYOP-eligible dropdown because it is not in the plan for
+  sub-table A; it does not appear in the GORKA built-in table
+  because isManagedByGorka is false). It returns when Step 1.5
+  gives it a working generic adapter.
+
+================================================================
+B.17 — COMMITS — IN ORDER
+================================================================
+
+Group 1 — Schema and seed (2 commits)
+  1. schema: add credentialSchema to ConnectorCatalog
+  2. seed: add credentialSchema to all rows; flip mocean-sms to LIVE
+
+Group 2 — Backend enable-if-absent (1 commit)
+  3. backend: enable-if-absent rule
+
+Group 3 — Client service types (1 commit)
+  4. connectors.service: CredentialField, CredentialSchema,
+     alreadyEnabled
+
+Group 4 — Modal rewrite (1 commit)
+  5. ConfigurationModal: render from credentialSchema
+
+Group 5 — Page restructure (2 commits)
+  6. Connectors.tsx: three sub-tables, dropdown, delete per-
+     connector BYOP routing
+  7. delete ResendByopModal.tsx and TwilioByopModal.tsx
+
+Group 6 — Docs (1 commit at slice close)
+  8. RESUME-HERE v2.5 (this appendix)
+
+Total: 8 commits.
+
+================================================================
+B.18 — FIRST ACTIONS AFTER APPROVAL
+================================================================
+
+  1. Founder approves this appendix.
+  2. Read the exact on-disk state of each file before editing
+     (schema block, seed block, backend handler, service file,
+     modal, page).
+  3. Edit in the order of B.17.
+  4. Verify each edit with findstr / Select-String before commit.
+  5. Push all commits.
+  6. Cloud trip (B.13).
+  7. Live test (B.14).
+  8. Close the slice: RESUME-HERE stays at v2.5, no new file.
+
+No edits start until the founder approves this appendix.
+
+================================================================
+END OF APPENDIX B
+================================================================
+
 End of RESUME-HERE.md
