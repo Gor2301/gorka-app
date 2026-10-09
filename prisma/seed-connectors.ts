@@ -28,6 +28,15 @@ const connectors = [
     pricingConfig: { currency: 'USD', unitLabel: 'message', markupPercent: 0 },
     iconUrl: null,
     documentationUrl: 'https://www.twilio.com/docs/messaging',
+    credentialSchema: {
+      credentials: [
+        { name: 'accountSid', label: 'Account SID', type: 'text', required: true, placeholder: 'AC...' },
+        { name: 'authToken', label: 'Auth Token', type: 'password', required: true },
+      ],
+      configuration: [
+        { name: 'from', label: 'From number', type: 'tel', required: true, placeholder: '+1...' },
+      ],
+    },
   },
   {
     code: 'twilio-voice',
@@ -43,6 +52,15 @@ const connectors = [
     pricingConfig: { currency: 'USD', unitLabel: 'minute', markupPercent: 0 },
     iconUrl: null,
     documentationUrl: 'https://www.twilio.com/docs/voice',
+    credentialSchema: {
+      credentials: [
+        { name: 'accountSid', label: 'Account SID', type: 'text', required: true, placeholder: 'AC...' },
+        { name: 'authToken', label: 'Auth Token', type: 'password', required: true },
+      ],
+      configuration: [
+        { name: 'from', label: 'From number', type: 'tel', required: true, placeholder: '+1...' },
+      ],
+    },
   },
   {
     code: 'resend-email',
@@ -58,10 +76,18 @@ const connectors = [
     pricingConfig: { currency: 'USD', unitLabel: 'email', markupPercent: 0 },
     iconUrl: null,
     documentationUrl: 'https://resend.com/docs',
+    credentialSchema: {
+      credentials: [
+        { name: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 're_...' },
+      ],
+      configuration: [
+        { name: 'from', label: 'From address', type: 'email', required: true, default: 'onboarding@resend.dev' },
+      ],
+    },
   },
   {
     code: 'mocean-sms',
-    mvpStatus: 'COMING_SOON',
+    mvpStatus: 'LIVE',
     name: 'Mocean SMS',
     description: 'Send SMS through Mocean for regional coverage.',
     category: 'SMS',
@@ -73,6 +99,15 @@ const connectors = [
     pricingConfig: { currency: 'USD', unitLabel: 'message', markupPercent: 0 },
     iconUrl: null,
     documentationUrl: 'https://www.moceanapi.com/docs',
+    credentialSchema: {
+      credentials: [
+        { name: 'apiKey', label: 'API Key', type: 'password', required: true },
+        { name: 'apiSecret', label: 'API Secret', type: 'password', required: true },
+      ],
+      configuration: [
+        { name: 'from', label: 'Sender name', type: 'text', required: true, default: 'GORKA' },
+      ],
+    },
   },
   {
     code: 'gemini-ai',
@@ -88,6 +123,12 @@ const connectors = [
     pricingConfig: { currency: 'USD', unitLabel: 'token', markupPercent: 0 },
     iconUrl: null,
     documentationUrl: 'https://ai.google.dev/docs',
+    credentialSchema: {
+      credentials: [
+        { name: 'apiKey', label: 'API Key', type: 'password', required: true },
+      ],
+      configuration: [],
+    },
   },
   {
     code: 'custom-api',
@@ -103,6 +144,12 @@ const connectors = [
     pricingConfig: { currency: 'USD', unitLabel: 'request', markupPercent: 0 },
     iconUrl: null,
     documentationUrl: null,
+    credentialSchema: {
+      credentials: [
+        { name: 'apiKey', label: 'API Key', type: 'password', required: true },
+      ],
+      configuration: [],
+    },
   },
 ];
 
@@ -125,6 +172,7 @@ async function main() {
         pricingConfig: c.pricingConfig,
         iconUrl: c.iconUrl,
         documentationUrl: c.documentationUrl,
+        credentialSchema: c.credentialSchema,
       },
     });
     console.log(`  ✓ ${c.code}`);
