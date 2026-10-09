@@ -1642,9 +1642,12 @@ Implementation:
 C.5 — F17 DESIGN AS IMPLEMENTED
 ================================================================
 
-A separate consolidated spec exists for F17:
-GORKA_RECOVERY/recovery-notes/F17-SPEC.md (v1.1). What was built
-matches that spec:
+The design is captured inline below and in the session chat
+that produced it. File it as a standalone spec only after the
+cloud trip and live test pass. What was built matches the
+design described in this section:
+
+  - shared/src/sync_engine.rs — ApplyNotifier type alias
 
   - shared/src/sync_engine.rs — ApplyNotifier type alias
     (Arc<dyn Fn() + Send + Sync>). Optional field on
@@ -1814,7 +1817,7 @@ C.9 — OPEN ITEMS
 
 New this session:
   - Cloud trip + live test for f872e9b. Pending.
-  - F17-SPEC.md v1.1 filed alongside RESUME-HERE.
+  - F17 design is captured inline in C.5. No standalone file.
   - Cargo.lock drift: main's committed Cargo.lock is behind
     main's committed Cargo.toml. Cosmetic. One-commit fix
     whenever.
