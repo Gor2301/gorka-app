@@ -1,5 +1,19 @@
 import { api } from './api.service';
 
+export interface CredentialField {
+  name: string;
+  label: string;
+  type: 'password' | 'text' | 'email' | 'tel';
+  required: boolean;
+  placeholder?: string;
+  default?: string;
+}
+
+export interface CredentialSchema {
+  credentials: CredentialField[];
+  configuration: CredentialField[];
+}
+
 export interface CatalogEntry {
   code: string;
   name: string;
@@ -8,6 +22,7 @@ export interface CatalogEntry {
   provider: string;
   isManagedByGorka: boolean;
   mvpStatus: 'LIVE' | 'COMING_SOON';
+  credentialSchema?: CredentialSchema | null;
 }
 
 export interface EnablementRow {
@@ -22,19 +37,8 @@ export interface EnablementRow {
 
 export interface EnableResponse {
   row: EnablementRow | null;
-  /**
-   * Present only when the backend holds a GORKA-managed Tier 1
-   * credential for the requested connector code AND the enable was
-   * sent with tier1Acknowledged: true. Omitted otherwise. The value
-   * is a UTF-8 string (a bare API key for Resend, a JSON string for
-   * Twilio). The caller re-encodes it to bytes before calling
-   * write_local_connector_credential. See SLICE-5-SPEC §5.
-   *
-   * This value is a secret. It must never be logged, rendered, or
-   * stored anywhere except the local SQLCipher database via
-   * write_local_connector_credential.
-   */
   credential?: { value: string; configuration: Record<string, any> };
+  alreadyEnabled?: boolean;
 }
 
 export const connectorsService = {
@@ -42,12 +46,10 @@ export const connectorsService = {
     const body = await api.get<any>('/connectors/catalog');
     return body?.data?.rows ?? [];
   },
-
   async listEnablements(): Promise<EnablementRow[]> {
     const body = await api.get<any>('/connectors');
     return body?.data?.rows ?? [];
   },
-
   async enable(
     connectorCode: string,
     options?: { zone3Acknowledged?: boolean; tier1Acknowledged?: boolean },
@@ -61,9 +63,9 @@ export const connectorsService = {
     return {
       row: body?.data ?? null,
       credential: body?.credential,
+      alreadyEnabled: body?.alreadyEnabled,
     };
   },
-
   async disable(connectorCode: string): Promise<EnablementRow | null> {
     const body = await api.post<any>('/connectors/disable', { connectorCode });
     return body?.data ?? null;

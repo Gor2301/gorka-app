@@ -4,7 +4,7 @@ import { prisma } from '../db';
 
 const router = Router();
 
-// ─── Validation ───────────────────────────────────────────────────────
+// --- Validation ---
 const enableSchema = z.object({
   connectorCode: z.string().min(1),
   credentialsLocation: z.enum(['CLOUD', 'LOCAL']),
@@ -16,14 +16,14 @@ const disableSchema = z.object({
   connectorCode: z.string().min(1),
 });
 
-// ─── GORKA Tier 1 credential lookup ───────────────────────────────────
+// --- GORKA Tier 1 credential lookup ---
 // Reads GORKA's own provider credentials from environment variables.
 // Returns null when no GORKA credential is configured for the code.
 //
 // The credential is returned to the caller in the enable response body.
 // It is held in process memory for the duration of the request only.
 // It is never persisted, logged, or written to the database. See
-// SLICE-5-SPEC §5 (SECURITY NOTE) and CONNECTOR-MODEL.md §4.5.
+// SLICE-5-SPEC section 5 (SECURITY NOTE) and CONNECTOR-MODEL.md section 4.5.
 //
 // Encoding: `value` is the provider credential as a UTF-8 string. The
 // client re-encodes it to bytes before calling
@@ -56,7 +56,7 @@ function getGorkaCredential(
   }
 }
 
-// ─── GET /api/connectors ──────────────────────────────────────────────
+// --- GET /api/connectors ---
 // Returns the caller's enabled connectors.
 //   OWNER  -> all organizations
 //   Others -> own organization only
@@ -83,15 +83,19 @@ router.get('/', async (req: Request, res: Response): Promise<any> => {
 
     return res.status(200).json({ success: true, data: { rows, total: rows.length } });
   } catch (error) {
-    console.error('❌ Connector list error:', error);
+    console.error('Connector list error:', error);
     return res.status(500).json({ success: false, error: 'Failed to list connectors' });
   }
 });
 
-// ─── POST /api/connectors/enable ──────────────────────────────────────
+// --- POST /api/connectors/enable ---
 // Enables a connector for the caller's organization.
 // LOCAL credentialsLocation only in this phase. CLOUD is rejected
 // until credential encryption is implemented.
+//
+// Enable-if-absent: a second enable for a row that is already
+// CONNECTED is a silent no-op. No write, no audit. The response
+// gains alreadyEnabled: true and returns the existing row.
 //
 // Slice 5: when tier1Acknowledged === true and the backend holds a
 // GORKA credential for the requested code, the response body gains a
@@ -112,7 +116,7 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
       });
     }
 
-     const { connectorCode, credentialsLocation, zone3Acknowledged, tier1Acknowledged } = parsed.data;
+    const { connectorCode, credentialsLocation, zone3Acknowledged, tier1Acknowledged } = parsed.data;
 
     if (credentialsLocation === 'CLOUD') {
       return res.status(400).json({
@@ -135,62 +139,83 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
       });
     }
 
-    const row = await prisma.$transaction(async (tx) => {
-      const upserted = await tx.clientConnector.upsert({
-        where: {
-          organizationId_connectorCode: {
-            organizationId: user.organizationId,
-            connectorCode,
-          },
-        },
-        create: {
+    // Enable-if-absent: check for an existing row first.
+    const existing = await prisma.clientConnector.findUnique({
+      where: {
+        organizationId_connectorCode: {
           organizationId: user.organizationId,
           connectorCode,
-          status: 'CONNECTED',
-          credentialsLocation,
-          connectedAt: new Date(),
         },
-        update: {
-          status: 'CONNECTED',
-          credentialsLocation,
-          connectedAt: new Date(),
-          disconnectedAt: null,
-          suspendedReason: null,
-        },
-      });
-
-      if (zone3Acknowledged === true) {
-        await tx.organizationAuditEvent.create({
-          data: {
-            organizationId: user.organizationId,
-            eventType: 'ZONE_3_CONNECTION_ACKNOWLEDGED',
-            actorId: user.id,
-            actorName: user.email ?? null,
-            details: { connectorCode, tier: 'TIER2' },
-          },
-        });
-      }
-
-      if (tier1Acknowledged === true) {
-        await tx.organizationAuditEvent.create({
-          data: {
-            organizationId: user.organizationId,
-            eventType: 'TIER1_CONNECTION_ACKNOWLEDGED',
-            actorId: user.id,
-            actorName: user.email ?? null,
-            details: { connectorCode, tier: 'TIER1' },
-          },
-        });
-      }
-      return upserted;
+      },
     });
 
     const responseBody: {
       success: boolean;
       data: unknown;
+      alreadyEnabled?: true;
       credential?: { value: string; configuration: Record<string, any> };
-    } = { success: true, data: row };
+    } = { success: true, data: null };
 
+    if (existing && existing.status === 'CONNECTED') {
+      // Already enabled. No write, no audit row. Return the existing row.
+      responseBody.data = existing;
+      responseBody.alreadyEnabled = true;
+    } else {
+      const row = await prisma.$transaction(async (tx) => {
+        const upserted = await tx.clientConnector.upsert({
+          where: {
+            organizationId_connectorCode: {
+              organizationId: user.organizationId,
+              connectorCode,
+            },
+          },
+          create: {
+            organizationId: user.organizationId,
+            connectorCode,
+            status: 'CONNECTED',
+            credentialsLocation,
+            connectedAt: new Date(),
+          },
+          update: {
+            status: 'CONNECTED',
+            credentialsLocation,
+            connectedAt: new Date(),
+            disconnectedAt: null,
+            suspendedReason: null,
+          },
+        });
+
+        if (zone3Acknowledged === true) {
+          await tx.organizationAuditEvent.create({
+            data: {
+              organizationId: user.organizationId,
+              eventType: 'ZONE_3_CONNECTION_ACKNOWLEDGED',
+              actorId: user.id,
+              actorName: user.email ?? null,
+              details: { connectorCode, tier: 'TIER2' },
+            },
+          });
+        }
+
+        if (tier1Acknowledged === true) {
+          await tx.organizationAuditEvent.create({
+            data: {
+              organizationId: user.organizationId,
+              eventType: 'TIER1_CONNECTION_ACKNOWLEDGED',
+              actorId: user.id,
+              actorName: user.email ?? null,
+              details: { connectorCode, tier: 'TIER1' },
+            },
+          });
+        }
+        return upserted;
+      });
+      responseBody.data = row;
+    }
+
+    // Tier 1 credential: returned whenever requested and configured.
+    // This includes the already-enabled case, so a fresh device can
+    // receive the credential without re-provisioning.
     if (tier1Acknowledged === true) {
       const gorkaCredential = getGorkaCredential(connectorCode);
       if (gorkaCredential) {
@@ -200,12 +225,12 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
 
     return res.status(200).json(responseBody);
   } catch (error) {
-    console.error('❌ Connector enable error:', error);
+    console.error('Connector enable error:', error);
     return res.status(500).json({ success: false, error: 'Failed to enable connector' });
   }
 });
 
-// ─── POST /api/connectors/disable ─────────────────────────────────────
+// --- POST /api/connectors/disable ---
 // Disables a connector for the caller's organization. If the row
 // does not exist, returns 404.
 router.post('/disable', async (req: Request, res: Response): Promise<any> => {
@@ -251,12 +276,12 @@ router.post('/disable', async (req: Request, res: Response): Promise<any> => {
 
     return res.status(200).json({ success: true, data: row });
   } catch (error) {
-    console.error('❌ Connector disable error:', error);
+    console.error('Connector disable error:', error);
     return res.status(500).json({ success: false, error: 'Failed to disable connector' });
   }
 });
 
-// GET /api/connectors/catalog
+// --- GET /api/connectors/catalog ---
 // Returns the active connector_catalog rows for display.
 router.get('/catalog', async (req: Request, res: Response): Promise<any> => {
   try {
@@ -270,4 +295,5 @@ router.get('/catalog', async (req: Request, res: Response): Promise<any> => {
     return res.status(500).json({ success: false, error: 'Failed to list catalog' });
   }
 });
+
 export default router;
