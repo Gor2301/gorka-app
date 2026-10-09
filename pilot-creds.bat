@@ -16,8 +16,8 @@ REM real customer. See GORKA_RECOVERY/recovery-notes/CREDENTIALS.md.
 REM --------------------------------------------------------------------
 
 set "DATABASE_URL=postgresql://postgres.tmloklxelckicufzpzxz:gorka2026saas@aws-1-eu-west-3.pooler.supabase.com:5432/gorka_test"
-set "RESEND_API_KEY=re_d5BwBTPP_77bYXXNXGGLZU5SwNmtx2gjb"
-set "GORKA_RESEND_API_KEY=re_d5BwBTPP_77bYXXNXGGLZU5SwNmtx2gjb"
+set "RESEND_API_KEY=re_R7BkU3K1_8WeFnw2CUxY2hN32SJQwbKzF"
+set "GORKA_RESEND_API_KEY=re_R7BkU3K1_8WeFnw2CUxY2hN32SJQwbKzF"
 set "GORKA_RESEND_FROM=onboarding@resend.dev"
 set "TMP=C:\cargo-tmp"
 set "TEMP=C:\cargo-tmp"
