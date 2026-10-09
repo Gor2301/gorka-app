@@ -1465,7 +1465,394 @@ B.18 — FIRST ACTIONS AFTER APPROVAL
 No edits start until the founder approves this appendix.
 
 ================================================================
-END OF APPENDIX B
+================================================================
+APPENDIX C — STEP 1 CLOSE (added v2.6, 2026-10-09)
 ================================================================
 
+STATUS: CODE COMPLETE ON MAIN. CLOUD VERIFICATION PENDING.
+        The cloud trip for f872e9b has not yet run. Live test
+        not yet run. This appendix is written from the state of
+        the code, not from a verified live run. If cloud fails,
+        amend this appendix in place (it is current, not
+        historical) or add Appendix D with the findings.
+
+================================================================
+C.0 — WHY THIS APPENDIX EXISTS
+================================================================
+
+Appendix B is the spec Slice/Step 1 implemented. This appendix
+records what Step 1 actually shipped, the findings from the first
+live run, the fixes, and the decisions made mid-slice that amend
+Appendix B. Sections 1–16 and Appendices A/B are unchanged; this
+is additive.
+
+Where this appendix and earlier sections conflict, this appendix
+wins. Appendix B remains the historical record of what Step 1
+was meant to be.
+
+================================================================
+C.1 — MACHINE STATE
+================================================================
+
+MAIN:    HEAD f872e9b. Pushed to origin/main. Working tree
+         clean except CHAT-HANDOFF-DUMP.txt and make-dump.ps1
+         (untracked, known).
+
+CLOUD:   at e944453. Has not yet pulled 4b24231 or f872e9b.
+         Has not run the credentialSource migration or the
+         ApplyNotifier build. First action next session.
+
+Commits added this session:
+
+  dd26719  schema: add credentialSchema to ConnectorCatalog
+  976876b  seed: add credentialSchema to all rows; flip mocean-sms
+           to LIVE
+  e944453  connectors: enable-if-absent; schema-driven BYOP modal;
+           two-table UI
+  4b24231  connectors: credentialSource field; card placement by
+           source; roll back failed Tier 1 connect; hide
+           custom-api from BYOP dropdown
+  f872e9b  sync_engine: optional ApplyNotifier callback; agent
+           emits connector-sync; Communication Tools page
+           re-reads on event
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -5
+    git status --short
+
+================================================================
+C.2 — WHAT STEP 1 SHIPPED
+================================================================
+
+GOAL (from Appendix B)
+  Restructure the Client's Connectors page into a GORKA built-in
+  table and a BYOP section with three sub-tables (A functional,
+  B and C placeholders). Schema-driven modal. Enable-if-absent
+  backend. Delete the two per-connector BYOP modals.
+
+DELIVERED
+  - prisma/schema.cloud.prisma — ConnectorCatalog gains
+    credentialSchema Json?. ClientConnector gains
+    credentialSource String?.
+  - prisma/seed-connectors.ts — credentialSchema on five rows
+    (custom-api's is omitted to keep it out of the BYOP dropdown);
+    mocean-sms flipped to LIVE.
+  - src/backend/routes/connectors.routes.ts — enable-if-absent
+    rule; credentialSource computed from tier1/zone3
+    acknowledgments and written to both create and update paths;
+    getGorkaCredential unchanged.
+  - supervisor-dashboard/src/services/connectors.service.ts —
+    CredentialField, CredentialSchema, credentialSchema on
+    CatalogEntry, credentialSource on EnablementRow,
+    alreadyEnabled on EnableResponse.
+  - ConfigurationModal.tsx — rewritten to render entirely from a
+    credentialSchema prop. No per-connector React code.
+  - Connectors.tsx — GORKA built-in section, BYOP section with
+    three sub-tables, schema-driven modal mount, sections split
+    by credentialSource (Rule C).
+  - ResendByopModal.tsx and TwilioByopModal.tsx — deleted.
+  - shared/src/sync_engine.rs — ApplyNotifier type alias;
+    optional field on DiscoveryConfig and ListenerConfig;
+    threaded through start_engine_connect, start_engine_listen,
+    run_engine, run_session; call site in run_session wrapped in
+    catch_unwind.
+  - shared/tests/sync_engine.rs — two fixtures gain
+    apply_notifier: None.
+  - src-tauri-agent/src/main.rs — notifier closure in
+    start_engine_inner that emits "connector-sync" via the
+    AppHandle.
+  - src-tauri/src/main.rs — Client passes apply_notifier: None.
+  - agent-dashboard/src/pages/CommunicationToolsPage.tsx —
+    listener-first registration, generation-counter guarded
+    reads, cleanup invalidation. Page auto-refreshes on
+    connector-sync.
+
+================================================================
+C.3 — FINDINGS AND RESOLUTIONS
+================================================================
+
+From the first live run (client and agent against a live backend
+and DB), six findings were recorded. Five are resolved in this
+slice; one is deferred.
+
+  F12  Failed Connect (GORKA) left the row CONNECTED.
+       RESOLVED in 4b24231. Frontend rolls back via disable()
+       when the backend returns no credential.
+
+  F13  custom-api appeared in the BYOP dropdown.
+       RESOLVED in 4b24231. custom-api's credentialSchema is
+       omitted from the seed, so the eligibility filter excludes
+       it. It returns when a generic adapter exists (Step 1.5
+       was going to build one; see C.8 for why that shrank).
+
+  F14  Card placement ignored credential source.
+       RESOLVED in 4b24231. New field credentialSource on
+       ClientConnector. Sections split by source. See C.4.
+
+  F15  custom-api stuck on Agent after Client disabled it.
+       DEFERRED. Known design gap. Belongs with the
+       CONNECTOR_DISABLED origination work (§7 A/B/C decision
+       still pending).
+
+  F16  twilio-sms missing on Agent after Client connected it.
+       RESOLVED as a side-effect of F12. With rollback, the row
+       no longer gets stuck CONNECTED-without-credential; the
+       CONNECTOR_ENABLED event either originates correctly or
+       not at all.
+
+  F17  Communication Tools page did not auto-refresh on sync.
+       RESOLVED in f872e9b. Engine notifier → Tauri event →
+       frontend re-read. See C.5.
+
+================================================================
+C.4 — RULE C — CARD PLACEMENT BY CREDENTIAL SOURCE
+(amends Appendix B §B.2 decision 1)
+================================================================
+
+Founder direction, from the live test:
+
+  The section is the answer to "whose account is this on?" An
+  admin glancing at the page sees which connectors GORKA is
+  paying for and which ones the customer is. No guessing. The
+  card lives where the credential came from.
+
+Rule C, as implemented:
+
+  GORKA credential       → card in GORKA built-in
+  BYOP credential        → card in Bring your own, even when
+                           the connector is GORKA-managed
+  Unconnected            → GORKA built-in by default (the offer),
+                           also in the BYOP dropdown as the
+                           alternative
+  Disconnected           → returns to GORKA built-in
+
+Rule A (Appendix B §B.2) placed cards purely by the catalog flag
+isManagedByGorka. Rule C supersedes it.
+
+Implementation:
+  - ClientConnector.credentialSource is set by the backend enable
+    handler: tier1Acknowledged === true → 'GORKA';
+    zone3Acknowledged === true → 'BYOP'.
+  - The frontend splits sections on this field, not on
+    isManagedByGorka.
+
+================================================================
+C.5 — F17 DESIGN AS IMPLEMENTED
+================================================================
+
+A separate consolidated spec exists for F17:
+GORKA_RECOVERY/recovery-notes/F17-SPEC.md (v1.1). What was built
+matches that spec:
+
+  - shared/src/sync_engine.rs — ApplyNotifier type alias
+    (Arc<dyn Fn() + Send + Sync>). Optional field on
+    DiscoveryConfig and ListenerConfig.
+  - Call site: run_session, in the Some(frame) arm, immediately
+    after handle_incoming(...)? returns Ok. Post-commit,
+    outside any transaction, on the engine thread. Wrapped in
+    std::panic::catch_unwind(AssertUnwindSafe(...)) because the
+    engine thread is unsupervised.
+  - Agent — closure that captures AppHandle and calls
+    app.emit("connector-sync", ()). Result discarded.
+  - Client — apply_notifier: None. No behavior change.
+  - Frontend — listener registered first, initial read after.
+    Generation counter guards stale reads. Cleanup invalidates
+    any in-flight read.
+
+Post-commit invariant, verified from source:
+process_event (shared/src/sync_pipeline.rs line ~102) opens
+conn.transaction() and calls tx.commit() on both Accept paths
+(prerequisite-pending and applied). When handle_incoming returns
+Ok, every event has committed or was a no-write reject.
+
+Panic policy, decided:
+  The engine thread is unsupervised (run_engine has no
+  catch_unwind, no is_finished check, no status flip on panic).
+  A notifier panic would silently kill the engine. Therefore the
+  call is wrapped. The panic payload is discarded; the engine
+  continues. Logging the payload via eprintln! in the Err arm is
+  a one-line refinement available later.
+
+================================================================
+C.6 — PROCESS AMENDMENTS
+================================================================
+
+P-A. DOCS AFTER VERIFICATION.
+     Documentation for a slice is written only after the cloud
+     trip AND the live test pass. Writing docs for unverified
+     code wastes work and produces unreliable docs. This
+     appendix is written with a STATUS line because the cloud
+     trip has not yet run.
+
+P-B. THREE-COMMIT STRUCTURE PER SLICE, NOT EIGHT.
+     Appendix B §B.17 planned eight commits. In practice, cloud
+     fails at the first bad step in a chain, and the chain output
+     itself localises the failure. The batching that emerged:
+       - schema + seed                    (data shape)
+       - backend + service + UI + deletes (behaviour and UI)
+       - docs                             (at slice close)
+
+P-C. NO GUESSING ON ANCHORS.
+     When the exact on-disk text of a target block is not in
+     hand, read it first (Get-Content | Select-Object -Skip N
+     -First M) and derive the anchor from the output. Never
+     propose an anchor from memory.
+
+P-D. FEWER ROUND TRIPS.
+     Whole-file replacements for files whose structure is
+     already known. Anchored edits in files we have read. No
+     intermediate commit per file.
+
+P-E. FOUNDER'S TIME ABOVE PROCESS PURITY.
+     Don't turn one command into five round trips. State the
+     whole plan, run it, paste the tail. Diagnose only on
+     failure.
+
+================================================================
+C.7 — PILOT-STAGE SECURITY POLICY
+(supersedes §5)
+================================================================
+
+Founder direction, from this session:
+
+  The system is pre-product. No users, no customers. No debtor
+  data in GORKA cloud (existing invariant). The pilot
+  credentials protect a test database and a test email account.
+  Exposure is recoverable. Rotating credentials every session is
+  process overhead that stalls the actual work.
+
+Policy, in force:
+
+  - If a credential appears in a chat: note it in one line and
+    continue. Do not block.
+  - Credentials do not go into git-tracked files or recovery
+    docs. This stands.
+  - Rotation is deferred until there is a real product with real
+    users. Rotate before the first real customer.
+
+During this session, the Supabase pooler password and the Resend
+API key were both pasted into the chat log. Per the policy above,
+noted and not blocking.
+
+§5 is superseded. Do not enforce rotation on future sessions
+until this policy is revised.
+
+================================================================
+C.8 — REVISED QUEUE
+================================================================
+
+Supersedes §14 and Appendix A §A.5's "NEXT — RECOMMENDED, IN
+ORDER" list.
+
+DONE
+  Prior slices (see Appendix A).
+  Step 1  Connector UI restructure. Code complete on main.
+          Cloud verification pending.
+
+IN FLIGHT
+  Cloud trip + live test for f872e9b.
+
+NEXT — IN ORDER
+
+  1. CLOUD TRIP + LIVE TEST for f872e9b. First action.
+     On pass: mark C.1 status line as verified.
+     On fail: amend C.1 with the failure; fix on main; re-push.
+
+  2. STEP 1.5 — MORE KNOWN PROVIDERS. Shrunk from Appendix B
+     §B.16's "generic HTTP adapter" plan. The SSRF decision
+     (see C.8.A below) rules out admin-typed URLs, so Step 1.5
+     becomes "additional provider adapters, same UI." Sub-table
+     B stays a placeholder. Its own spec before any code.
+
+  3. AI COPILOT + AI BOUNDARY LAYER. Moves near front. Same
+     tier as Step 1.5. Own planning session first.
+
+  4. STEP 1.6 — DATA-SOURCE DISPLAY SURFACE. Sub-table C when
+     built. Smaller than Step 1.5.
+
+  5. COMPLIANCE RULES PAGE (B5, B6).
+
+  6. COMPLIANCE ENFORCEMENT LAYER — preflight check in the send
+     flow. Includes the two outbound-contact rules from C.8.B.
+
+  7. SYNC-ARCHITECTURE §7 A/B/C DECISION, then
+     CONNECTOR_DISABLED and CONNECTOR_CREDENTIAL_REPLACED
+     origination and apply.
+
+  8. TWILIO SMS BYOP SEND VERIFICATION.
+
+  9. B7 CREDENTIAL-TRANSIT REVIEW — review-only.
+
+ 10. CANCEL-NEGATIVE FOR TIER 1 — 5-minute test.
+
+ 11. REGISTRATION / ONBOARDING BLOCK. Its own planning session,
+     then its own slices. Includes marketing-site registration,
+     org creation, admin-creates-agent-user flow, enrollment
+     package export UI.
+
+ 12. ACCEPTANCE — end-to-end.
+
+C.8.A — OUTBOUND REQUEST DESTINATION RULE
+  The Agent only calls known providers (a GORKA-maintained list).
+  It does not accept admin-typed URLs. This removes the SSRF
+  surface that Step 1.5 was scoped to guard against. Step 1.5
+  shrank accordingly.
+
+C.8.B — OUTBOUND RECIPIENT RULES
+  Two rules, to be enforced in the compliance preflight:
+   1. Outbound goes to profile contacts only: debtor,
+      guarantors, pledgers. Add contact first if none.
+   2. Off-profile channels (agent's own phone, corporate
+      directory) stay off-system — not routed through the
+      connector, not logged as a connector event.
+
+================================================================
+C.9 — OPEN ITEMS
+================================================================
+
+New this session:
+  - Cloud trip + live test for f872e9b. Pending.
+  - F17-SPEC.md v1.1 filed alongside RESUME-HERE.
+  - Cargo.lock drift: main's committed Cargo.lock is behind
+    main's committed Cargo.toml. Cosmetic. One-commit fix
+    whenever.
+  - custom-api Client DB row is DISCONNECTED from the test.
+    After re-seed, has no credentialSchema. Verify on next live
+    test that it does not appear in the dropdown.
+
+Carried from §15 and Appendix A §A.6 (unchanged unless noted):
+  - Registration / onboarding gap (own block, C.8 item 11).
+  - Agent settings.dat user_id added by hand for the demo.
+  - Communication Tools page sync re-render — CLOSED by F17.
+  - Vite watcher EBUSY on cargo build.
+  - Client disable does not propagate to Agent (F15).
+  - Mocean SMS HTTP shape unconfirmed against current docs.
+  - Twilio Voice and Gemini AI adapters not built.
+  - Cancel-negative for Tier 1 not yet run.
+  - .bak files and untracked dump files. Delete at leisure.
+
+================================================================
+C.10 — WHAT REMAINS PENDING FOR THIS SLICE
+================================================================
+
+Step 1 is not closed until:
+  1. Cloud pull brings 4b24231 and f872e9b into cloud.
+  2. Cloud trip passes: prisma db push adds credential_source;
+     prisma generate regenerates; seed re-runs; cargo build
+     compiles the ApplyNotifier change; cargo test remains
+     112/112; node verify remains 9/9; both npm run build pass.
+  3. Live test confirms: F12 (rollback), F13 (custom-api
+     absent), F14 (card placement follows source), F17 (page
+     auto-refreshes on sync).
+  4. C.1 STATUS line is updated from "CODE COMPLETE ON MAIN.
+     CLOUD VERIFICATION PENDING." to "CLOSED. Cloud trip and
+     live test passed YYYY-MM-DD."
+
+Until all four are done, do not start Step 1.5.
+
+================================================================
+END OF APPENDIX C
+================================================================
 End of RESUME-HERE.md
