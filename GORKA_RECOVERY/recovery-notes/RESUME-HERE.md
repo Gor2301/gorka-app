@@ -1858,4 +1858,347 @@ Until all four are done, do not start Step 1.5.
 ================================================================
 END OF APPENDIX C
 ================================================================
+
+
+================================================================
+APPENDIX D — STEP 1 CLOSE AND SESSION FINDINGS
+(added v2.7, 2026-10-10)
+================================================================
+
+D.0 — WHY THIS APPENDIX EXISTS
+
+Appendix C recorded Step 1 code complete but cloud
+verification pending. The cloud trip and live test ran on
+2026-10-09/10. This appendix records the result, the
+findings, and the credential-handling change that came out
+of it.
+
+Where this appendix conflicts with C.1's state block, this
+appendix wins. C.1 is historical.
+
+================================================================
+D.1 — MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:    HEAD cd6a67f plus this appendix commit. Pushed.
+         Working tree clean except the two known untracked
+         files.
+
+CLOUD:   at cd6a67f. Full cloud trip passed. Live test
+         passed. Backend running. Five terminals may be
+         open or closed at the founder's discretion.
+
+Step 1 commits added since Appendix C:
+
+  859172c  sync_engine: restore missing Duration import
+           clobbered by ApplyNotifier insertion
+  89ed725  agent: import Emitter trait for AppHandle::emit
+           in sync notifier
+  893d86e  connectors: Rule C filter checks CONNECTED state
+           and isManagedByGorka; fixes F18 F19 F20
+  192d3cb  F17 diagnostic: eprintln in notifier, console.log
+           in listener
+  db81b87  revert F17 diagnostics
+  e7eca18  recovery-notes: CREDENTIALS.md
+  c7b42ae  add pilot-creds.bat
+  58d30ca  rotate Resend API key (dead)
+  6618eec  rotate Resend key to re_XK7FAF5z for
+           auto-revoke test (dead)
+  cd6a67f  secrets out of git: pilot-creds.bat becomes
+           template; values live in gitignored
+           pilot-creds.local.bat
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -8
+    git status --short
+
+================================================================
+D.2 — STEP 1 CLOSED
+================================================================
+
+CLOUD TRIP — PASSED
+
+  prisma db push          PASS — added credential_source
+  prisma generate         PASS
+  seed                    PASS — six rows; mocean-sms LIVE
+  cargo build --workspace PASS — after F21 and F22 fixed
+  cargo test --workspace  112/112 PASS
+  node verify             9/9 PASS
+  Client npm run build    PASS
+  Agent npm run build     PASS
+
+LIVE TEST — PASSED
+
+  F12  Tier 1 rollback on missing credential    VERIFIED
+  F13  custom-api out of BYOP dropdown          VERIFIED
+  F14  Rule C placement for BYOP rows           VERIFIED
+  F17  Agent auto-refresh on sync               VERIFIED
+       (after the Agent binary was rebuilt —
+       see F23)
+  F18  custom-api in GORKA built-in             VERIFIED FIXED
+  F19  Legacy NULL credentialSource rows        VERIFIED FIXED
+  F20  Disconnect makes card vanish             VERIFIED FIXED
+
+  End-to-end send via Resend Tier 1: VERIFIED. Real email
+  delivered to the founder's inbox on 2026-10-10.
+
+================================================================
+D.3 — FINDINGS THIS SESSION (F18–F23)
+================================================================
+
+F18  custom-api appeared in GORKA built-in.
+     RESOLVED in 893d86e. The Rule C filter only checked
+     credentialSource !== 'BYOP', so unconnected
+     non-GORKA-managed rows with null source landed in
+     GORKA built-in. Filter now also checks
+     isManagedByGorka for non-connected rows.
+
+F19  Legacy rows with NULL credentialSource (connected
+     before the field existed) landed in GORKA built-in.
+     RESOLVED in 893d86e. Backend writes credentialSource
+     on every connect, so a fresh connect fixes the row.
+
+F20  Disconnect made the card vanish from both sections.
+     RESOLVED in 893d86e. Filter now branches on CONNECTED
+     status first, then source, then isManagedByGorka.
+
+F21  The ApplyNotifier insertion clobbered an existing
+     `use std::time::Duration;` import in sync_engine.rs.
+     Detected by cargo build on the first cloud trip.
+     Fixed in 859172c.
+
+F22  AppHandle::emit requires the `Emitter` trait in scope
+     in Tauri 2.x. The ApplyNotifier closure called emit
+     without importing the trait. Detected by cargo build
+     on the same trip. Fixed in 89ed725.
+
+F23  The running Agent binary was stale. The first F17
+     live test "failed" because the Agent process was
+     built before the Emitter fix (89ed725). The binary on
+     disk had the fix; the process running in the window
+     did not. After Ctrl+C and rebuild, F17 passed.
+     No code change. Process rule recorded in D.9.
+
+================================================================
+D.4 — SECRET-MANAGEMENT INCIDENT
+================================================================
+
+On 2026-10-09/10, three Resend API keys were pushed to
+GitHub in CREDENTIALS.md and pilot-creds.bat. Each was
+auto-revoked by Resend within minutes of the push being
+allowed through GitHub's secret scanning block.
+
+Confirmation came in three forms:
+
+  1. curl against api.resend.com returned
+     "API key is invalid" minutes after a push.
+  2. The key disappeared from the Resend dashboard's
+     API keys list.
+  3. Resend sent an email: "We received an alert from
+     GitHub secret scanning that your API key was
+     mistakenly exposed on GitHub. We automatically
+     deleted your API key."
+
+Root cause: Resend and GitHub have a partnership. GitHub
+secret scanning reports leaked Resend keys to Resend.
+Resend auto-revokes them. This is by design and cannot be
+turned off.
+
+Consequence: the policy in Appendix C §C.7 ("credentials
+go into recovery notes, in git, on both machines") cannot
+be honored for Resend keys. The provider revokes them.
+
+Resolution: see D.5.
+
+================================================================
+D.5 — NEW CREDENTIAL PATTERN
+================================================================
+
+Secrets live on cloud only. Not in git. Never.
+
+  pilot-creds.bat          in git. Template. No values.
+                           Calls pilot-creds.local.bat if
+                           present.
+
+  pilot-creds.local.bat    gitignored. Cloud only. Holds
+                           the real values. Never committed.
+
+  CREDENTIALS.md           in git. Documents which env
+                           vars are required and where
+                           they live. No values.
+
+Cloud is the only machine that needs credentials. Main is
+edit-only. It never runs the backend, cargo, or the live
+test.
+
+Backup: if cloud is wiped, pilot-creds.local.bat is lost.
+Keep one copy outside git (desktop text file, password
+manager, USB). Restore by copying back to
+C:\gorka-app\pilot-creds.local.bat.
+
+Launch: none of this affects the product. In production
+the backend runs on a host; its secrets live in the host's
+dashboard. The Agent never reads a key from disk — it
+receives credentials over encrypted sync and stores them
+in local SQLCipher. This has been the architecture since
+Slice 5. It works.
+
+================================================================
+D.6 — REVISED CLOUD RUNBOOK
+================================================================
+
+Every terminal that needs DB, backend, cargo, or Prisma
+starts with `call pilot-creds.bat`.
+
+TERMINAL 1 — Backend
+
+    cd /d C:\gorka-app && call pilot-creds.bat && npx tsx src/backend/index.ts
+
+  Wait for "Express server running on http://localhost:3000"
+  and "✅ PostgreSQL connected successfully". Leave running.
+
+TERMINAL 2 — Client vite
+
+    cd /d C:\gorka-app && npm run dev
+
+  Wait for "Local: http://localhost:5173/".
+
+TERMINAL 3 — Agent vite
+
+    cd /d C:\gorka-app\agent-dashboard && npm run dev
+
+  Must bind 5174. If it binds 5173 or 5175, stop and fix.
+
+TERMINAL 4 — Client Tauri
+
+    cd /d C:\gorka-app && call pilot-creds.bat && cargo run --bin gorka-client
+
+TERMINAL 5 — Agent Tauri
+
+    cd /d C:\gorka-app && call pilot-creds.bat && cargo run --bin gorka-agent
+
+CLOUD TRIP — one command, one terminal
+
+    cd /d C:\gorka-app && git pull && call pilot-creds.bat && npx prisma db push --schema=prisma\schema.cloud.prisma && npx prisma generate --schema=prisma\schema.cloud.prisma && npx tsx prisma/seed-connectors.ts && cargo build --workspace && cargo test --workspace && node verify\index.mjs && npm run build && cd agent-dashboard && npm run build && cd ..
+
+  Note: the Client build runs from the repo root
+  (C:\gorka-app). There is no supervisor-dashboard\
+  folder. Appendix B §B.13 said `cd supervisor-dashboard`
+  — that was wrong. The root IS the Client.
+
+================================================================
+D.7 — REVISED QUEUE
+================================================================
+
+Supersedes C.8.
+
+DONE
+  Prior slices (see Appendix A).
+  Step 1  Connector UI restructure. CLOSED 2026-10-10.
+          Cloud trip and live test passed. Findings
+          F12–F23 recorded in C.3 and D.3.
+
+IN FLIGHT
+  None.
+
+NEXT — IN ORDER
+
+  1. STEP 1.5 — MORE KNOWN PROVIDERS. Additional provider
+     adapters behind the same schema-driven UI. Sub-table
+     B stays a placeholder. Own spec before any code.
+
+  2. AI COPILOT + AI BOUNDARY LAYER. Own planning session.
+
+  3. STEP 1.6 — DATA-SOURCE DISPLAY SURFACE.
+
+  4. COMPLIANCE RULES PAGE (B5, B6).
+
+  5. COMPLIANCE ENFORCEMENT LAYER — preflight check.
+
+  6. SYNC-ARCHITECTURE §7 A/B/C DECISION, then
+     CONNECTOR_DISABLED and CONNECTOR_CREDENTIAL_REPLACED.
+
+  7. TWILIO SMS BYOP SEND VERIFICATION.
+
+  8. B7 CREDENTIAL-TRANSIT REVIEW.
+
+  9. CANCEL-NEGATIVE FOR TIER 1 — 5-minute test.
+
+ 10. REGISTRATION / ONBOARDING BLOCK.
+
+ 11. ACCEPTANCE — end-to-end.
+
+================================================================
+D.8 — OPEN ITEMS
+================================================================
+
+New this session:
+  - F15 remains open: Client disable does not propagate
+    to the Agent. Deferred to queue item 6.
+  - Communication Tools page shows event metadata, not
+    credential health. A card showing TIER1 / ENABLED /
+    green badge can still have a dead credential behind
+    it. Logged as a design gap; own slice, own decision.
+
+Carried from §15 and Appendix A §A.6 (unchanged):
+  - Registration / onboarding gap (queue item 10).
+  - Agent settings.dat user_id added by hand for the demo.
+  - Vite watcher EBUSY on cargo build.
+  - Mocean SMS HTTP shape unconfirmed against current docs.
+  - Twilio Voice and Gemini AI adapters not built.
+  - .bak files and untracked dump files. Delete at leisure.
+
+Resolved this session:
+  - Cargo.lock drift — discarded on cloud, not re-committed.
+  - F17-SPEC.md dangling reference — removed in 192d3cb
+    and 746b90f.
+  - Secrets in git — resolved by D.5 pattern.
+
+================================================================
+D.9 — PROCESS AMENDMENTS
+================================================================
+
+P-F. THE RUNNING BINARY IS NOT THE SOURCE.
+     After a code change, the running application is
+     still the old binary until the process is restarted.
+     A live test that does not restart the affected
+     process is testing the wrong code. F23 is the
+     example: F17's first "failure" was a stale Agent
+     built before 89ed725. Rule: after every Rust
+     change, Ctrl+C the affected process, rebuild,
+     relaunch, then test.
+
+P-G. CLOUD IS THE ONLY PLACE RUST COMPILE ERRORS
+     ARE CAUGHT. Main cannot run cargo (SAC blocks it).
+     F21 and F22 are the third and fourth compile-time
+     defects in two slices. The cloud trip is not
+     optional; it is the only gate.
+
+P-H. SECRETS DO NOT GO IN GIT.
+     Supersedes C.7 and CREDENTIALS.md's founder
+     instruction. Not because of policy preference —
+     because Resend auto-revokes any key pushed to
+     GitHub. See D.4. Values live in
+     pilot-creds.local.bat on cloud only. Docs describe
+     requirements, never values.
+
+P-I. CREDENTIALS ARE LOADED VIA pilot-creds.bat.
+     Every terminal that needs DB, backend, cargo, or
+     Prisma starts with `call pilot-creds.bat`. This
+     replaces the inline `set "DATABASE_URL=..."` pattern
+     used in §6 and B.13.
+
+P-J. ONE APPENDIX PER SESSION, NOT APPEND-AND-EDIT.
+     Appendix C's edit-in-place rule was a one-time
+     exception because C was current, not historical.
+     From v2.7 forward, session findings append a new
+     appendix. Do not edit prior appendices.
+
+================================================================
+END OF APPENDIX D
+================================================================
+
 End of RESUME-HERE.md
+
