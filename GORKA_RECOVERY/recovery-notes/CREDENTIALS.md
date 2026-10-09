@@ -26,9 +26,9 @@ Contents:
 
 &#x20; DATABASE\_URL=postgresql://postgres.tmloklxelckicufzpzxz:gorka2026saas@aws-1-eu-west-3.pooler.supabase.com:5432/gorka\_test
 
-&#x20; RESEND\_API\_KEY=re\_R7BkU3K1\_8WeFnw2CUxY2hN32SJQwbKzF
+&#x20; RESEND\_API\_KEY=re\_XK7FAF5z\_CeYxJ3UTvYfJHnPREyQZa7Fg
 
-&#x20; GORKA\_RESEND\_API\_KEY=re\_R7BkU3K1\_8WeFnw2CUxY2hN32SJQwbKzF
+&#x20; GORKA\_RESEND\_API\_KEY=re\_XK7FAF5z\_CeYxJ3UTvYfJHnPREyQZa7Fg
 
 &#x20; GORKA\_RESEND\_FROM=onboarding@resend.dev
 
