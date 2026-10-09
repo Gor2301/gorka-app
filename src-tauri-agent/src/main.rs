@@ -16,7 +16,7 @@
 
 use std::sync::Mutex;
 use rusqlite::{params, Connection};
-use tauri::{command, Manager};
+use tauri::{command, Emitter, Manager};
 use chrono::Utc;
 use gorka_shared::storage::AppStorage;
 use gorka_shared::models::*;
