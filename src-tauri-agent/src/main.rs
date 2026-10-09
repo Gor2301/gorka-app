@@ -812,7 +812,8 @@ fn start_engine_inner(
     let app_for_notifier = app.clone();
     let notifier: gorka_shared::sync_engine::ApplyNotifier =
         std::sync::Arc::new(move || {
-            let _ = app_for_notifier.emit("connector-sync", ());
+        eprintln!("[F17-DIAG] notifier fired");
+    let _ = app_for_notifier.emit("connector-sync", ());
         });
 
     let discovery = DiscoveryConfig {

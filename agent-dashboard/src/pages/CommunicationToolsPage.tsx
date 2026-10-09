@@ -44,6 +44,7 @@ export default function CommunicationToolsPage() {
     (async () => {
       try {
         const un = await listen('connector-sync', () => {
+  console.log('[F17-DIAG] listener received connector-sync');
           if (!cancelled) loadConnectors();
         });
         if (cancelled) un();
