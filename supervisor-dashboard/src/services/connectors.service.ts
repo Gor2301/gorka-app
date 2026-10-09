@@ -31,6 +31,7 @@ export interface EnablementRow {
   connectorCode: string;
   status: 'CONNECTED' | 'DISCONNECTED' | 'ERROR';
   credentialsLocation: 'LOCAL' | 'CLOUD';
+  credentialSource: 'GORKA' | 'BYOP' | null;
   connectedAt: string | null;
   disconnectedAt: string | null;
 }

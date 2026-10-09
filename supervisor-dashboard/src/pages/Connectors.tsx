@@ -103,6 +103,16 @@ const statusBadgeStyle = (connected: boolean): React.CSSProperties => ({
   color: connected ? '#166534' : '#6b7280',
 });
 
+const sourceBadgeStyle: React.CSSProperties = {
+  fontSize: '10px',
+  fontWeight: 600,
+  padding: '2px 6px',
+  borderRadius: '4px',
+  backgroundColor: '#ede9fe',
+  color: '#5b21b6',
+  marginLeft: '6px',
+};
+
 const actionsRowStyle: React.CSSProperties = {
   display: 'flex',
   gap: '8px',
@@ -250,7 +260,6 @@ export default function Connectors() {
       });
 
       // Enable-if-absent: the connector is already on the server.
-      // Close silently and reload. No credential re-write needed.
       if (result.alreadyEnabled) {
         setShowDeclaration(false);
         setSelectedCatalog(null);
@@ -258,7 +267,15 @@ export default function Connectors() {
         return;
       }
 
+      // F12: no GORKA credential for this code. The backend wrote a
+      // CONNECTED row but no credential exists, so the connector can
+      // never send. Roll the row back before reporting the failure.
       if (!result.credential) {
+        try {
+          await connectorsService.disable(catalog.code);
+        } catch (rollbackErr) {
+          console.error('Rollback after failed enable also failed:', rollbackErr);
+        }
         setShowDeclaration(false);
         setSelectedCatalog(null);
         alert('GORKA-managed ' + catalog.name + ' is not configured on this server.');
@@ -319,7 +336,6 @@ export default function Connectors() {
       handleTier1Confirm();
       return;
     }
-    // TIER2: accepted the boundary declaration. Open the schema modal.
     if (!selectedCatalog) return;
     setShowConfigModal(true);
   };
@@ -353,15 +369,25 @@ export default function Connectors() {
     setSelectedCatalog(null);
   };
 
-  const renderGorkaCard = (row: DisplayRow) => {
+  const renderCard = (row: DisplayRow, section: 'gorka' | 'byop') => {
     const { catalog, enablement } = row;
     const isConnected = enablement?.status === 'CONNECTED';
     const isBusy = busyCode === catalog.code;
+    const sourceLabel =
+      enablement?.credentialSource === 'BYOP' ? 'YOUR ACCOUNT'
+      : enablement?.credentialSource === 'GORKA' ? 'GORKA'
+      : null;
+
     return (
       <div key={catalog.code} style={cardStyle}>
         <div style={cardHeaderStyle}>
           <div>
-            <h3 style={cardTitleStyle}>{catalog.name}</h3>
+            <h3 style={cardTitleStyle}>
+              {catalog.name}
+              {isConnected && sourceLabel && (
+                <span style={sourceBadgeStyle}>{sourceLabel}</span>
+              )}
+            </h3>
             <p style={cardProviderStyle}>{catalog.provider}</p>
           </div>
           <span style={statusBadgeStyle(isConnected)}>
@@ -372,45 +398,16 @@ export default function Connectors() {
           <p style={cardDescStyle}>{catalog.description}</p>
         )}
         <div style={actionsRowStyle}>
-          {!isConnected && catalog.mvpStatus === 'COMING_SOON' && (
+          {section === 'gorka' && !isConnected && catalog.mvpStatus === 'COMING_SOON' && (
             <button style={btnDisabledStyle} disabled title="This connector is coming soon.">
               Coming soon
             </button>
           )}
-          {!isConnected && catalog.mvpStatus === 'LIVE' && (
+          {section === 'gorka' && !isConnected && catalog.mvpStatus === 'LIVE' && (
             <button style={btnPrimaryStyle} onClick={() => handleConnect(row)} disabled={isBusy}>
               {isBusy ? 'Connecting...' : 'Connect (GORKA)'}
             </button>
           )}
-          {isConnected && (
-            <button style={btnDangerStyle} onClick={() => handleDisconnect(row)} disabled={isBusy}>
-              {isBusy ? 'Disconnecting...' : 'Disconnect'}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderByopCard = (row: DisplayRow) => {
-    const { catalog, enablement } = row;
-    const isConnected = enablement?.status === 'CONNECTED';
-    const isBusy = busyCode === catalog.code;
-    return (
-      <div key={catalog.code} style={cardStyle}>
-        <div style={cardHeaderStyle}>
-          <div>
-            <h3 style={cardTitleStyle}>{catalog.name}</h3>
-            <p style={cardProviderStyle}>{catalog.provider}</p>
-          </div>
-          <span style={statusBadgeStyle(isConnected)}>
-            {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
-          </span>
-        </div>
-        {catalog.description && (
-          <p style={cardDescStyle}>{catalog.description}</p>
-        )}
-        <div style={actionsRowStyle}>
           {isConnected && (
             <button style={btnDangerStyle} onClick={() => handleDisconnect(row)} disabled={isBusy}>
               {isBusy ? 'Disconnecting...' : 'Disconnect'}
@@ -437,22 +434,24 @@ export default function Connectors() {
     );
   }
 
-  // Rule A: isManagedByGorka decides the table. One vendor, one top-level table.
-  const gorkaRows = rows.filter((r) => r.catalog.isManagedByGorka);
-  const byopRows = rows.filter((r) => !r.catalog.isManagedByGorka);
+  // F14 / Rule C: section follows the credential source, not the
+  // catalog flag. GORKA-built-in holds everything that is not
+  // BYOP-connected (including unconnected offers). The BYOP section
+  // holds rows the admin connected with their own credential.
+  const gorkaSectionRows = rows.filter(
+    (r) => r.enablement?.credentialSource !== 'BYOP',
+  );
+  const byopConnectedRows = rows.filter(
+    (r) => r.enablement?.credentialSource === 'BYOP' && r.enablement.status === 'CONNECTED',
+  );
 
   // BYOP dropdown eligibility (Q1-B-1):
   //   credentialSchema present AND mvpStatus LIVE AND not already CONNECTED.
+  // custom-api has no schema (F13), so it is excluded automatically.
   const byopEligible = rows.filter((r) =>
     r.catalog.credentialSchema &&
     r.catalog.mvpStatus === 'LIVE' &&
     (!r.enablement || r.enablement.status !== 'CONNECTED'),
-  );
-
-  // BYOP connected cards: any non-GORKA row with a credentialSchema
-  // that is CONNECTED.
-  const byopConnected = byopRows.filter(
-    (r) => r.catalog.credentialSchema && r.enablement?.status === 'CONNECTED',
   );
 
   const selectedRow = rows.find((r) => r.catalog.code === selectedCatalog?.code) ?? null;
@@ -479,8 +478,10 @@ export default function Connectors() {
       <section style={sectionStyle}>
         <h3 style={sectionTitleStyle}>GORKA built-in</h3>
         <p style={sectionSubStyle}>Vendors provisioned by GORKA on your behalf.</p>
-        {gorkaRows.length > 0 ? (
-          <div style={gridStyle}>{gorkaRows.map(renderGorkaCard)}</div>
+        {gorkaSectionRows.length > 0 ? (
+          <div style={gridStyle}>
+            {gorkaSectionRows.map((r) => renderCard(r, 'gorka'))}
+          </div>
         ) : (
           <div style={emptyTextStyle}>No GORKA built-in connectors available.</div>
         )}
@@ -516,9 +517,9 @@ export default function Connectors() {
               Add
             </button>
           </div>
-          {byopConnected.length > 0 && (
+          {byopConnectedRows.length > 0 && (
             <div style={{ ...gridStyle, marginTop: '12px' }}>
-              {byopConnected.map(renderByopCard)}
+              {byopConnectedRows.map((r) => renderCard(r, 'byop'))}
             </div>
           )}
         </div>

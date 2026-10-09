@@ -369,6 +369,7 @@ model ClientConnector {
   connectorCode         String   @map("connector_code")
   status                String   @default("CONNECTED")
   credentialsLocation   String   @default("LOCAL") @map("credentials_location")
+  credentialSource      String?  @map("credential_source")
   credentialsEncrypted  String?  @map("credentials_encrypted")
   connectedAt           DateTime @default(now()) @map("connected_at")
   disconnectedAt        DateTime? @map("disconnected_at")

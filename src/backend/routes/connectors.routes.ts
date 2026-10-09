@@ -97,6 +97,11 @@ router.get('/', async (req: Request, res: Response): Promise<any> => {
 // CONNECTED is a silent no-op. No write, no audit. The response
 // gains alreadyEnabled: true and returns the existing row.
 //
+// credentialSource records which path the admin used:
+//   tier1Acknowledged -> 'GORKA'
+//   zone3Acknowledged -> 'BYOP'
+// The frontend uses this to place the card in the right section.
+//
 // Slice 5: when tier1Acknowledged === true and the backend holds a
 // GORKA credential for the requested code, the response body gains a
 // `credential` field. The field is omitted otherwise. The credential
@@ -139,6 +144,12 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
       });
     }
 
+    // Which path did the admin take? TIER1 wins if both are somehow set.
+    const credentialSource =
+      tier1Acknowledged === true ? 'GORKA'
+      : zone3Acknowledged === true ? 'BYOP'
+      : null;
+
     // Enable-if-absent: check for an existing row first.
     const existing = await prisma.clientConnector.findUnique({
       where: {
@@ -174,11 +185,13 @@ router.post('/enable', async (req: Request, res: Response): Promise<any> => {
             connectorCode,
             status: 'CONNECTED',
             credentialsLocation,
+            credentialSource,
             connectedAt: new Date(),
           },
           update: {
             status: 'CONNECTED',
             credentialsLocation,
+            credentialSource,
             connectedAt: new Date(),
             disconnectedAt: null,
             suspendedReason: null,

@@ -144,12 +144,10 @@ const connectors = [
     pricingConfig: { currency: 'USD', unitLabel: 'request', markupPercent: 0 },
     iconUrl: null,
     documentationUrl: null,
-    credentialSchema: {
-      credentials: [
-        { name: 'apiKey', label: 'API Key', type: 'password', required: true },
-      ],
-      configuration: [],
-    },
+    // credentialSchema intentionally omitted (F13, Step 1).
+    // custom-api has no adapter; nothing sends. It stays hidden
+    // until Step 1.5 gives it a generic HTTP adapter. The ?? null
+    // in the update block clears any schema left on the row.
   },
 ];
 
@@ -172,7 +170,7 @@ async function main() {
         pricingConfig: c.pricingConfig,
         iconUrl: c.iconUrl,
         documentationUrl: c.documentationUrl,
-        credentialSchema: c.credentialSchema,
+        credentialSchema: c.credentialSchema ?? null,
       },
     });
     console.log(`  ✓ ${c.code}`);
