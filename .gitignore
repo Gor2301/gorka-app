@@ -49,3 +49,4 @@ GORKA_RECOVERY/backups/*.dat*
 GORKA_RECOVERY/backups/backend-source/
 GORKA_RECOVERY/backups/backend-source-before-cleanup/
 GORKA_RECOVERY/backups/tauri-source/
+pilot-creds.local.bat
