@@ -355,6 +355,7 @@ model ConnectorCatalog {
   pricingConfig     Json     @map("pricing_config")
   iconUrl           String?  @map("icon_url")
   documentationUrl  String?  @map("documentation_url")
+  credentialSchema  Json?    @map("credential_schema")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
