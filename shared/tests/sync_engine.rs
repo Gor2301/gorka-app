@@ -110,6 +110,7 @@ fn direct_sync_propagates_debtor() {
             jwt: String::new(),
             listen_port: port,
             listen_address: format!("127.0.0.1:{}", port),
+        apply_notifier: None,
         },
     )
     .expect("start engine B");
@@ -131,6 +132,7 @@ fn direct_sync_propagates_debtor() {
                 .collect::<String>(),
             backend_base_url: String::new(),
             manual_override: Some(format!("127.0.0.1:{}", port)),
+        apply_notifier: None,
         },
     );
 

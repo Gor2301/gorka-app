@@ -1,16 +1,17 @@
 // CommunicationToolsPage - Agent App.
 //
-// Reads local_connectors on mount and renders one card per
-// enabled connector. The credential lives in local SQLCipher and
-// is never read, transported, or displayed by this page. The
-// configuration JSON is likewise not shown.
+// Reads local_connectors on mount and on every `connector-sync`
+// event emitted by the Rust side. The credential lives in local
+// SQLCipher and is never read, transported, or displayed by this
+// page. The configuration JSON is likewise not shown.
 //
 // Empty state: the exact sentence from AGENT-APP-SPEC.md v1.3
 // section 11.8. Do not paraphrase. Do not add a subtitle, a link,
 // or a support email.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare } from 'lucide-react';
+import { listen } from '@tauri-apps/api/event';
 import { Card, ErrorBanner, Spinner } from '@/components/primitives';
 import { localDB, LocalConnector } from '@/services/local.db';
 import './CommunicationToolsPage.css';
@@ -19,21 +20,46 @@ export default function CommunicationToolsPage() {
   const [connectors, setConnectors] = useState<LocalConnector[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const requestGen = useRef(0);
+
+  const loadConnectors = useCallback(async () => {
+    const gen = ++requestGen.current;
+    try {
+      setError('');
+      const rows = await localDB.listLocalConnectors();
+      if (gen !== requestGen.current) return;
+      setConnectors(rows);
+    } catch (err) {
+      if (gen !== requestGen.current) return;
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (gen === requestGen.current) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
     (async () => {
       try {
-        setLoading(true);
-        setError('');
-        const rows = await localDB.listLocalConnectors();
-        setConnectors(rows);
+        const un = await listen('connector-sync', () => {
+          if (!cancelled) loadConnectors();
+        });
+        if (cancelled) un();
+        else unlisten = un;
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setLoading(false);
+        console.error('connector-sync listener failed:', err);
       }
+      if (!cancelled) loadConnectors();
     })();
-  }, []);
+
+    return () => {
+      cancelled = true;
+      requestGen.current++;
+      if (unlisten) unlisten();
+    };
+  }, [loadConnectors]);
 
   return (
     <div className="communication-tools-page">

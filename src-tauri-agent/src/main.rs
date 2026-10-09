@@ -809,12 +809,19 @@ fn start_engine_inner(
     let backend_base_url =
         gorka_shared::sync_discovery::CONTROL_PLANE_BASE_URL.to_string();
 
+    let app_for_notifier = app.clone();
+    let notifier: gorka_shared::sync_engine::ApplyNotifier =
+        std::sync::Arc::new(move || {
+            let _ = app_for_notifier.emit("connector-sync", ());
+        });
+
     let discovery = DiscoveryConfig {
         jwt,
         local_wire_device_id: device_id,
         local_wire_device_id_hex,
         backend_base_url,
         manual_override: manual_override.filter(|s| !s.trim().is_empty()),
+        apply_notifier: Some(notifier),
     };
 
     let handle = sync_engine::start_engine_connect(

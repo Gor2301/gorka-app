@@ -31,7 +31,12 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+
+/// Notifier called by the engine after it successfully processes an
+/// inbound sync frame. Runs on the engine thread. Implementations
+/// MUST be non-blocking. Panics are caught and logged; the engine
+/// continues.
+pub type ApplyNotifier = std::sync::Arc<dyn Fn() + Send + Sync>;
 
 use rand::RngCore;
 use rusqlite::{params, Connection};
@@ -151,6 +156,8 @@ pub struct DiscoveryConfig {
     /// address directly and skips discovery. Not the normal MVP
     /// path.
     pub manual_override: Option<String>,
+    /// Optional notifier. See ApplyNotifier.
+    pub apply_notifier: Option<ApplyNotifier>,
 }
 
 /// Configuration for the listening peer (Client).
@@ -161,6 +168,8 @@ pub struct ListenerConfig {
     pub listen_port: u16,
     /// The address the listener advertises to the Control Plane.
     pub listen_address: String,
+    /// Optional notifier. See ApplyNotifier.
+    pub apply_notifier: Option<ApplyNotifier>,
 }
 
 // ---------------------------------------------------------------
@@ -181,6 +190,7 @@ pub fn start_engine_connect(
 
     let stop_t = stop.clone();
     let status_t = status.clone();
+    let notifier_t = discovery.apply_notifier.clone();
 
     let join = thread::spawn(move || {
         let mode = PeerMode::Connect(discovery);
@@ -192,6 +202,7 @@ pub fn start_engine_connect(
             device_id,
             stop_t,
             status_t,
+            notifier_t,
         );
     });
 
@@ -233,6 +244,7 @@ pub fn start_engine_listen(
     let backend_base_url =
         sync_discovery::CONTROL_PLANE_BASE_URL.to_string();
     let local_wire_device_id_hex = hex_encode(&device_id);
+    let notifier_t = config.apply_notifier.clone();
 
     let join = thread::spawn(move || {
         let mode = PeerMode::Listen {
@@ -250,6 +262,7 @@ pub fn start_engine_listen(
             device_id,
             stop_t,
             status_t,
+            notifier_t,
         );
     });
 
@@ -283,6 +296,7 @@ fn run_engine(
     device_id: [u8; 16],
     stop: Arc<AtomicBool>,
     status: Arc<Mutex<EngineStatus>>,
+    apply_notifier: Option<ApplyNotifier>,
 ) {
     let mut backoff_ms = SYNC_ENGINE_BACKOFF_INITIAL_MS;
 
@@ -335,6 +349,7 @@ fn run_engine(
             &device_id,
             &stop,
             &status,
+            apply_notifier.as_ref(),
         );
 
         match session_result {
@@ -609,6 +624,7 @@ fn run_session(
     local_device_id: &[u8; 16],
     stop: &Arc<AtomicBool>,
     status: &Arc<Mutex<EngineStatus>>,
+    apply_notifier: Option<&ApplyNotifier>,
 ) -> Result<(), String> {
     let session_key = *session.session_key();
     let peer_device_id = session.peer_device_id().to_vec();
@@ -650,6 +666,13 @@ fn run_session(
                     &peer_device_id,
                     &frame,
                 )?;
+                if let Some(n) = apply_notifier.cloned() {
+                    let _ = std::panic::catch_unwind(
+                        std::panic::AssertUnwindSafe(move || {
+                            n();
+                        }),
+                    );
+                }
             }
             None => {}
         }

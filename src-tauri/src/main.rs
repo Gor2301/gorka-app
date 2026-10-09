@@ -599,6 +599,7 @@ fn start_engine_inner(
         jwt,
         listen_port: port,
         listen_address,
+        apply_notifier: None,
     };
 
     let handle = sync_engine::start_engine_listen(
