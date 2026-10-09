@@ -31,6 +31,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 /// Notifier called by the engine after it successfully processes an
 /// inbound sync frame. Runs on the engine thread. Implementations
