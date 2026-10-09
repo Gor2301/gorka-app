@@ -434,13 +434,18 @@ export default function Connectors() {
     );
   }
 
-  // F14 / Rule C: section follows the credential source, not the
-  // catalog flag. GORKA-built-in holds everything that is not
-  // BYOP-connected (including unconnected offers). The BYOP section
-  // holds rows the admin connected with their own credential.
-  const gorkaSectionRows = rows.filter(
-    (r) => r.enablement?.credentialSource !== 'BYOP',
-  );
+  // Rule C: section follows the CURRENT credential state.
+  //   Connected with a BYOP credential -> BYOP section
+  //   Connected with anything else     -> GORKA built-in
+  //   Not connected, GORKA-managed     -> GORKA built-in (the offer)
+  //   Not connected, not GORKA-managed -> hidden (F18 / B.16.5)
+  const gorkaSectionRows = rows.filter((r) => {
+    const e = r.enablement;
+    if (e?.status === 'CONNECTED') {
+      return e.credentialSource !== 'BYOP';
+    }
+    return r.catalog.isManagedByGorka;
+  });
   const byopConnectedRows = rows.filter(
     (r) => r.enablement?.credentialSource === 'BYOP' && r.enablement.status === 'CONNECTED',
   );
