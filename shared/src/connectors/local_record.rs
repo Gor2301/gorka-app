@@ -155,6 +155,7 @@ pub fn list_local_connectors(
             "SELECT connector_code, tier, status, configuration, source_device_id, updated_at
              FROM local_connectors
              WHERE organization_id = ?1
+               AND status = 'ENABLED'
              ORDER BY connector_code ASC",
         )
         .map_err(|e| e.to_string())?;
