@@ -8,8 +8,17 @@
 //   gorka-recover repair --dry-run <db_path>
 //   gorka-recover repair --apply <db_path>
 //
-// The SQLCipher key is read from stdin (see §9.2). The utility
-// never prints the key, the credential_value, or the
+// With an explicit settings.dat (derives the SQLCipher key from the
+// local password, the same way the app does):
+//   gorka-recover --password <settings.dat> inspect <db_path>
+//   gorka-recover --password <settings.dat> repair --dry-run <db_path>
+//   gorka-recover --password <settings.dat> repair --apply <db_path>
+//
+// Without --password, the utility expects the derived hex key on
+// stdin (see §9.2). With --password, the local password is read from
+// stdin and the salt from the settings file.
+//
+// The utility never prints the key, the credential_value, or the
 // configuration.
 
 use std::env;
@@ -23,40 +32,66 @@ use gorka_shared::recover::{inspect, repair_apply, repair_dry_run, InspectLine};
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 3 {
-        eprintln!("usage: gorka-recover <inspect|repair> [--dry-run|--apply] <db_path>");
+    let mut password_mode: Option<String> = None;
+    let mut positional: Vec<&str> = Vec::new();
+    let mut i = 1;
+    while i < args.len() {
+        if args[i] == "--password" {
+            if i + 1 >= args.len() {
+                eprintln!("--password requires a path to settings.dat");
+                return ExitCode::from(2);
+            }
+            password_mode = Some(args[i + 1].clone());
+            i += 2;
+        } else {
+            positional.push(&args[i]);
+            i += 1;
+        }
+    }
+
+    if positional.len() < 2 {
+        eprintln!("usage: gorka-recover [--password <settings.dat>] <inspect|repair> [--dry-run|--apply] <db_path>");
         return ExitCode::from(2);
     }
 
-    let mode = args[1].as_str();
+    let mode = positional[0];
     let (sub_mode, db_path) = if mode == "repair" {
-        if args.len() < 4 {
+        if positional.len() < 3 {
             eprintln!("usage: gorka-recover repair [--dry-run|--apply] <db_path>");
             return ExitCode::from(2);
         }
-        (args[2].as_str(), args[3].as_str())
+        (positional[1], positional[2])
     } else {
-        ("", args[2].as_str())
+        ("", positional[1])
     };
 
-    // Read key from stdin. Single line, trailing whitespace trimmed.
-    eprintln!("SQLCipher key (hex):");
-    let mut key = String::new();
-    if io::stdin().read_to_string(&mut key).is_err() {
-        eprintln!("failed to read key from stdin");
-        return ExitCode::FAILURE;
-    }
-    let key = key.trim();
-    if key.is_empty() {
-        eprintln!("empty key");
-        return ExitCode::FAILURE;
-    }
-
-    let conn = match open_with_key(db_path, key) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("failed to open database: {}", e);
-            return ExitCode::FAILURE;
+    let conn = match &password_mode {
+        Some(settings_path) => match open_with_password(db_path, settings_path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("failed to open database: {}", e);
+                return ExitCode::FAILURE;
+            }
+        },
+        None => {
+            eprintln!("SQLCipher key (hex):");
+            let mut key = String::new();
+            if io::stdin().read_to_string(&mut key).is_err() {
+                eprintln!("failed to read key from stdin");
+                return ExitCode::FAILURE;
+            }
+            let key = key.trim();
+            if key.is_empty() {
+                eprintln!("empty key");
+                return ExitCode::FAILURE;
+            }
+            match open_with_key(db_path, key) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("failed to open database: {}", e);
+                    return ExitCode::FAILURE;
+                }
+            }
         }
     };
 
@@ -78,10 +113,35 @@ fn open_with_key(path: &str, key: &str) -> Result<Connection, String> {
         row.get::<_, String>(0)
     })
     .map_err(|e| format!("PRAGMA key failed: {}", e))?;
-    // Force SQLCipher to actually open the DB (lazy until first read).
     conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))
         .map_err(|e| format!("db open failed: {}", e))?;
     Ok(conn)
+}
+
+/// Derive the SQLCipher key from the local password and the salt in
+/// settings.dat, exactly as the application does at unlock time.
+fn open_with_password(db_path: &str, settings_path: &str) -> Result<Connection, String> {
+    let content = std::fs::read_to_string(settings_path)
+        .map_err(|e| format!("cannot read settings: {}", e))?;
+    let v: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("settings.dat is not valid JSON: {}", e))?;
+    let salt_hex = v
+        .get("salt")
+        .and_then(|s| s.as_str())
+        .ok_or("settings.dat has no salt")?;
+    let salt = hex::decode(salt_hex).map_err(|e| format!("salt hex decode failed: {}", e))?;
+
+    eprintln!("Local password:");
+    let mut password = String::new();
+    if io::stdin().read_to_string(&mut password).is_err() {
+        return Err("failed to read password from stdin".to_string());
+    }
+    let password = password.trim_end_matches(['\r', '\n']);
+
+    let key = gorka_shared::db::derive_key(password, &salt)
+        .map_err(|e| format!("derive key failed: {}", e))?;
+
+    open_with_key(db_path, &key)
 }
 
 fn read_org_ids(conn: &Connection) -> Result<Vec<String>, String> {
