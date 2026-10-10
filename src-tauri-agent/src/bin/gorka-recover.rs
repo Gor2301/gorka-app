@@ -74,8 +74,10 @@ fn main() -> ExitCode {
 fn open_with_key(path: &str, key: &str) -> Result<Connection, String> {
     let conn = Connection::open(path).map_err(|e| e.to_string())?;
     let escaped = key.replace('\'', "''");
-    conn.execute(&format!("PRAGMA key = '{}'", escaped), [])
-        .map_err(|e| format!("PRAGMA key failed: {}", e))?;
+    conn.query_row(&format!("PRAGMA key = '{}'", escaped), [], |row| {
+        row.get::<_, String>(0)
+    })
+    .map_err(|e| format!("PRAGMA key failed: {}", e))?;
     // Force SQLCipher to actually open the DB (lazy until first read).
     conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))
         .map_err(|e| format!("db open failed: {}", e))?;
