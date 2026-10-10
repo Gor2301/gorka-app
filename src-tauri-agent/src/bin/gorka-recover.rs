@@ -96,6 +96,7 @@ fn main() -> ExitCode {
     };
 
     match (mode, sub_mode) {
+        ("inspect", _) => run_inspect(&conn),
         ("version", _) => run_version(&conn),
         ("repair", "--dry-run") => run_repair_dry_run(&conn),
         ("repair", "--apply") => run_repair_apply(conn),
