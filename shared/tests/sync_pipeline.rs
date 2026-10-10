@@ -7,7 +7,12 @@
 // against a fresh in-memory database.
 
 use gorka_shared::db::open_in_memory_for_tests;
-use gorka_shared::connectors::local_record::read_local_connector_credential;
+use gorka_shared::connectors::local_record::{
+    read_local_connector_credential,
+    upsert_local_connector_with_event,
+    disable_local_connector_with_event,
+    LocalConnectorInput,
+};
 use rusqlite::params;
 use gorka_shared::sync::{
     encode_debtor_created_payload,
@@ -721,4 +726,99 @@ fn list_local_connectors_shape_and_order() {
         assert!(!r.status.is_empty());
         assert!(!r.updated_at.is_empty());
     }
+}
+
+
+#[test]
+fn client_disable_commits_local_state_and_event_together() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+
+    let input = LocalConnectorInput {
+        connector_code: "resend-email".to_string(),
+        tier: "TIER1".to_string(),
+        status: "ENABLED".to_string(),
+        credential_value: vec![0xAA, 0xBB],
+        configuration: "{}".to_string(),
+    };
+    upsert_local_connector_with_event(&mut conn, ORG_ID, "local-device", input)
+        .expect("enable");
+
+    disable_local_connector_with_event(&mut conn, ORG_ID, "local-device", "resend-email")
+        .expect("disable");
+
+    let (status, cred, config): (String, Vec<u8>, String) = conn
+        .query_row(
+            "SELECT status, credential_value, configuration
+             FROM local_connectors WHERE connector_code = 'resend-email'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("row");
+    assert_eq!(status, "DISABLED");
+    assert!(cred.is_empty());
+    assert_eq!(config, "");
+
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sync_events
+             WHERE event_type = 'CONNECTOR_DISABLED'
+               AND entity_id = 'resend-email'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("q");
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn t21_disable_rolls_back_atomically_on_event_failure() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+
+    let input = LocalConnectorInput {
+        connector_code: "resend-email".to_string(),
+        tier: "TIER1".to_string(),
+        status: "ENABLED".to_string(),
+        credential_value: vec![0xAA, 0xBB],
+        configuration: "{}".to_string(),
+    };
+    upsert_local_connector_with_event(&mut conn, ORG_ID, "local-device", input)
+        .expect("enable");
+
+    // Induce a failure on the CONNECTOR_DISABLED event insert.
+    conn.execute(
+        "CREATE TRIGGER fail_connector_disabled
+         BEFORE INSERT ON sync_events
+         WHEN NEW.event_type = 'CONNECTOR_DISABLED'
+         BEGIN
+             SELECT RAISE(ABORT, 'induced failure');
+         END",
+        [],
+    ).expect("trigger");
+
+    let result = disable_local_connector_with_event(
+        &mut conn, ORG_ID, "local-device", "resend-email",
+    );
+    assert!(result.is_err(), "expected induced failure, got Ok");
+
+    // Local row unchanged. The UPDATE rolled back.
+    let (status, cred): (String, Vec<u8>) = conn
+        .query_row(
+            "SELECT status, credential_value
+             FROM local_connectors WHERE connector_code = 'resend-email'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("row");
+    assert_eq!(status, "ENABLED");
+    assert_eq!(cred, vec![0xAA, 0xBB]);
+
+    // No CONNECTOR_DISABLED event.
+    let ev: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sync_events WHERE event_type = 'CONNECTOR_DISABLED'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("q");
+    assert_eq!(ev, 0);
 }

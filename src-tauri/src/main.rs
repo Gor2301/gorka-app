@@ -361,6 +361,23 @@ fn write_local_connector_credential(
 }
 
 #[command]
+fn disable_local_connector(
+    connector_code: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    gorka_shared::connectors::local_record::disable_local_connector_with_event(
+        conn,
+        &organization_id,
+        "local-device",
+        &connector_code,
+    )
+}
+
+#[command]
 fn get_dashboard_stats(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
@@ -816,6 +833,7 @@ fn main() {
             get_debtor_count,
             get_dashboard_stats,
             write_local_connector_credential,
+            disable_local_connector,
             get_debts,
             insert_debt,
             update_debt,

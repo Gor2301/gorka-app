@@ -6,8 +6,8 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 
-use crate::sync::encode_connector_enabled_payload;
-use crate::sync_events::{self, ENTITY_CONNECTOR, EVENT_CONNECTOR_ENABLED};
+use crate::sync::{encode_connector_enabled_payload, encode_connector_disabled_payload};
+use crate::sync_events::{self, ENTITY_CONNECTOR, EVENT_CONNECTOR_ENABLED, EVENT_CONNECTOR_DISABLED};
 
 pub struct LocalConnectorInput {
     pub connector_code: String,
@@ -230,4 +230,53 @@ pub fn read_local_connector_credential(
         credential_value,
         configuration,
     }))
+}
+
+/// Disable a local connector and originate a CONNECTOR_DISABLED
+/// event in one transaction.
+///
+/// The credential value, configuration, and tier are wiped. The
+/// row remains with status = DISABLED so a later ENABLED from
+/// another device must win the tie-break before the connector is
+/// usable again.
+///
+/// This is the write path the Client Dashboard's
+/// disable_local_connector command uses. CONNECTOR-EVENT-ORDER-SPEC
+/// v1.0 §7.3.
+pub fn disable_local_connector_with_event(
+    conn: &mut Connection,
+    organization_id: &str,
+    source_device_id: &str,
+    connector_code: &str,
+) -> Result<(), String> {
+    let disabled_at_ms = chrono::Utc::now().timestamp_millis() as u64;
+    let payload = encode_connector_disabled_payload(connector_code, disabled_at_ms);
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "UPDATE local_connectors
+         SET status = 'DISABLED',
+             tier = '',
+             credential_value = X'',
+             configuration = '',
+             source_device_id = ?1,
+             updated_at = ?2
+         WHERE organization_id = ?3 AND connector_code = ?4",
+        params![source_device_id, now, organization_id, connector_code],
+    ).map_err(|e| e.to_string())?;
+
+    sync_events::originate_event(
+        &tx,
+        organization_id,
+        EVENT_CONNECTOR_DISABLED,
+        ENTITY_CONNECTOR,
+        connector_code,
+        &payload,
+        &[],
+    )?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
 }

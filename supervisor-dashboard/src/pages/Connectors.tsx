@@ -309,6 +309,13 @@ export default function Connectors() {
     setBusyCode(row.catalog.code);
     try {
       await connectorsService.disable(row.catalog.code);
+      try {
+        await invoke('disable_local_connector', { connectorCode: row.catalog.code });
+      } catch (localErr) {
+        // The cloud record is already disabled. The local record
+        // will reconcile on the next sync. Do not block the UI.
+        console.warn('Local connector disable did not complete:', localErr);
+      }
       await load();
     } catch (err: any) {
       alert('Failed to disconnect ' + row.catalog.name + ': ' + (err?.message || 'Unknown error'));
