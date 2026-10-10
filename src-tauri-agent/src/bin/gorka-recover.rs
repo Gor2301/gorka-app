@@ -96,7 +96,7 @@ fn main() -> ExitCode {
     };
 
     match (mode, sub_mode) {
-        ("inspect", _) => run_inspect(&conn),
+        ("version", _) => run_version(&conn),
         ("repair", "--dry-run") => run_repair_dry_run(&conn),
         ("repair", "--apply") => run_repair_apply(conn),
         _ => {
@@ -262,4 +262,42 @@ fn print_line(line: &InspectLine) {
     }
     println!("  status_consistent: {}", line.status_consistent);
     println!("  tuple_matches_latest: {}", line.tuple_matches_latest);
+}
+
+fn run_version(conn: &Connection) -> ExitCode {
+    let uv: i64 = match conn.query_row("PRAGMA user_version", [], |r| r.get(0)) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("user_version query failed: {}", e);
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("user_version = {}", uv);
+
+    let mut stmt = match conn.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("prepare failed: {}", e);
+            return ExitCode::FAILURE;
+        }
+    };
+    let iter = match stmt.query_map([], |row| row.get::<_, String>(0)) {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("query failed: {}", e);
+            return ExitCode::FAILURE;
+        }
+    };
+    for r in iter {
+        match r {
+            Ok(name) => println!("  table: {}", name),
+            Err(e) => {
+                eprintln!("row error: {}", e);
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+    ExitCode::SUCCESS
 }
