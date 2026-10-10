@@ -7,6 +7,8 @@
 // against a fresh in-memory database.
 
 use gorka_shared::db::open_in_memory_for_tests;
+use gorka_shared::connectors::local_record::read_local_connector_credential;
+use rusqlite::params;
 use gorka_shared::sync::{
     encode_debtor_created_payload,
     encode_entity_updated_payload,
@@ -400,7 +402,7 @@ fn connector_enabled_accepted_and_applied() {
 }
 
 #[test]
-fn connector_disabled_is_deferred_without_mutation() {
+fn connector_disabled_creates_tombstone_when_row_absent() {
     let mut conn = open_in_memory_for_tests().expect("db init");
 
     let payload = encode_connector_disabled_payload("custom-api", 1_789_891_200_001);
@@ -421,22 +423,180 @@ fn connector_disabled_is_deferred_without_mutation() {
     let result = process_sync_message(&mut conn, ORG_ID, &SESSION_KEY, &framed)
         .expect("process");
 
-    assert_eq!(result.outcomes[0].outcome, AckOutcome::Rejected);
+    // DISABLED is no longer deferred. CONNECTOR-EVENT-ORDER-SPEC §7.1.
+    assert_eq!(result.outcomes[0].outcome, AckOutcome::Accepted);
 
-    // Nothing written: no sync_events row, no local_connectors row,
-    // no audit entry. The transaction was dropped.
+    // The tombstone row exists with the DISABLED invariants. §4.2/§4.3.
+    let (status, tier, cred, config, w_clock, w_seq): (
+        String, String, Vec<u8>, String, i64, i64,
+    ) = conn.query_row(
+        "SELECT status, tier, credential_value, configuration,
+                winning_logical_clock, winning_sequence
+         FROM local_connectors
+         WHERE connector_code = 'custom-api'",
+        [],
+        |row| Ok((
+            row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?,
+            row.get(4)?, row.get(5)?,
+        )),
+    ).expect("tombstone row");
+    assert_eq!(status, "DISABLED");
+    assert_eq!(tier, "");
+    assert!(cred.is_empty());
+    assert_eq!(config, "");
+    assert_eq!(w_clock, 1);
+    assert_eq!(w_seq, 1);
+
     let ev: i64 = conn
         .query_row("SELECT COUNT(*) FROM sync_events", [], |row| row.get(0))
-        .expect("q");
-    let lc: i64 = conn
-        .query_row("SELECT COUNT(*) FROM local_connectors", [], |row| row.get(0))
         .expect("q");
     let audit: i64 = conn
         .query_row("SELECT COUNT(*) FROM audit_log", [], |row| row.get(0))
         .expect("q");
-    assert_eq!(ev, 0);
-    assert_eq!(lc, 0);
-    assert_eq!(audit, 0);
+    assert_eq!(ev, 1);
+    assert_eq!(audit, 1);
+}
+
+#[test]
+fn connector_disabled_after_enabled_wipes_credential() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+
+    let enabled_payload = encode_connector_enabled_payload(
+        "resend-email",
+        "TIER1",
+        b"opaque-credential-bytes",
+        "{\"from\":\"a@example.invalid\"}",
+        1_789_891_200_000,
+    );
+    let disabled_payload =
+        encode_connector_disabled_payload("resend-email", 1_789_891_200_500);
+
+    let rec_enabled = encode_event_record(
+        &event_id_a(), DEVICE_A, 1, 100,
+        0x0005, 0x06, b"resend-email",
+        1_789_891_200_000, &enabled_payload,
+    );
+    let rec_disabled = encode_event_record(
+        &event_id_b(), DEVICE_A, 2, 105,
+        0x0006, 0x06, b"resend-email",
+        1_789_891_200_500, &disabled_payload,
+    );
+
+    let framed = build_sync_message(
+        &SESSION_KEY, &NONCE, &message_id(), &[rec_enabled, rec_disabled],
+    ).expect("build");
+
+    let result = process_sync_message(&mut conn, ORG_ID, &SESSION_KEY, &framed)
+        .expect("process");
+    assert_eq!(result.outcomes[0].outcome, AckOutcome::Accepted);
+    assert_eq!(result.outcomes[1].outcome, AckOutcome::Accepted);
+
+    let (status, cred, config, w_clock, w_seq): (String, Vec<u8>, String, i64, i64) =
+        conn.query_row(
+            "SELECT status, credential_value, configuration,
+                    winning_logical_clock, winning_sequence
+             FROM local_connectors WHERE connector_code = 'resend-email'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        ).expect("row");
+    assert_eq!(status, "DISABLED");
+    assert!(cred.is_empty());
+    assert_eq!(config, "");
+    assert_eq!(w_clock, 105);
+    assert_eq!(w_seq, 2);
+}
+
+#[test]
+fn connector_stale_enabled_after_disabled_loses() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+
+    // DISABLED carries the higher clock. The ENABLED that follows is stale.
+    let disabled_payload =
+        encode_connector_disabled_payload("resend-email", 1_789_891_200_500);
+    let enabled_payload = encode_connector_enabled_payload(
+        "resend-email",
+        "TIER1",
+        b"opaque-credential-bytes",
+        "{\"from\":\"a@example.invalid\"}",
+        1_789_891_200_000,
+    );
+
+    let rec_disabled = encode_event_record(
+        &event_id_a(), DEVICE_A, 1, 105,
+        0x0006, 0x06, b"resend-email",
+        1_789_891_200_500, &disabled_payload,
+    );
+    let rec_enabled = encode_event_record(
+        &event_id_b(), DEVICE_A, 2, 100,
+        0x0005, 0x06, b"resend-email",
+        1_789_891_200_000, &enabled_payload,
+    );
+
+    let framed = build_sync_message(
+        &SESSION_KEY, &NONCE, &message_id(), &[rec_disabled, rec_enabled],
+    ).expect("build");
+
+    let result = process_sync_message(&mut conn, ORG_ID, &SESSION_KEY, &framed)
+        .expect("process");
+    assert_eq!(result.outcomes[0].outcome, AckOutcome::Accepted);
+    assert_eq!(result.outcomes[1].outcome, AckOutcome::Accepted);
+
+    // DISABLED won. The stale ENABLED is a no-op. §4.3.
+    let (status, cred): (String, Vec<u8>) = conn.query_row(
+        "SELECT status, credential_value FROM local_connectors
+         WHERE connector_code = 'resend-email'",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).expect("row");
+    assert_eq!(status, "DISABLED");
+    assert!(cred.is_empty());
+}
+
+#[test]
+fn t22_read_credential_on_disabled_row_returns_none() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+
+    // Inconsistent fixture: DISABLED row carrying non-empty bytes.
+    // The read guard must gate on status, not on the byte content.
+    conn.execute(
+        "INSERT INTO local_connectors
+         (id, connector_code, organization_id, tier, status,
+          credential_value, configuration, source_device_id,
+          created_at, updated_at,
+          winning_logical_clock, winning_device_id, winning_sequence)
+         VALUES ('r1', 'resend-email', ?1, '', 'DISABLED',
+                 X'AABBCCDD', '', 'dev',
+                 '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z',
+                 100, X'00', 10)",
+        params![ORG_ID],
+    ).expect("seed");
+
+    let read = read_local_connector_credential(&conn, ORG_ID, "resend-email")
+        .expect("read");
+    assert!(read.is_none(), "DISABLED row must not yield a credential");
+}
+
+#[test]
+fn t23_read_credential_on_enabled_row_returns_some() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+
+    conn.execute(
+        "INSERT INTO local_connectors
+         (id, connector_code, organization_id, tier, status,
+          credential_value, configuration, source_device_id,
+          created_at, updated_at,
+          winning_logical_clock, winning_device_id, winning_sequence)
+         VALUES ('r1', 'resend-email', ?1, 'TIER1', 'ENABLED',
+                 X'AABBCCDD', '{}', 'dev',
+                 '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z',
+                 100, X'00', 10)",
+        params![ORG_ID],
+    ).expect("seed");
+
+    let read = read_local_connector_credential(&conn, ORG_ID, "resend-email")
+        .expect("read");
+    let secret = read.expect("ENABLED row must yield a credential");
+    assert_eq!(secret.credential_value, vec![0xAA, 0xBB, 0xCC, 0xDD]);
 }
 
 #[test]
