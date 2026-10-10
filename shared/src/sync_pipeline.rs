@@ -141,10 +141,7 @@ fn process_event(
     // requires a frozen-doc amendment; not this slice. Returning
     // Ok(Rejected) is a clean per-event outcome: the transaction
     // drops, nothing is written, and the batch continues.
-    if matches!(
-        event.event_type,
-        EVT_CONNECTOR_DISABLED | EVT_CONNECTOR_CREDENTIAL_REPLACED
-    ) {
+    if matches!(event.event_type, EVT_CONNECTOR_CREDENTIAL_REPLACED) {
         return Ok(AckOutcome::Rejected);
     }
 
@@ -454,6 +451,7 @@ fn apply_event(
         EVT_ACTION_CREATED => apply_action_created(tx, organization_id, event),
         EVT_COMMUNICATION_LOGGED => apply_communication_logged(tx, organization_id, event),
         EVT_CONNECTOR_ENABLED => apply_connector_enabled(tx, organization_id, event),
+        EVT_CONNECTOR_DISABLED => apply_connector_disabled(tx, organization_id, event),
         _ => Err("unsupported event type".to_string()),
     }
 }
@@ -696,25 +694,57 @@ fn apply_connector_enabled(
     let now = ms_to_rfc3339(event.created_at_ms);
     let source_device_id = hex::encode(&event.device_id);
 
-    let existing_id: Option<String> = tx
+    // Read the winning tuple, if a row exists. The tuple is the
+    // protocol-order tie-break anchor; see §6 of the frozen spec.
+    let existing: Option<(String, i64, Vec<u8>, i64)> = tx
         .query_row(
-            "SELECT id FROM local_connectors WHERE organization_id = ?1 AND connector_code = ?2",
+            "SELECT id, winning_logical_clock, winning_device_id, winning_sequence
+             FROM local_connectors WHERE organization_id = ?1 AND connector_code = ?2",
             params![organization_id, &connector_code],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()
         .map_err(|e| e.to_string())?;
 
-    match existing_id {
-        Some(id) => {
+    let incoming_wins = match &existing {
+        None => true,
+        Some((_, w_clock, w_dev, w_seq)) => protocol_order_less(
+            *w_clock,
+            w_dev,
+            *w_seq,
+            event.logical_clock as i64,
+            &event.device_id,
+            event.sequence as i64,
+        ),
+    };
+
+    if !incoming_wins {
+        return Ok(());
+    }
+
+    match existing {
+        Some((id, _, _, _)) => {
             tx.execute(
-                "UPDATE local_connectors SET tier = ?1, status = 'ENABLED', credential_value = ?2, configuration = ?3, source_device_id = ?4, updated_at = ?5 WHERE id = ?6",
+                "UPDATE local_connectors
+                 SET tier = ?1,
+                     status = 'ENABLED',
+                     credential_value = ?2,
+                     configuration = ?3,
+                     source_device_id = ?4,
+                     updated_at = ?5,
+                     winning_logical_clock = ?6,
+                     winning_device_id = ?7,
+                     winning_sequence = ?8
+                 WHERE id = ?9",
                 params![
                     &p.tier,
                     &p.credential_value,
                     &p.configuration,
                     &source_device_id,
                     &now,
+                    event.logical_clock as i64,
+                    &event.device_id,
+                    event.sequence as i64,
                     &id,
                 ],
             )
@@ -723,7 +753,12 @@ fn apply_connector_enabled(
         None => {
             let id = Uuid::new_v4().to_string();
             tx.execute(
-                "INSERT INTO local_connectors (id, connector_code, organization_id, tier, status, credential_value, configuration, source_device_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, 'ENABLED', ?5, ?6, ?7, ?8, ?8)",
+                "INSERT INTO local_connectors
+                 (id, connector_code, organization_id, tier, status,
+                  credential_value, configuration, source_device_id,
+                  created_at, updated_at,
+                  winning_logical_clock, winning_device_id, winning_sequence)
+                 VALUES (?1, ?2, ?3, ?4, 'ENABLED', ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11)",
                 params![
                     &id,
                     &connector_code,
@@ -733,21 +768,123 @@ fn apply_connector_enabled(
                     &p.configuration,
                     &source_device_id,
                     &now,
+                    event.logical_clock as i64,
+                    &event.device_id,
+                    event.sequence as i64,
                 ],
             )
             .map_err(|e| e.to_string())?;
         }
     }
 
-    // Section 25.14.5 step 2: write an application audit entry.
-    // The audit action name is implementation-level, not a wire
-    // event type. Wire: CONNECTOR_ENABLED. Audit: SYNC_CONNECTOR_ENABLED.
     db::log_audit(
         tx,
         "SYNC_CONNECTOR_ENABLED",
         Some(&connector_code),
         1,
         "Applied CONNECTOR_ENABLED from sync",
+    )?;
+
+    Ok(())
+}
+
+fn apply_connector_disabled(
+    tx: &Transaction,
+    organization_id: &str,
+    event: &EventRecord,
+) -> Result<(), String> {
+    let connector_code = String::from_utf8(event.entity_id.clone())
+        .map_err(|_| "connector entity_id not UTF-8".to_string())?;
+    // Validate the payload. The disabled_at_ms value is currently
+    // not stored; it is validated only.
+    let _p = parse_connector_disabled_payload(&event.payload)?;
+    let now = ms_to_rfc3339(event.created_at_ms);
+    let source_device_id = hex::encode(&event.device_id);
+
+    let existing: Option<(String, i64, Vec<u8>, i64)> = tx
+        .query_row(
+            "SELECT id, winning_logical_clock, winning_device_id, winning_sequence
+             FROM local_connectors WHERE organization_id = ?1 AND connector_code = ?2",
+            params![organization_id, &connector_code],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    let incoming_wins = match &existing {
+        None => true,
+        Some((_, w_clock, w_dev, w_seq)) => protocol_order_less(
+            *w_clock,
+            w_dev,
+            *w_seq,
+            event.logical_clock as i64,
+            &event.device_id,
+            event.sequence as i64,
+        ),
+    };
+
+    if !incoming_wins {
+        return Ok(());
+    }
+
+    match existing {
+        Some((id, _, _, _)) => {
+            // Winning DISABLED against an existing row: tombstone
+            // it. Credential and config are wiped. §4.3.
+            tx.execute(
+                "UPDATE local_connectors
+                 SET tier = '',
+                     status = 'DISABLED',
+                     credential_value = X'',
+                     configuration = '',
+                     source_device_id = ?1,
+                     updated_at = ?2,
+                     winning_logical_clock = ?3,
+                     winning_device_id = ?4,
+                     winning_sequence = ?5
+                 WHERE id = ?6",
+                params![
+                    &source_device_id,
+                    &now,
+                    event.logical_clock as i64,
+                    &event.device_id,
+                    event.sequence as i64,
+                    &id,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        None => {
+            // DISABLED before ENABLED: insert the tombstone. §4.2.
+            let id = Uuid::new_v4().to_string();
+            tx.execute(
+                "INSERT INTO local_connectors
+                 (id, connector_code, organization_id, tier, status,
+                  credential_value, configuration, source_device_id,
+                  created_at, updated_at,
+                  winning_logical_clock, winning_device_id, winning_sequence)
+                 VALUES (?1, ?2, ?3, '', 'DISABLED', X'', '', ?4, ?5, ?5, ?6, ?7, ?8)",
+                params![
+                    &id,
+                    &connector_code,
+                    organization_id,
+                    &source_device_id,
+                    &now,
+                    event.logical_clock as i64,
+                    &event.device_id,
+                    event.sequence as i64,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    db::log_audit(
+        tx,
+        "SYNC_CONNECTOR_DISABLED",
+        Some(&connector_code),
+        1,
+        "Applied CONNECTOR_DISABLED from sync",
     )?;
 
     Ok(())
