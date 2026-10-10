@@ -945,7 +945,7 @@ fn reconcile_field(
     Ok(())
 }
 
-fn protocol_order_less(
+pub fn protocol_order_less(
     a_clock: i64,
     a_dev: &[u8],
     a_seq: i64,

@@ -32,6 +32,8 @@ pub mod sync_relay;
 pub mod sync_session;
 pub mod sync_transport;
 
+pub mod recover;
+
 pub fn placeholder() -> &'static str {
     "gorka-shared"
 }

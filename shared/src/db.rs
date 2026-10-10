@@ -138,6 +138,14 @@ pub fn open_in_memory_for_tests() -> Result<Connection, String> {
     Ok(conn)
 }
 
+/// Test-only helper. Runs the migration sequence on an
+/// already-open connection. Used by migration tests that
+/// manipulate PRAGMA user_version to simulate historical
+/// schema states. Not used by production code.
+pub fn run_migrations_for_tests(conn: &mut Connection) -> Result<(), String> {
+    run_migrations(conn)
+}
+
 pub fn verify_password(conn: &Connection) -> Result<(), String> {
     conn.query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get::<_, i64>(0))
         .map_err(|_| "Incorrect password".to_string())?;
@@ -724,6 +732,124 @@ fn run_migrations(conn: &mut Connection) -> Result<(), String> {
         ).map_err(|e| e.to_string())?;
 
         tx.execute("PRAGMA user_version = 9", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    if current_version < 10 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        // CONNECTOR-EVENT-ORDER-SPEC v1.0 §5.2.
+        // Three ordering columns on local_connectors. Defaults are
+        // placeholders so ALTER TABLE does not violate NOT NULL
+        // before backfill. Every row is backfilled in step 1.
+        tx.execute(
+            "ALTER TABLE local_connectors ADD COLUMN winning_logical_clock INTEGER NOT NULL DEFAULT -1",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "ALTER TABLE local_connectors ADD COLUMN winning_device_id BLOB NOT NULL DEFAULT X''",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "ALTER TABLE local_connectors ADD COLUMN winning_sequence INTEGER NOT NULL DEFAULT -1",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // Step 1 — backfill only rows with matching events.
+        // WHERE EXISTS prevents a NOT NULL violation on rows
+        // without a matching event; step 2 diagnoses those.
+        // The inner ORDER BY mirrors protocol_order_less:
+        // (logical_clock, device_id bytes, sequence) descending.
+        tx.execute(
+            "UPDATE local_connectors
+             SET winning_logical_clock = (
+                     SELECT se.logical_clock FROM sync_events se
+                     WHERE se.organization_id = local_connectors.organization_id
+                       AND se.entity_type = 'connector'
+                       AND se.event_type IN ('CONNECTOR_ENABLED', 'CONNECTOR_DISABLED')
+                       AND se.entity_id = local_connectors.connector_code
+                     ORDER BY se.logical_clock DESC, se.device_id DESC, se.sequence DESC
+                     LIMIT 1),
+                 winning_device_id = (
+                     SELECT se.device_id FROM sync_events se
+                     WHERE se.organization_id = local_connectors.organization_id
+                       AND se.entity_type = 'connector'
+                       AND se.event_type IN ('CONNECTOR_ENABLED', 'CONNECTOR_DISABLED')
+                       AND se.entity_id = local_connectors.connector_code
+                     ORDER BY se.logical_clock DESC, se.device_id DESC, se.sequence DESC
+                     LIMIT 1),
+                 winning_sequence = (
+                     SELECT se.sequence FROM sync_events se
+                     WHERE se.organization_id = local_connectors.organization_id
+                       AND se.entity_type = 'connector'
+                       AND se.event_type IN ('CONNECTOR_ENABLED', 'CONNECTOR_DISABLED')
+                       AND se.entity_id = local_connectors.connector_code
+                     ORDER BY se.logical_clock DESC, se.device_id DESC, se.sequence DESC
+                     LIMIT 1)
+             WHERE EXISTS (
+                 SELECT 1 FROM sync_events se2
+                 WHERE se2.organization_id = local_connectors.organization_id
+                   AND se2.entity_type = 'connector'
+                   AND se2.event_type IN ('CONNECTOR_ENABLED', 'CONNECTOR_DISABLED')
+                   AND se2.entity_id = local_connectors.connector_code)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        // Step 2 — existence check. Fail if any row lacks a
+        // matching event. Returning Err drops the transaction
+        // before commit; SQLite rolls back all DDL and DML.
+        let unmatched: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM local_connectors lc
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM sync_events se
+                 WHERE se.organization_id = lc.organization_id
+                   AND se.entity_type = 'connector'
+                   AND se.event_type IN ('CONNECTOR_ENABLED', 'CONNECTOR_DISABLED')
+                   AND se.entity_id = lc.connector_code)",
+            [], |row| row.get(0),
+        ).map_err(|e| e.to_string())?;
+        if unmatched > 0 {
+            return Err(format!(
+                "migration 10 failed: {} local_connectors rows have no matching event. \
+                 Rollback. See CONNECTOR-EVENT-ORDER-SPEC §5.5.",
+                unmatched
+            ));
+        }
+
+        // Step 3 — status provenance check. Every row's status
+        // must match the type of its latest matching event.
+        // The check verifies status and only status; tier,
+        // credential_value, and configuration are not inspected.
+        // MT8 makes this scope explicit.
+        let mismatched: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM local_connectors lc
+             WHERE lc.status != (
+                 SELECT CASE se.event_type
+                     WHEN 'CONNECTOR_ENABLED' THEN 'ENABLED'
+                     WHEN 'CONNECTOR_DISABLED' THEN 'DISABLED'
+                     ELSE 'UNKNOWN' END
+                 FROM sync_events se
+                 WHERE se.organization_id = lc.organization_id
+                   AND se.entity_type = 'connector'
+                   AND se.event_type IN ('CONNECTOR_ENABLED', 'CONNECTOR_DISABLED')
+                   AND se.entity_id = lc.connector_code
+                 ORDER BY se.logical_clock DESC, se.device_id DESC, se.sequence DESC
+                 LIMIT 1)",
+            [], |row| row.get(0),
+        ).map_err(|e| e.to_string())?;
+        if mismatched > 0 {
+            return Err(format!(
+                "migration 10 failed: {} local_connectors rows have status inconsistent \
+                 with their latest matching event. Rollback. See §5.5.",
+                mismatched
+            ));
+        }
+
+        tx.execute("PRAGMA user_version = 10", [])
             .map_err(|e| e.to_string())?;
 
         tx.commit().map_err(|e| e.to_string())?;
