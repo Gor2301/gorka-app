@@ -76,7 +76,7 @@ fn main() -> ExitCode {
         None => {
             eprintln!("SQLCipher key (hex):");
             let mut key = String::new();
-            if io::stdin().read_to_string(&mut key).is_err() {
+            if io::stdin().read_line(&mut key).is_err() {
                 eprintln!("failed to read key from stdin");
                 return ExitCode::FAILURE;
             }
@@ -133,7 +133,7 @@ fn open_with_password(db_path: &str, settings_path: &str) -> Result<Connection, 
 
     eprintln!("Local password:");
     let mut password = String::new();
-    if io::stdin().read_to_string(&mut password).is_err() {
+    if io::stdin().read_line(&mut password).is_err() {
         return Err("failed to read password from stdin".to_string());
     }
     let password = password.trim_end_matches(['\r', '\n']);
