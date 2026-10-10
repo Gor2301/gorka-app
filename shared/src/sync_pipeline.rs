@@ -357,6 +357,7 @@ fn prerequisite_exists(tx: &Transaction, event: &EventRecord) -> Result<bool, St
     match event.event_type {
         EVT_DEBTOR_CREATED => Ok(true),
         EVT_CONNECTOR_ENABLED => Ok(true),
+        EVT_CONNECTOR_DISABLED => Ok(true),
         EVT_ENTITY_UPDATED => {
             let entity_id_str = String::from_utf8(event.entity_id.clone())
                 .map_err(|_| "entity_id not UTF-8".to_string())?;
