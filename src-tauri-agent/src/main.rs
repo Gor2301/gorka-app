@@ -235,6 +235,36 @@ fn get_debtor_count(
 }
 
 #[command]
+fn set_debtor_opt_out(
+    debtor_id: String,
+    channel: String,
+    value: bool,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let channel: gorka_shared::compliance::Channel = channel.parse()?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    gorka_shared::compliance::set_debtor_opt_out(
+        conn,
+        &organization_id,
+        &debtor_id,
+        channel,
+        value,
+    )
+}
+
+#[command]
+fn get_disclosure_text(
+    state: tauri::State<AppState>,
+) -> Result<Option<String>, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    gorka_shared::compliance::get_disclosure_text(conn)
+}
+
+#[command]
 fn list_local_connectors(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
@@ -302,6 +332,14 @@ fn send_connector_message(
     let user_id = crate::auth::get_user_id(app.clone())?;
     let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
     let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+
+    gorka_shared::compliance::check_opt_out(
+        conn,
+        &organization_id,
+        &debtor_id,
+        &connector_code,
+    )
+    .map_err(|block| format!("Compliance: {:?}", block))?;
 
     let secret = gorka_shared::connectors::local_record::read_local_connector_credential(
         conn,
@@ -990,6 +1028,8 @@ fn main() {
             delete_debtor,
             search_debtors,
             get_debtor_count,
+            set_debtor_opt_out,
+            get_disclosure_text,
             list_local_connectors,
             test_connector_connection,
             send_connector_message,
