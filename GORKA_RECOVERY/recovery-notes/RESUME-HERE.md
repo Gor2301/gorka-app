@@ -2200,5 +2200,409 @@ P-J. ONE APPENDIX PER SESSION, NOT APPEND-AND-EDIT.
 END OF APPENDIX D
 ================================================================
 
+
+================================================================
+APPENDIX E — CONNECTOR EVENT ORDER: THREE COMMITS CLOSED
+(added v2.8, 2026-10-11)
+================================================================
+
+E.0 — WHY THIS APPENDIX EXISTS
+
+CONNECTOR-EVENT-ORDER-SPEC.md v1.0 was frozen at f39519f.
+This session implemented all three STOP-gated commits and ran
+the Commit 3 live test. This appendix records what shipped,
+what the live test proved, the environment discoveries, and
+the one open item left on the table. Where it conflicts with
+D.8's "F15 remains open", this appendix wins: F15 is CLOSED.
+
+================================================================
+E.1 — MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:    HEAD 9811137. Pushed to origin/main.
+CLOUD:   at 9811137. Full workspace test suite green.
+
+Commits added this session, oldest first:
+
+  a29b4e8  migration v10 + recovery utility (Commit 1/3)
+  b253ae0  gorka-recover: use query_row for PRAGMA key
+  9134e85  sync_pipeline: order-aware CONNECTOR apply; add
+           DISABLED dispatch (Commit 2/3)
+  95a2e76  sync_pipeline tests: replace deferred-DISABLED with
+           tombstone/wipe/stale/read-gate tests
+  0115014  sync_pipeline: CONNECTOR_DISABLED has no prerequisite
+  fee397d  Client origination: disable_local_connector (Commit 3/3)
+  a5fab27  gorka-recover: --password mode
+  c4366a9  gorka-recover: read_line instead of read_to_string
+  34a0b94  gorka-recover: version subcommand
+  5dc5b53  gorka-recover: restore inspect match arm
+  9811137  local_record: list_local_connectors excludes DISABLED
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -15
+    git status --short
+
+================================================================
+E.2 — WHAT SHIPPED
+================================================================
+
+COMMIT 1 — migration v10 + recovery utility  (a29b4e8)
+
+  db.rs
+    - if current_version < 10 block. Adds three columns to
+      local_connectors:
+        winning_logical_clock INTEGER NOT NULL DEFAULT -1
+        winning_device_id    BLOB    NOT NULL DEFAULT X''
+        winning_sequence     INTEGER NOT NULL DEFAULT -1
+    - Backfill UPDATE with WHERE EXISTS guard. A row without a
+      matching event is not updated, so ALTER TABLE defaults
+      remain and the subsequent check can diagnose explicitly.
+    - Check 1 (existence): fails if any row lacks a matching
+      CONNECTOR_ENABLED or CONNECTOR_DISABLED event.
+    - Check 2 (status provenance): fails if any row's status
+      disagrees with the type of its protocol-latest matching
+      event. Verifies status only, not tier / credential /
+      configuration.
+    - All three steps run inside one transaction. Any failure
+      returns Err before commit; SQLite rolls back DDL and DML;
+      PRAGMA user_version stays at 9.
+    - Added pub fn run_migrations_for_tests. Test-only helper.
+
+  recover.rs (new)
+    - inspect, plan_for_row, repair_dry_run, repair_apply.
+    - Uses the real protocol_order_less and the real payload
+      decoders. No parallel comparator; no parallel parser.
+    - SafeRow and SafeEvent do not carry credential_value or
+      configuration. Structural enforcement, not a convention.
+
+  src-tauri-agent/src/bin/gorka-recover.rs (new)
+    - CLI wrapper. Auto-discovered by Cargo as bin
+      "gorka-recover". No Cargo.toml change needed.
+
+  shared/tests/migration_v10.rs (new)
+    - MT1–MT9, MT11, MT12. Eleven automated tests.
+    - MT10 is a manual procedure documented in spec §9.4.
+
+COMMIT 1 bug fixes this session:
+
+  b253ae0  gorka-recover used conn.execute for PRAGMA key.
+           rusqlite rejects row-returning PRAGMAs on execute.
+           Fixed: conn.query_row, mirroring db.rs.
+
+  a5fab27  Added --password mode: read the local password, read
+           the salt from settings.dat, derive the key with
+           db::derive_key. Same derivation the app uses.
+
+  c4366a9  read_line instead of read_to_string on interactive
+           stdin. read_to_string waits for EOF, which never comes
+           from a terminal.
+
+  34a0b94  version subcommand: print PRAGMA user_version and the
+           table list. Read-only diagnostic.
+
+  5dc5b53  Restore the inspect match arm. It was accidentally
+           replaced (not added alongside) when version was added.
+
+COMMIT 2 — apply path and dispatch  (9134e85)
+
+  apply_connector_enabled is order-aware:
+    - Reads (id, winning_logical_clock, winning_device_id,
+      winning_sequence) for the (organization, code).
+    - incoming_wins = protocol_order_less(existing tuple,
+      incoming tuple). If the row is absent, incoming wins.
+    - Stale ENABLED against an existing row: no-op.
+    - Winning ENABLED: UPDATE with credential, config, tier,
+      source_device_id, updated_at, and the new winning tuple.
+    - First-time insert: INSERT with the winning tuple from the
+      event.
+
+  apply_connector_disabled is new:
+    - No existing row: INSERT a tombstone.
+        tier = '', status = 'DISABLED',
+        credential_value = X'', configuration = ''
+        source_device_id = hex(event.device_id)
+        created_at = updated_at = ms_to_rfc3339(event.created_at)
+        winning tuple from event
+    - Existing row and incoming wins: UPDATE to a tombstone. Tier,
+      credential_value, and configuration are wiped.
+    - Stale DISABLED against an existing row: no-op.
+    - Idempotent.
+
+  Dispatch:
+    - EVT_CONNECTOR_DISABLED => apply_connector_disabled added.
+    - Pre-dispatch guard reduced from
+        DISABLED | REPLACED
+      to
+        REPLACED only.
+
+  prerequisite_exists:
+    - EVT_CONNECTOR_ENABLED => Ok(true)
+    - EVT_CONNECTOR_DISABLED => Ok(true)   <-- was missing,
+      fell into _ => false, caused DISABLED to be treated as
+      pending and never applied. Fixed in 0115014.
+
+  Tests: 95a2e76. The stale test
+    connector_disabled_is_deferred_without_mutation
+  was replaced with five new tests:
+    connector_disabled_creates_tombstone_when_row_absent
+    connector_disabled_after_enabled_wipes_credential
+    connector_stale_enabled_after_disabled_loses
+    t22_read_credential_on_disabled_row_returns_none
+    t23_read_credential_on_enabled_row_returns_some
+
+COMMIT 3 — Client origination  (fee397d)
+
+  local_record.rs:
+    - disable_local_connector_with_event. One transaction:
+        UPDATE local_connectors SET status='DISABLED', tier='',
+          credential_value=X'', configuration='',
+          source_device_id=?, updated_at=?
+        WHERE organization_id = ? AND connector_code = ?
+        then originate_event(EVENT_CONNECTOR_DISABLED).
+      Both commit together or neither does.
+
+  src-tauri/src/main.rs:
+    - disable_local_connector command. Registered in
+      generate_handler!.
+    - Passes "local-device" as source_device_id (matches the
+      existing convention from write_local_connector_credential).
+
+  supervisor-dashboard/src/pages/Connectors.tsx:
+    - handleDisconnect now calls the local command after the
+      cloud disable. Local failure is logged, not surfaced.
+      The cloud record is authoritative; the local tombstone
+      reconciles on the next sync.
+
+  local_record.rs (9811137):
+    - list_local_connectors SQL gains "AND status = 'ENABLED'".
+      Without it, the Communication Tools page renders the
+      tombstone as a live card.
+
+================================================================
+E.3 — LIVE TEST RESULT (Commit 3 acceptance gate)
+================================================================
+
+Agent DB inspected at:
+  C:\Users\Administrator\AppData\Roaming\click.gorka.agent\data\gorka-agent.db
+
+Command:
+  target\debug\gorka-recover.exe --password <settings.dat> inspect <db>
+
+Before disconnect:
+
+  row ea8f534a-ece6-4afd-9288-0df1a6980333
+    code=resend-email org=cmty0xrxw0000c4q4mvtpqjqv
+    tier=TIER1 status=ENABLED
+    winning=(600, fd3d113825791dd3975757da50a8aa5f, 331)
+    latest_event: CONNECTOR_ENABLED clock=600 seq=331
+    status_consistent: true
+    tuple_matches_latest: true
+
+After disconnect (5 seconds later):
+
+  row ea8f534a-ece6-4afd-9288-0df1a6980333
+    code=resend-email org=cmty0xrxw0000c4q4mvtpqjqv
+    tier= status=DISABLED
+    winning=(604, fd3d113825791dd3975757da50a8aa5f, 332)
+    latest_event: CONNECTOR_DISABLED clock=604 seq=332
+    status_consistent: true
+    tuple_matches_latest: true
+
+Communication Tools page on the Agent: Resend Email card
+disappeared without any user action.
+
+All three facts confirmed:
+  1. Tombstone written (tier='', status='DISABLED').
+  2. Credential wiped (credential_value is empty).
+  3. UI hidden (list_local_connectors excludes DISABLED).
+
+Gate PASSED.
+
+================================================================
+E.4 — FINDINGS THIS SESSION
+================================================================
+
+FG1  gorka-recover used conn.execute for PRAGMA key.
+     rusqlite rejects row-returning PRAGMAs on execute. Fixed:
+     conn.query_row, mirroring db.rs. Commit b253ae0.
+
+FG2  gorka-recover read stdin with read_to_string. Blocks
+     on interactive input; read_to_string waits for EOF which
+     never comes from a terminal. Fixed: read_line.
+     Commit c4366a9.
+
+FG3  EVT_CONNECTOR_DISABLED was missing from
+     prerequisite_exists. It fell into the _ => false arm, so
+     DISABLED was treated as a pending event and was never
+     dispatched to apply_connector_disabled. It was still
+     logged, still advanced the clock, but the row was never
+     tombstoned. Found by the failing sync_pipeline tests.
+     Fixed in 0115014.
+
+FG4  list_local_connectors did not filter DISABLED rows. The
+     Communication Tools page would have shown the dead card
+     even though the credential was wiped. Fixed: WHERE
+     organization_id = ?1 AND status = 'ENABLED'. Commit
+     9811137.
+
+FG5  The Agent DB under %APPDATA%\com.gorka.agent is a stale
+     leftover from a bundle-identifier rename. The live Agent
+     uses %APPDATA%\click.gorka.agent, user_version = 10, all
+     tables present. The stale folder is at user_version = 7
+     and was never migrated. Not a defect. Environment note.
+     Do not confuse the two in future sessions.
+
+FG6  Cloud disk filled during a build (24 GB in target/).
+     cargo clean reclaimed 24 GB, full rebuild took 26 minutes.
+     target/ is regenerable; nothing was lost.
+
+FG7  The live test surfaced three ghost rows:
+       custom-api   tier=TIER2 status=ENABLED
+       mocean-sms   tier=TIER2 status=ENABLED
+       twilio-sms   tier=TIER2 status=ENABLED
+     These agents hold ENABLED rows for connectors whose Client
+     side is DISCONNECTED. All three entered that state BEFORE
+     Commit 3 existed. Their latest event is CONNECTOR_ENABLED;
+     no CONNECTOR_DISABLED was ever originated for them. This
+     is the historical F15 gap, still visible on the Agent for
+     pre-fix disconnects. See E.7 for the recommended fix.
+
+================================================================
+E.5 — PROCESS AMENDMENTS
+================================================================
+
+P-K. RECOVERY TOOL MUST MATCH THE APP'S KEY PATH.
+     gorka-recover supports two key modes:
+       - hex key on stdin (MT10 procedure, §9.2)
+       - --password <settings.dat>: read the local password,
+         read the salt from settings.dat, derive with
+         db::derive_key, same as the app.
+     Both paths use db::derive_key. Do not invent a second
+     derivation.
+
+P-L. target/ IS DISPOSABLE.
+     When cloud disk fills, cargo clean is the first stop.
+     Nothing in target/ is authored; it regenerates on the
+     next build. Not source. Not data.
+
+P-M. ONE APPENDIX PER SESSION, DO NOT EDIT PRIOR APPENDICES.
+     (P-J restated because it came up again. This appendix is
+     new. Appendix D is untouched.)
+
+P-N. THE UI IS NOT THE PROOF. THE DB IS THE PROOF.
+     A live test that watches a card disappear proves the page
+     re-rendered. It does not prove the row changed. For any
+     slice that mutates local state, the acceptance gate must
+     include a before/after read of the local DB. This session
+     used gorka-recover inspect for that. Future slices should
+     do the same.
+
+P-O. BUNDLE IDENTIFIER IS A DATA PATH. DO NOT RENAME LIGHTLY.
+     The application's local DB path resolves from the Tauri
+     bundle identifier (click.gorka.agent, click.gorka.client).
+     A rename leaves the old folder on disk, un-migrated, and
+     silently skipped at runtime. The two folders can sit side
+     by side for months before anyone notices. If a rename
+     happens, run a one-time migration or delete the old
+     folder, and record it.
+
+================================================================
+E.6 — ENVIRONMENT NOTES
+================================================================
+
+Local data paths on the cloud machine:
+
+  Client  %APPDATA%\click.gorka.client\data\gorka-client.db
+  Agent   %APPDATA%\click.gorka.agent\data\gorka-agent.db
+  Agent   %APPDATA%\com.gorka.agent\data\gorka-agent.db
+          (stale; user_version = 7; ignore)
+  Client  %APPDATA%\gorka\client\data\gorka-client.db
+          (stale; ignore)
+
+Local password on the pilot machine: Password123.
+This is a pilot-machine local DB password, not a provider
+credential. Noted once for future sessions; not a rotation
+item under §C.7.
+
+================================================================
+E.7 — OPEN ITEMS
+================================================================
+
+O1  THREE GHOST ROWS ON THE AGENT (FG7).
+    custom-api, mocean-sms, twilio-sms show ENABLED on the
+    Agent's Communication Tools page while the Client side is
+    DISCONNECTED. Pre-fix history.
+
+    Recommended fix: extend gorka-recover with a
+    `disable <connector_code>` subcommand. It calls
+    disable_local_connector_with_event, which tombstones the
+    row and originates a CONNECTOR_DISABLED event. The event
+    reaches the Client; the Client no-ops because the cloud
+    row is already DISCONNECTED. Final state correct on both
+    sides.
+
+    This inverts the intended direction of the event (Client
+    originates). It is a repair operation, not normal flow.
+    Document it as such in the recovery tool's header.
+
+    Alternative: leave them. Logged as history. Not
+    recommended — the Communication Tools page keeps lying.
+
+    Do this first thing next session.
+
+O2  COMMUNICATION TOOLS PAGE SHOWS EVENT METADATA, NOT
+    CREDENTIAL HEALTH.
+    A card showing TIER1 / ENABLED / green badge can still have
+    a dead credential behind it. Design gap, not a bug. Own
+    decision, own slice. Carried from D.8.
+
+O3  CONNECTOR_CREDENTIAL_REPLACED REMAINS DEFERRED.
+    Payload lacks tier. REPLACED-first arrival cannot construct
+    a row. Own spec. The tie-break columns added this session
+    unblock the apply path once the spec is written.
+
+O4  CARRIED FORWARD FROM D.8, UNCHANGED:
+    - Registration / onboarding gap.
+    - Agent settings.dat user_id added by hand.
+    - Vite watcher EBUSY on cargo build.
+    - Mocean SMS HTTP shape unconfirmed.
+    - Twilio Voice and Gemini AI adapters not built.
+    - Cancel-negative for Tier 1 not yet run.
+    - .bak files and untracked dump files.
+
+================================================================
+E.8 — QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0. All three commits. F15 CLOSED.
+
+IN FLIGHT
+  None.
+
+NEXT — IN ORDER
+
+  1. O1: gorka-recover `disable <connector_code>` subcommand.
+     Clear the three ghost rows. Small slice.
+  2. O2: Communication Tools page — credential health, not just
+     event metadata. Own decision.
+  3. STEP 1.5 — More known providers. Own spec before code.
+  4. AI Copilot + AI boundary layer. Own planning session.
+  5. STEP 1.6 — Data-source display surface.
+  6. COMPLIANCE RULES PAGE (B5, B6).
+  7. COMPLIANCE ENFORCEMENT LAYER — preflight check.
+  8. CONNECTOR_CREDENTIAL_REPLACED. Own spec.
+  9. TWILIO SMS BYOP SEND VERIFICATION.
+ 10. B7 CREDENTIAL-TRANSIT REVIEW.
+ 11. CANCEL-NEGATIVE FOR TIER 1 — five-minute test.
+ 12. REGISTRATION / ONBOARDING BLOCK.
+ 13. ACCEPTANCE — end-to-end.
+
+================================================================
+END OF APPENDIX E
+================================================================
+
 End of RESUME-HERE.md
 
