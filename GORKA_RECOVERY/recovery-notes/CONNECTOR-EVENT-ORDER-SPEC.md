@@ -1777,8 +1777,824 @@ End of frozen specification.
 
 
 Status: FROZEN 2026-10-11. Approved for implementation.
-
-
-
 Next action: Commit 1 only. Do not proceed to Commit 2 until local SQLCipher migration gates (MT1–MT12) pass.
 
+
+PART II — AI COPILOT AND COMPLIANCE ENFORCEMENT
+Version: 1.0 — FROZEN
+Date frozen: 2026-10-11
+Status: APPROVED FOR IMPLEMENTATION. STOP-gated slices.
+Companion to: Part I of this file (CONNECTOR-EVENT-ORDER-SPEC v1.0). Part II inherits the primitives frozen in Part I: the protocol_order_less tie-break, tombstone semantics, fail-closed migration pattern, and connector lifecycle (CONNECTOR_ENABLED, CONNECTOR_DISABLED). Nothing in Part II reopens Part I.
+
+Reviewer verdict: GO for freeze (2026-10-11). No further spec revisions except implementation defects.
+
+Supersedes: every prior AI Copilot draft (v0.1 through v0.7a) and the August 2026 cloud AI spec.
+
+II.1 Architecture fit
+GORKA is local-first. Debtor data lives on the client's devices. It does not go to a GORKA cloud. No cloud service is in the middle of any Copilot flow.
+
+The Agent device calls the AI provider directly. Same pattern as SMS and email. Credential is the client's own (BYOP) or GORKA-provisioned (Tier 1, funded phase). Device → provider.
+
+There is no cloud AI endpoint, no cloud AI table, no cloud AI state.
+
+The Copilot is a connector, mechanically. Same catalog row, same enable flow, same credential distribution through encrypted sync, same tombstone on disable. One Copilot connector per AI provider the client chooses to enable.
+
+On legal responsibility. The BYOP model establishes who contracts for the AI service. It does not establish that GORKA is legally uninvolved in the data flow. GORKA's mechanisms shape what data reaches the provider; that shaping is a GORKA decision and a release gate. See II.11.5.
+
+II.2 Scope
+II.2.1 What we build (MVP)
+AI provider abstraction and registry supporting multiple providers without code changes for the OpenAI-compatible class (II.6).
+
+Gemini adapter and OpenAI-compatible adapter, both implementing the existing ConnectorAdapter trait (II.7).
+
+Enablement of AI providers through the existing BYOP flow (Tier 2).
+
+Context Engine producing a small, allowlisted context (II.3).
+
+Strategy Engine calling the provider, receiving strictly structured output (II.8).
+
+Deterministic fallback producing a rule-based recommendation when the provider fails (II.9).
+
+Fact validation layer with bounded detection scope (II.10).
+
+AI boundary layer validating a typed request at a single enforcement point (II.4).
+
+Copilot panel on the Agent's debtor profile page (II.12).
+
+Recommendation lifecycle with statuses, expiration, durable send-attempt record, defined outcomes (II.11).
+
+Opt-out enforcement, optional contact-limit configuration, optional disclosure text (II.13).
+
+Data enrichment — BYOP connector category, reserved only (II.14).
+
+II.2.2 What we do not build (MVP)
+Feature	Status	Reason
+Web scraping of any kind	Never built	GORKA's own code does not scrape.
+Automatic third-party contact discovery	Never built	—
+Predictive ML / probability percentages	Not built	No data; LLMs cannot calibrate.
+Learning system / A-B prompt testing	Not built	No labeled outcomes yet.
+Autonomous prompt modification	Never built	—
+Autonomous sending or automatic retries	Never built	—
+Cross-device AI recommendation history	Not built in MVP	II.15.
+SMS and voice drafting	Deferred	Email first.
+Psychology / "understands the debtor" language	Never used	—
+AI usage in billing aggregates	Deferred	—
+Data enrichment adapters / lookups	Reserved, not built	II.14.
+Universal quiet-hours engine	Never built	II.13.
+Timezone-based send blocking	Never built	II.13.
+Any cloud AI endpoint or cloud AI storage	Never built	—
+II.3 The Context Engine
+Where it runs. On the Agent device. Local tables only. No cloud call.
+
+Allowlist. Only the fields listed here may leave the device. The list is the boundary.
+
+json
+{
+  "debtor": {
+    "amountRange": "5000-7500",
+    "daysOverdueRange": "30-60",
+    "debtOriginCategory": "INVOICE"
+  },
+  "communicationHistory": {
+    "totalCount": 5,
+    "emailCount": 3,
+    "smsCount": 1,
+    "voiceCount": 1,
+    "responseRateBand": "LOW"
+  },
+  "paymentHistory": {
+    "totalCount": 1,
+    "partialCount": 1,
+    "missedCount": 0
+  },
+  "indicators": {
+    "paymentReliability": "POOR",
+    "engagementLevel": "LOW",
+    "communicationPreference": "EMAIL",
+    "promisesKeptRatio": "PARTIAL"
+  }
+}
+Not in the allowlist, does not leave the device: debtor name, surname, email, phone (any form); exact debt amount; invoice or debt reference; message bodies; documents; third-party enrichment; any field not listed above.
+
+Coarse representations, not exact values. Exact values and combinations of exact values can identify a person after direct identifiers are removed. Bands mitigate this.
+
+Indicators are computed locally by deterministic rules. Not by the AI.
+
+The allowlist is enforced in two independent places. The Context Engine only produces allowlisted fields. The boundary layer (II.4) validates the complete serialized request. Two checks, same rule.
+
+Subject to legal review.
+
+II.4 The AI boundary layer
+Where it runs. On the Agent device, in the Copilot command.
+
+II.4.1 The single enforcement point
+The Copilot command constructs a typed OutboundAiRequest.
+
+The boundary validator validates it.
+
+The validated form is captured as a canonical semantic object.
+
+The adapter receives the canonical semantic object and translates it into its provider's HTTP envelope.
+
+The adapter may not add, remove, reorder, or alter any prompt content, context field, or request option during translation.
+
+II.4.2 The typed request
+text
+OutboundAiRequest {
+  systemPrompt: String,          // from a fixed template, parameters only from the allowlist
+  userMessage: String,           // from a fixed template, parameters only from the allowlist
+  context: AllowedContext,       // the exact shape in II.3, no additional fields
+  model: String,                 // from connector configuration
+  requestOptions: RequestOptions // a fixed allowlist of options
+}
+II.4.3 Validation rules
+Fields. No field outside the typed structure. Unknown fields fail.
+
+Values. Each value matches its declared type: string enums where declared, integers within declared bounds, no free-form strings.
+
+Embedded identifiers. systemPrompt and userMessage scanned for: known debtor identifiers, email-shaped strings, phone-shaped strings, currency amounts outside declared ranges, invoice-shaped tokens. Any match fails.
+
+Request options. Only options on the fixed allowlist.
+
+Any rule failure blocks the request. No fallback inside the boundary. A failed request falls through to the deterministic fallback (II.9).
+
+II.4.4 What the boundary does not claim
+It validates structure and known patterns. It does not guarantee no identifying information can ever reach the provider. A malicious or unusually shaped identifier could pass. The boundary reduces exposure; it is not an absolute guarantee. The legal release gate (II.11.5) determines what is acceptable.
+
+II.4.5 Semantic-identity acceptance test
+Byte-identity of the entire provider-bound body is not achievable — Gemini and OpenAI use different envelopes. The correct test is semantic identity with an explicit per-provider field mapping.
+
+For each adapter:
+
+A table maps every canonical field to the provider's body location. Example: systemPrompt → contents[0].parts[0].text for Gemini; messages[0].content for OpenAI-compatible.
+
+The test walks the mapping, compares each field individually, and asserts the provider body contains only mapped locations.
+
+An unmapped location fails the test.
+
+If a provider's format cannot be mapped unambiguously, the test fails closed.
+
+Three tests:
+
+Positive: valid request → provider body round-trips to equal the validated form.
+
+Negative: invalid request never reaches the adapter.
+
+Injection: a fixture adapter attempts to add a field during translation; the mapping walk catches it.
+
+II.4.6 Credentials
+Credentials are never part of the OutboundAiRequest. Supplied to the adapter at construction time, separate from the canonical payload. Never in prompts, canonical bytes, or audit logs.
+
+II.4.7 Logging
+The sanitized request is logged locally for audit: field names only, no values. Never to a cloud.
+
+II.4.8 Two-placeholder pattern
+The draft the agent edits uses real values, restored deterministically from the context by rendering approved tokens. The rationale uses placeholders. Restoration is deterministic render of approved tokens into permitted fields. The draft is not trusted because restoration succeeded — fact validation (II.10) runs on the final message.
+
+II.5 Model and provider configuration
+The model identifier is a configuration value. Not hardcoded. No provider model string appears in code. Stored in the connector's configuration JSON.
+
+The provider is a catalog row. Not hardcoded. II.6 defines the catalog architecture.
+
+II.5.1 Config-only changes — Disable → Re-enable
+The MVP does not introduce a separate configuration-update event. To change a model, base URL, or any other configuration-only field:
+
+The client disables the connector. Originates CONNECTOR_DISABLED.
+
+The client re-enables with the new configuration. Originates CONNECTOR_ENABLED, whose payload carries configuration.
+
+Verification status (Slice 0, closed):
+
+On CONNECTOR_DISABLED, apply_connector_disabled writes a tombstone. Confirmed in code.
+
+On re-enable, apply_connector_enabled writes the full payload with the winning tuple. Confirmed.
+
+A device that missed the disable but received the re-enable: the re-enable has a later clock, wins. Confirmed by protocol_order_less.
+
+A stale disable arriving after the re-enable: loses. Confirmed.
+
+read_local_connector_credential gates on status = 'ENABLED'. Confirmed in local_record.rs.
+
+Agent send path (send_connector_message) and test path (test_connector_connection) both route through read_local_connector_credential and refuse on None. Confirmed in src-tauri-agent/src/main.rs.
+
+UX cost: disable wipes the credential on every device. Re-enable must therefore supply a new credential. Tier 1 provision; Tier 2 re-enter.
+
+On gemini-2.5-flash as default. The seed row ships with gemini-2.5-flash. Availability and free-tier eligibility are verified at implementation.
+
+II.5.2 Base URL network controls
+Because the adapter carries an API credential, a URL-validation failure is a credential-disclosure risk, not merely a connectivity problem.
+
+Static validation, at configuration save:
+
+Must be HTTPS.
+
+Must not be an IP address literal (IPv4 or IPv6). IPv6 literals in brackets rejected.
+
+Must not contain embedded credentials (user:pass@host).
+
+Hostname displayed on the connector card.
+
+Resolution-time validation, at every request:
+
+Hostname resolved before connection.
+
+Resolved address must be public. Loopback, private, link-local, multicast, reserved rejected. Applies to IPv4 and IPv6.
+
+The address actually connected to is the one validated. DNS rebinding prevented by using the validated resolved address for the connection.
+
+Redirect handling:
+
+Follow redirects only within the same origin.
+
+Cross-origin redirects rejected.
+
+No credential forwarded to any redirect destination.
+
+If the client cannot enforce this, redirects disabled entirely.
+
+Tests: IPv4 and IPv6 loopback, private, link-local, multicast rejected. DNS rebinding simulation rejected. Cross-origin redirect rejected; credentials not forwarded. Embedded credentials rejected at save.
+
+II.5.3 Implementation acceptance condition (addendum 3)
+When the implementation pins a validated IP address to prevent DNS rebinding, the following must also hold:
+
+TLS certificate and hostname verification. The certificate presented by the pinned address must be validated against the intended hostname, not the pinned IP. Pinning the IP must not disable SNI, hostname verification, or certificate chain validation.
+
+Proxy configuration. If the HTTP client is configured to use a proxy, the proxy must not bypass the address-validation policy. Either the proxy is disabled for AI provider calls, or the proxy's resolved destination is subject to the same validation.
+
+These are Slice 3 acceptance conditions. Verified with a test that attempts a TLS connection to a pinned address presenting the wrong certificate, and a test that attempts a call through a misconfigured proxy.
+
+II.6 Extensible AI provider catalog
+The requirement. The catalog is open. Gemini today. Paid Gemini tiers, ChatGPT, KIMI, Claude, DeepSeek, others later. Adding a provider does not require re-architecting anything.
+
+II.6.1 Catalog identity vs registry factory
+Two separate concepts:
+
+The catalog row identifies a specific provider. chatgpt, kimi, gemini-ai are catalog rows.
+
+The registry maps a catalog row's code to an adapter factory.
+
+Multiple catalog codes can map to the same factory. chatgpt, kimi, and deepseek map to the OpenAI-compatible factory, which reads base_url and model from each row's configuration.
+
+II.6.2 Adapter identity
+The ConnectorAdapter::code() method returns a &'static str. The current implementation's contract (catalog identity vs adapter-family identity) is verified in Slice 3. The invariant: provider/catalog identity is distinct from adapter-family identity, and the registry knows which catalog code produced which adapter.
+
+II.6.3 Three levels of extensibility
+Level 1 — Model within a provider. Config value. No code.
+
+Level 2 — OpenAI-compatible provider verified to meet the contract. Seed a catalog row. No code. Applies to providers verified against: authentication shape, structured output support, error response shape, and the chat-completions request/response contract.
+
+Level 3 — Provider with a unique API contract. A new adapter, one small code slice. Same shape as resend-email or mocean-sms.
+
+II.6.4 MVP adapters
+Two adapters ship:
+
+Gemini — Google's API shape. Used by gemini-ai.
+
+OpenAI-compatible — serves any verified provider. Used by chatgpt, kimi, and any future OpenAI-compatible provider.
+
+Adding a new OpenAI-compatible provider: one seed row. Adding a new model to an existing provider: one config value. Adding a unique-API provider: one small adapter slice.
+
+II.7 The AI adapters
+Two adapters in the MVP, both implementing ConnectorAdapter.
+
+Gemini adapter. Posts to Google's generate-content endpoint with the model from config.
+
+OpenAI-compatible adapter. Posts to {base_url}/chat/completions with the model from config.
+
+Both receive the credential at construction, separate from the canonical payload. Both drop at end of call. Both carry the credential-leak regression test.
+
+Neither adapter redacts, builds the prompt, validates facts, or enforces compliance. Those run before construction. The adapter's only job is transport.
+
+The adapter receives the canonical semantic object and may not modify it. See II.4.5.
+
+Neither adapter reads or writes the database. Neither emits sync events.
+
+The adapter is not an enforcement boundary. A successful adapter call is not authorization to send.
+
+II.8 Strategy Engine and structured output
+The prompt. One system prompt, one user message containing the context JSON. The system prompt instructs the model to return JSON only.
+
+The response schema (strict):
+
+json
+{
+  "recommendation": {
+    "channel": "EMAIL",
+    "priority": "HIGH",
+    "tone": "FIRM",
+    "timing": "WITHIN_24_HOURS",
+    "rationale": "..."
+  },
+  "draft": {
+    "subject": "...",
+    "body": "..."
+  },
+  "riskFlags": ["LOW_RESPONSE_RATE"]
+}
+Canonical enums (shared by the AI schema and the fallback):
+
+Priority: LOW | NORMAL | HIGH
+
+Tone: FRIENDLY | FIRM | URGENT | FINAL_NOTICE
+
+Timing: WITHIN_24_HOURS | WITHIN_3_DAYS | WITHIN_7_DAYS
+
+Channel: EMAIL (only channel in the MVP)
+
+The fallback (II.9) maps to the same enums. One schema.
+
+Local schema validation, regardless of provider features. Even if a provider claims JSON mode or structured output, the local parser validates against the schema. Rejects: missing fields, unknown enum values, wrong types, free text. No salvage. Falls through to fallback.
+
+modelVersion is not trusted from the response. The record uses the configured model name from connector configuration and the local promptVersion from the Copilot code.
+
+Rationale scope. Model-generated text. Labeled "AI explanation — unverified." Constrained to a small structured form. No free-form narrative. Not subject to fact validation. Not allowed to introduce facts as UI facts. Does not appear in the sent email.
+
+No auto-generation. Manual trigger only. Regeneration limit: three per debtor per session.
+
+II.9 Deterministic fallback
+If the provider fails or returns malformed output, the Agent gets a recommendation from local rules. No AI call. Offline-capable.
+
+Deterministic inputs:
+
+days_overdue — integer from the debt's due date.
+
+response_rate_numeric — replies / total outbound. If total is zero, treated as 0.0.
+
+promises_kept_numeric — promises kept / promises made. If made is zero, treated as 0.0.
+
+Band-to-numeric mapping. II.3 uses bands for the AI allowlist. The fallback uses numeric values internally. Both are derived from the same local counts. No band-to-numeric conversion.
+
+Fallback rules:
+
+text
+if days_overdue > 60 and response_rate_numeric < 0.2:
+    → EMAIL, priority HIGH, tone URGENT
+elif days_overdue > 30 and promises_kept_numeric < 0.5:
+    → EMAIL, priority NORMAL, tone FIRM
+elif days_overdue > 30:
+    → EMAIL, priority NORMAL, tone FIRM
+else:
+    → EMAIL, priority NORMAL, tone FRIENDLY
+Missing data. No due date → days_overdue = 0 → FRIENDLY case.
+
+Order of implementation: fallback first, AI on top.
+
+II.10 Fact validation layer
+The invariant. No draft with unresolved detected claims can be sent. The draft is shown to the agent with flags; the send button is disabled until claims are resolved.
+
+Supported claim types in the MVP:
+
+Claim type	Detection	Verification
+Dollar amount	Regex on currency-shaped tokens	Cross-checked against the debtor's debt records
+Calendar date	Regex on date-shaped tokens	Cross-checked against due dates and event dates
+Invoice / reference number	Regex on reference-shaped tokens	Cross-checked against records in the local database
+Prior promise or payment	Pattern match against phrasing templates	Must be backed by a row in actions or payments
+Legal or credit consequence	Exact match against a fixed template list	Must match one of the templates
+The bounded scope is explicit. The validator does not claim to detect every possible factual claim. A claim that does not match a supported type is not flagged, not verified, not blocked. The absence of a flag is not proof of truth. The spec and UI state this plainly.
+
+II.10.1 Claim resolution
+When a claim is flagged, the agent has two actions:
+
+Edit the draft to remove the claim. No longer present. Revalidation passes.
+
+Resolve the claim with a database-supported value. The agent selects the correct value from the local database. The draft is rewritten. Revalidation confirms the claim matches the database.
+
+A resolution producing a value differing from the database is rejected.
+
+Resolution record. Local: which claim, what value selected, user_id, timestamp.
+
+Subsequent edits invalidate the resolution. Re-runs the validator. New claim requires new resolution.
+
+Validation runs on the final message immediately before send.
+
+If a claim cannot be verified against the database, the only resolution is to remove it.
+
+What this does not do. It does not make the draft legally safe. It makes it factually accurate within the supported claim types.
+
+II.11 Recommendation lifecycle and send safety
+II.11.1 Statuses
+PENDING, ACCEPTED, REJECTED, SENT, EXPIRED, SEND_UNCERTAIN.
+
+One canonical status per state:
+
+SENT — confirmed success only.
+
+SEND_UNCERTAIN — uncertain attempt.
+
+No ambiguous "SENT with an uncertain flag."
+
+II.11.2 Expiration
+Expires when any of these change since creation:
+
+Debt amount or debt status.
+
+Communication count for the debtor.
+
+Opt-out flags for the debtor (any channel).
+
+The configured expiration window passes (default 72 hours).
+
+Snapshot. Hash of a canonical serialization:
+
+Canonical form. Fixed field order (alphabetical), normalized: amounts as integer cents; dates as RFC 3339 UTC; counts as integers; booleans as 0/1; missing values as null.
+
+Hash algorithm. SHA-256 over the canonical UTF-8 bytes.
+
+Storage. Stored on the recommendation at creation time.
+
+Recomputed on load and in the send command. A mismatch expires.
+
+II.11.3 Send-command guarantees
+Refuses unless all are true at the moment of the call:
+
+Recommendation exists with status ACCEPTED.
+
+Belongs to the current debtor.
+
+Not EXPIRED and not superseded.
+
+Final edited draft passes fact validation.
+
+Opt-out flags allow the send.
+
+Contact-limit configuration, if set, allows the send. Not active until Slice 5.
+
+Connector credential present and connector is ENABLED.
+
+Configuration-only-change window is not in progress.
+
+Local locking. Inside one local database transaction:
+
+Recompute freshness snapshot.
+
+Read contact-limit count.
+
+Read opt-out flag.
+
+Write contact-limit reservation — a row in local send_reservations.
+
+Write send-attempt record — a row in send_attempts.
+
+Transaction commits. Provider call happens after commit. Concurrent local sends cannot pass the contact-limit check while the reservation is present.
+
+What this does not guarantee. Across disconnected devices, no local mechanism prevents two independent reservations. Documented in II.13.2.
+
+II.11.4 Send outcomes and durable attempt record
+Durable attempt record before the provider call. Written in the same transaction as the reservation. Commits before the provider call.
+
+text
+send_attempts {
+  id: UUID,
+  recommendation_id: UUID,
+  debtor_id: UUID,
+  organization_id: UUID,
+  connector_code: TEXT,
+  attempted_at: DATETIME,
+  state: TEXT,               -- IN_PROGRESS | CONFIRMED_SUCCESS | CONFIRMED_FAILURE | UNCERTAIN
+  finalized_at: DATETIME,
+  payload_snapshot: BLOB     -- see addendum 1
+}
+State transitions:
+
+Event	Attempt state	Reservation	Communication	Recommendation
+Before call	IN_PROGRESS	Written	—	ACCEPTED
+Confirmed success	CONFIRMED_SUCCESS	Converted	Written	SENT
+Confirmed failure	CONFIRMED_FAILURE	Released	Not written	ACCEPTED or REJECTED
+Uncertain (timeout, lost response)	UNCERTAIN	Retained	Not written	SEND_UNCERTAIN
+Crash before provider response	Recovery: UNCERTAIN	Retained	Not written	SEND_UNCERTAIN
+Crash after provider response	Recovery: UNCERTAIN	Retained	Not written	SEND_UNCERTAIN
+Recovery must be idempotent. Each recovery step keys on the attempt's id and prior state. Applying the same step twice is a no-op.
+
+Uncertain-reservation resolution:
+
+Prior state	Trigger	Result
+UNCERTAIN	Agent confirms delivery	Reservation converts to communication
+UNCERTAIN	Agent confirms not delivered	Reservation released
+UNCERTAIN	Agent cannot confirm	Reservation retained indefinitely
+UNCERTAIN	No agent action, TTL elapsed (default 30 days)	Reservation retained; UI shows overdue
+Uncertainty does not release the reservation. Only an explicit "not delivered" confirmation releases it.
+
+The provider call and local writes remain non-atomic. The reservation-then-attempt pattern is the recovery mechanism, not a distributed transaction.
+
+No automatic retry, ever. For any outcome. The agent decides.
+
+II.11.5 Legal release gate
+Preconditions for release, not engineering choices:
+
+Legal review of the outbound context allowlist (II.3).
+
+Legal review of the prompt templates.
+
+Legal review of provider terms for each AI provider the client enables.
+
+Documented decision on whether local-only persistence (II.15) meets the intended use.
+
+Legal review blocks release to real customers. It does not block local engineering. Slices 2 through 5 may proceed in-house with the release gate documented.
+
+II.12 The Copilot UI
+Collapsed state. Header with "Copilot" and a click-to-open indicator.
+
+Expanded state:
+
+Debtor snapshot. Name, amount, days overdue, contact availability. All local.
+
+Trigger. "Analyze debtor." Manual. No auto.
+
+Loading state. Shown immediately.
+
+Recommendation. Channel, priority, tone, timing.
+
+Rationale. Labeled "AI explanation — unverified." Structured form (II.8).
+
+Draft. Subject and body. Restored real values for editing. "Regenerate" (up to 3 per session) and "Edit."
+
+Claim flags. Mismatches appear inline.
+
+Actions. "Accept and Review" opens a composer with the draft prefilled. "Reject" discards. Sending is a separate explicit action inside the composer.
+
+When no AI provider is enabled. "Copilot is not enabled. Ask your administrator."
+
+On the enabling role. The same role that enables any other connector. No new permissions model.
+
+II.13 Compliance and contact handling
+II.13.1 Scope
+GORKA is a SaaS platform serving clients across many jurisdictions, time zones, and business models. GORKA does not impose a universal contact schedule, does not enforce time-of-day restrictions, and does not determine the legally permitted contact time for any jurisdiction.
+
+Contact timing is the client's responsibility. GORKA provides the mechanism; the client decides how to use it. This mirrors the Zone 3 declaration that applies to client-connected data sources.
+
+The MVP does not implement a quiet-hours engine, does not perform timezone-based blocking, and does not enforce jurisdiction-specific rules.
+
+II.13.2 Opt-out handling
+Opt-out is a legal fact, not a business preference.
+
+Stored on the debtor record as a per-channel flag.
+
+Reaches other devices through the existing ENTITY_UPDATED sync event.
+
+Send path checks the flag immediately before calling the connector, against the state available on the current device.
+
+If set, the send is blocked. No override from the Agent device. Admin can clear the flag through the debtor's edit form.
+
+The guarantee, stated precisely. Opt-out is enforced against the Agent's locally available state. Cross-device propagation is best-effort. An Agent that is offline or has stale local data may not yet know that an opt-out was recorded on another device. The system does not claim organization-wide prevention of sends after an opt-out. It enforces the flag against the state the device has, at the moment of the send.
+
+Whole-blob data concurrency limitation (addendum 2). Additionally, debtors.data is synchronized as a whole blob under ENTITY_UPDATED. Two devices that concurrently modify different keys in the same debtor's data object produce a single winner. The losing change — including an opt-out flag if it loses — is not preserved. This limitation is a property of the existing whole-blob event model, not of the Copilot feature. It applies to every field stored in data, not only opt-out.
+
+The MVP does not introduce per-key reconciliation for data. If per-key reconciliation becomes a requirement, it is a separately scoped change to the frozen sync architecture, not an expansion of this feature.
+
+The MVP does not block sends on stale sync state. Whether to block sends when local state is stale is a separate policy decision not defined in this draft.
+
+II.13.3 Contact limits
+A client may configure a contact limit. Configuration is local per device. Not synced.
+
+Contact-limit enforcement is not active until Slice 5. The configuration field exists. The send path does not consult it in Slice 1.
+
+II.13.4 Disclosure text
+If the client configures a disclosure text, it is appended to the outgoing message body before the preview is shown. If not configured, nothing is appended. No default.
+
+No repeated appending. The composer checks whether the disclosure is already the last line before appending. Reopening the preview does not duplicate.
+
+II.13.5 Honest language
+Anywhere the spec or the UI mentions compliance: "configurable controls to support applicable regulatory requirements." Never "FDCPA compliance built in." Never claim enforcement the system does not provide.
+
+II.13.6 What is not built
+Universal quiet-hours engine.
+
+Timezone-based send blocking.
+
+Jurisdiction-specific rules.
+
+Organization-wide rule synchronization.
+
+Any claim that the system guarantees compliance with any jurisdiction's requirements.
+
+Any claim that opt-out is enforced organization-wide across disconnected devices.
+
+II.13.7 Existing schema
+The compliance_rules table (migration v9) has columns for quiet hours. Those columns become unused. They remain in the schema. No migration in the MVP to drop them.
+
+II.14 Data enrichment (reserved)
+MVP scope: no enrichment lookup or enrichment data transmission is part of the MVP AI flow.
+
+No enrichment adapter. No lookup. No enriched data. No external data source is enabled or read.
+
+On "no data leaves the device." The approved allowlisted context (II.3) is sent to the AI provider as a normal part of the Copilot flow. That is the only outbound data. Enrichment data is not sent to the AI in the MVP because no enrichment exists in the MVP.
+
+When a future phase adds enrichment, any externally sourced field requires an explicit field-level disclosure decision and legal review before use in the AI flow. Until then, the field remains local.
+
+Architectural reservation:
+
+Data connector category, already reserved.
+
+DataSourceAdapter trait with lookup(), in the spec, not the code.
+
+external field in the Context object, reserved, always null in MVP.
+
+BYOP sub-table already present as a placeholder.
+
+Deferred. Which provider(s) to integrate. LookupQuery / LookupResult shapes. On-demand vs cached lookup. Interaction with fact validation. Any use of externally sourced fields in the AI flow.
+
+II.15 What syncs and what stays local
+Syncs.
+
+Connector enablement and credential (AI providers and any future data connector). Uses existing CONNECTOR_ENABLED and CONNECTOR_DISABLED.
+
+Opt-out flags. Uses existing ENTITY_UPDATED on the debtor record.
+
+Actual sent communications. Uses existing COMMUNICATION_LOGGED.
+
+Does not sync.
+
+AI prompts and responses.
+
+Recommendations, outcomes, drafts.
+
+The send_attempts and send_reservations tables.
+
+Enriched data.
+
+Contact-limit settings.
+
+Disclosure-text settings.
+
+Copilot outcome vs communication record:
+
+Copilot outcome — local fact: "the AI recommended X, the agent accepted it, the send resulted in Y." Local only.
+
+Communication record — actual sent message. Syncs through COMMUNICATION_LOGGED. Does not carry AI rationale or draft history.
+
+MVP default. Local-only persistence of recommendations and outcomes. Explicit limitation: no cross-device AI recommendation history in the MVP. If a customer requires the AI recommendation and its outcome to be visible on other devices or to survive device loss, that is a separately scoped audit-and-sync design. The limitation must be stated in the UI, in customer documentation, and in any onboarding material.
+
+II.16 Implementation slices
+Slice 0 — Approve the concept. Closed. All gates verified.
+
+Slice 1 — Opt-out enforcement + disclosure text. Frozen scope in II.17. No reservation lifecycle. No contact limits.
+
+Slice 2 — Deterministic Context Engine and fallback. Local context from existing tables. Rule-based recommendation using canonical enums (II.8) and deterministic calculations (II.9). Works offline, sends nothing external.
+
+Slice 3 — AI boundary and adapters. Typed outbound request, canonical serialization, boundary validator (II.4). Gemini and OpenAI-compatible adapters. Base URL network controls (II.5.2 and II.5.3). Tests: secrets cannot reach requests or logs; embedded identifiers caught; semantic-identity round-trip; injection caught.
+
+Slice 4 — Strategy Engine and fact validation. Strict parse with canonical enums and local schema validation. Fall back on failure. Bounded fact validator (II.10). Claim resolution semantics.
+
+Slice 5 — Recommendation lifecycle, reservation, contact limits, and UI. Local persistence. Expiration snapshot with canonical serialization. Regeneration limits. Review/composer flow. Durable send_attempts and send_reservations. Recovery scan. Three send outcomes. Contact-limit enforcement becomes active here. Re-enforce all preconditions in Rust.
+
+Slice 6 — Integrated security and regression tests. Offline/stale rules, opt-out changes, concurrent sends, provider failures, malformed output, altered drafts, expiration, credential leakage, embedded identifiers, base-URL attack scenarios, uncertain outcomes, crash recovery.
+
+Each slice gets a written acceptance result and a STOP/GO decision.
+
+II.17 Slice 1 — frozen scope
+II.17.1 What Slice 1 does
+Slice 1a — Opt-out enforcement.
+
+Opt-out stored in debtors.data JSON under key opt_out. Per channel: {"opt_out": {"email": true, "sms": false, "voice": false}}.
+
+Read in Rust inside send_connector_message. If set for the connector's channel, refuse.
+
+Connector-to-channel mapping is explicit and stable. Determined by the connector code, not the recommendation:
+
+Connector code	Channel
+resend-email	email
+* ends in -sms	sms
+* ends in -voice	voice
+The check uses the actual connector being called, not the channel the Copilot recommended.
+
+UI toggle on the debtor profile to set/clear the flag. The toggle reads the current data blob, sets or clears the key, and writes the whole blob back inside the same transaction that originates an ENTITY_UPDATED.
+
+The merge is whole-blob replace. Confirmed in apply_entity_updated. There is no key-level merge. The toggle therefore must not clobber unrelated data keys; it reads the existing blob, mutates the opt_out key, and writes the full blob.
+
+Enforcement is in Rust, in the send command. UI-only enforcement is insufficient.
+
+The opt-out toggle reads the current data blob, sets or clears the opt_out key, and writes the full blob back in the same transaction that originates the ENTITY_UPDATED. This preserves unrelated keys at the moment of the write. It does not prevent a concurrent write from another device from losing the flag under the whole-blob event ordering.
+
+Slice 1b — Disclosure text append.
+
+Read compliance_rules.disclosure_text. If non-empty, append to the composer body.
+
+The composer runs the append once. Idempotent: checks whether the disclosure is already the last line before appending.
+
+Edit and reopen do not duplicate.
+
+Appended before preview, so the preview shows the exact outgoing message.
+
+II.17.2 Acceptance tests (written before code)
+Opt-out (1a):
+
+Set opt_out.email = true on debtor X. Send via resend-email refuses with a clear error.
+
+Send via an SMS connector to the same debtor is not blocked by the email flag.
+
+Clear opt_out.email. Send succeeds.
+
+Set opt_out.email on device A. Sync. Device B refuses the send.
+
+Set opt_out.email while device B is offline. Device B does not know until sync. Documented as the stated limitation.
+
+Set opt_out.email while another data key exists. Verify the other key is not clobbered.
+
+On device A, set opt_out.email = true. On device B (offline), change an unrelated data key. Bring device B online. Verify which change wins under protocol_order_less, and verify the losing change is recorded in history_records — not silently lost.
+
+Verify the winner's outcome is the state on both devices after sync.
+
+Disclosure text (1b):
+
+Set disclosure text. Open composer. Verify appended.
+
+Edit body. Verify not appended twice.
+
+Save and reopen. Verify not appended twice.
+
+Clear disclosure text. Open composer. Verify nothing appended.
+
+II.17.3 What Slice 1 does not include
+Contact-limit enforcement. Deferred to Slice 5. Reason: enforcement requires the reservation lifecycle. A simple count-then-send in Slice 1 is vulnerable to concurrent local sends. Contact limits are not active until Slice 5.
+
+Any reservation logic.
+
+Any send-attempt record.
+
+Any new event type.
+
+Any protocol amendment.
+
+Any migration.
+
+II.17.4 Reconnaissance required before Slice 1 code
+Three items must be verified in the current codebase before Slice 1 implementation:
+
+debtors.data JSON shape and mutation path. How the field is serialized, updated, and consumed.
+
+ENTITY_UPDATED merge behavior for data. Whether it is whole-blob replace or key-level merge. If the latter, the toggle implementation differs.
+
+compliance_rules fields. Which columns are populated today, which are unused, whether the disclosure_text column is already present.
+
+No code before these three are read.
+
+II.18 Open questions
+Q1 — Persistence. Closed: local-only MVP, explicit limitation, separate design if a customer requires cross-device.
+
+Q2 — Configurable AI model. Closed: config-only changes use Disable → Re-enable. Verified safe in Slice 0.
+
+Q3 — Legal review of transmitted fields. Open. Required before real-customer release. Does not block local engineering.
+
+Q4 — Placeholder pattern. Closed.
+
+Q5 — Data enrichment boundary. Closed.
+
+II.19 What Part II does not do
+Does not write code.
+
+Does not amend any frozen document. No protocol amendments are required for this feature.
+
+Does not settle Q3 legal review.
+
+Does not build multiple AI providers today — only the abstraction.
+
+Does not build data enrichment today — only the reserved shape.
+
+Does not build cross-device AI recommendation history.
+
+Does not build scheduled, autonomous, or bulk AI.
+
+Does not build any scraping path.
+
+Does not build a universal compliance engine.
+
+Does not claim any compliance guarantee the system does not provide.
+
+II.20 Addendum — freeze clarifications (2026-10-11)
+Addendum 1 — II.11.4, immutable send-payload recovery
+The send_attempts table gains one column:
+
+text
+payload_snapshot: BLOB  -- canonical serialization of the exact outgoing request
+What it contains. The exact bytes handed to the adapter — recipient, subject, body, connector code, and the connector's configuration fields used in the request.
+
+When it is written. Same transaction as the attempt row, before the provider call. If the transaction commits, the snapshot exists. If it does not commit, no provider call happens.
+
+What it is used for. Only during recovery. On an uncertain outcome or a crash-recovery scan, the snapshot is read to reconstruct the message for display, for the agent's confirmation, and for the communication record if the agent confirms delivery.
+
+What it is not. Not synced. Not AI history. Not exposed in the UI except during the recovery flow. Local to the device.
+
+Deletion. The snapshot is deleted in the same transaction that finalizes the attempt and commits any corresponding communication record.
+
+Addendum 2 — II.13.2 and II.17.1, whole-blob data concurrency limitation
+See II.13.2 for the full statement, and II.17.1 for the toggle-level statement. The limitation is documented, not fixed. Fixing it would change the frozen sync semantics for every data-carrying entity. Out of scope.
+
+Addendum 3 — II.5.3, network-security implementation acceptance
+See II.5.3.
+
+II.21 Freeze record
+Reviewer verdict: GO for freeze (2026-10-11).
+
+The addendum resolves:
+
+Immutable send-payload recovery (Addendum 1).
+
+Whole-blob data concurrency limitation (Addendum 2).
+
+TLS hostname verification and proxy handling (Addendum 3).
+
+Next action: Slice 1 reconnaissance. Inspect the three code paths in II.17.4. No code before those are read.
+
+End of Part II.
+
+END COPY
