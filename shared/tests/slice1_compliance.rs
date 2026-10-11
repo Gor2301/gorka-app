@@ -33,6 +33,7 @@ use gorka_shared::compliance::{
     get_disclosure_text,
     get_opt_out,
     set_debtor_opt_out,
+    set_disclosure_text,
     Channel,
     ComplianceBlock,
 };
@@ -435,7 +436,38 @@ fn get_disclosure_text_returns_value_when_row_exists() {
     .expect("seed compliance_rules");
 
     let text = get_disclosure_text(&conn).expect("read");
+    assert!(text.is_none(), "NULL disclosure_text reads as None");
+}
+
+#[test]
+fn set_disclosure_text_inserts_when_no_row() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+    set_disclosure_text(&mut conn, ORG_ID, Some("Please contact us."))
+        .expect("insert");
+    let text = get_disclosure_text(&conn).expect("read");
     assert_eq!(text.as_deref(), Some("Please contact us."));
+}
+
+#[test]
+fn set_disclosure_text_updates_when_row_exists() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+    set_disclosure_text(&mut conn, ORG_ID, Some("First."))
+        .expect("insert");
+    set_disclosure_text(&mut conn, ORG_ID, Some("Second."))
+        .expect("update");
+    let text = get_disclosure_text(&conn).expect("read");
+    assert_eq!(text.as_deref(), Some("Second."));
+}
+
+#[test]
+fn set_disclosure_text_can_clear() {
+    let mut conn = open_in_memory_for_tests().expect("db init");
+    set_disclosure_text(&mut conn, ORG_ID, Some("Text."))
+        .expect("insert");
+    set_disclosure_text(&mut conn, ORG_ID, None)
+        .expect("clear");
+    let text = get_disclosure_text(&conn).expect("read");
+    assert!(text.is_none());
 }
 
 #[test]

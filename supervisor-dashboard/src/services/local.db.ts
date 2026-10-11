@@ -297,6 +297,16 @@ export const localDB = {
   async syncEngineStatus(): Promise<string> {
     return await invoke<string>('sync_engine_status');
   },
+
+  // --- Compliance -------------------------------------------------
+
+  async getDisclosureText(): Promise<string | null> {
+    return await invoke<string | null>('get_disclosure_text');
+  },
+
+  async setDisclosureText(text: string | null): Promise<void> {
+    await invoke('set_disclosure_text', { text });
+  },
 };
 
 // ─── DOCUMENT TYPES ───────────────────────────────────────────────────

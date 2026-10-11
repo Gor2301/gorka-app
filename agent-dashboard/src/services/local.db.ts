@@ -605,6 +605,20 @@ export const localDB = {
     });
   },
 
+  // --- Compliance ---------------------------------------------------
+
+  async setDebtorOptOut(
+    debtorId: string,
+    channel: 'email' | 'sms' | 'voice',
+    value: boolean,
+  ): Promise<void> {
+    await invoke('set_debtor_opt_out', { debtorId, channel, value });
+  },
+
+  async getDisclosureText(): Promise<string | null> {
+    return await invoke<string | null>('get_disclosure_text');
+  },
+
   // --- Sync engine -------------------------------------------------
 
   async syncEngineStatus(): Promise<string> {

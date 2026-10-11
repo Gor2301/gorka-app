@@ -39,6 +39,13 @@ const DOCUMENT_CATEGORIES: { value: string; label: string }[] = [
   { value: 'other',            label: 'Other' },
 ];
 
+type OptOutChannel = 'email' | 'sms' | 'voice';
+
+function readOptOut(debtor: Debtor | null, channel: OptOutChannel): boolean {
+  const v = debtor?.data?.opt_out?.[channel];
+  return v === true;
+}
+
 export default function DebtorProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -369,6 +376,19 @@ export default function DebtorProfilePage() {
   const openCommunicationForm = () => setShowCommunicationForm(true);
   const closeCommunicationForm = () => setShowCommunicationForm(false);
 
+  const handleOptOutToggle = async (
+    channel: OptOutChannel,
+    value: boolean,
+  ) => {
+    if (!debtor) return;
+    try {
+      await localDB.setDebtorOptOut(debtor.id, channel, value);
+      await loadDebtor();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const handleCommunicationSaved = async () => {
     closeCommunicationForm();
     await loadCommunications();
@@ -616,6 +636,27 @@ export default function DebtorProfilePage() {
           debtorName={`${debtor.name} ${debtor.surname}`.trim()}
           onSent={handleCommunicationSaved}
         />
+      </Card>
+
+      <Card>
+        <div className="debtor-profile__card-header">
+          <h2 className="debtor-profile__card-heading">Contact preferences</h2>
+        </div>
+        <p className="debtor-profile__muted" style={{ marginTop: 0 }}>
+          Opted-out channels are blocked by the send guard on this device.
+        </p>
+        <div className="debtor-profile__opt-out">
+          {(['email', 'sms', 'voice'] as OptOutChannel[]).map((ch) => (
+            <label key={ch} className="debtor-profile__opt-out-row">
+              <input
+                type="checkbox"
+                checked={readOptOut(debtor, ch)}
+                onChange={(e) => handleOptOutToggle(ch, e.target.checked)}
+              />
+              <span style={{ textTransform: 'capitalize' }}>{ch}</span>
+            </label>
+          ))}
+        </div>
       </Card>
 
       {!isRelated && (

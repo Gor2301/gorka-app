@@ -38,6 +38,21 @@ function recipientPlaceholderFor(connectorCode: string): string {
   return '';
 }
 
+// Mirrors gorka_shared::compliance::append_disclosure_idempotent.
+// The Rust side is authoritative; this is a preview-only computation.
+function finalBodyFor(rawDraft: string, disclosure: string | null): string {
+  const d = (disclosure ?? '').trim();
+  if (!d) return rawDraft;
+  const lines = rawDraft.split('\n');
+  const lastNonEmpty = [...lines]
+    .reverse()
+    .find((l) => l.trim() !== '');
+  if (lastNonEmpty !== undefined && lastNonEmpty.trim() === d) {
+    return rawDraft;
+  }
+  return `${rawDraft}\n${d}`;
+}
+
 export default function SendMessageModal({
   debtorId,
   debtorName,
@@ -52,15 +67,17 @@ export default function SendMessageModal({
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [disclosure, setDisclosure] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     (async () => {
       try {
-        const [rows, debtor] = await Promise.all([
+        const [rows, debtor, disclosureText] = await Promise.all([
           localDB.listLocalConnectors(),
           localDB.getDebtor(debtorId),
+          localDB.getDisclosureText(),
         ]);
         const enabled = rows.filter(
           (r) =>
@@ -74,6 +91,7 @@ export default function SendMessageModal({
         const email = debtor.email ?? '';
         setDebtorPhone(phone);
         setDebtorEmail(email);
+        setDisclosure(disclosureText);
 
         let pick = enabled[0]?.connector_code ?? '';
         if (
@@ -96,6 +114,9 @@ export default function SendMessageModal({
     setSubject('');
   };
 
+  const finalBody = finalBodyFor(body, disclosure);
+  const showPreview = finalBody !== body;
+
   const handleSend = async () => {
     if (!selectedCode) {
       setError('No connector is enabled on this device.');
@@ -110,7 +131,7 @@ export default function SendMessageModal({
       setError('Subject is required for email.');
       return;
     }
-    if (!body.trim()) {
+    if (!finalBody.trim()) {
       setError('Message body is required.');
       return;
     }
@@ -123,7 +144,7 @@ export default function SendMessageModal({
         debtorId,
         to: to.trim(),
         subject: isEmail ? subject.trim() : null,
-        body: body.trim(),
+        body: finalBody,
       };
       await localDB.sendConnectorMessage(input);
       onSent();
@@ -224,6 +245,17 @@ export default function SendMessageModal({
                   {body.length} / 1600
                 </span>
               </label>
+
+              {showPreview && (
+                <div className="send-message-modal__field">
+                  <span className="send-message-modal__label">
+                    Preview (what will be sent)
+                  </span>
+                  <pre className="send-message-modal__preview">
+                    {finalBody}
+                  </pre>
+                </div>
+              )}
             </>
           )}
         </div>

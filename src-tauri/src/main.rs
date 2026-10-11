@@ -389,6 +389,52 @@ fn get_dashboard_stats(
 }
 
 #[command]
+fn set_debtor_opt_out(
+    debtor_id: String,
+    channel: String,
+    value: bool,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let channel: gorka_shared::compliance::Channel = channel.parse()?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    gorka_shared::compliance::set_debtor_opt_out(
+        conn,
+        &organization_id,
+        &debtor_id,
+        channel,
+        value,
+    )
+}
+
+#[command]
+fn get_disclosure_text(
+    state: tauri::State<AppState>,
+) -> Result<Option<String>, String> {
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    gorka_shared::compliance::get_disclosure_text(conn)
+}
+
+#[command]
+fn set_disclosure_text(
+    text: Option<String>,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    gorka_shared::compliance::set_disclosure_text(
+        conn,
+        &organization_id,
+        text.as_deref(),
+    )
+}
+
+#[command]
 fn get_debts(
     debtor_id: String,
     app: tauri::AppHandle,
@@ -832,6 +878,9 @@ fn main() {
             search_debtors,
             get_debtor_count,
             get_dashboard_stats,
+            set_debtor_opt_out,
+            get_disclosure_text,
+            set_disclosure_text,
             write_local_connector_credential,
             disable_local_connector,
             get_debts,

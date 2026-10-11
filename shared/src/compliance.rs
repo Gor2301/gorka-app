@@ -248,6 +248,49 @@ pub fn get_disclosure_text(conn: &Connection) -> Result<Option<String>, String> 
     }
 }
 
+/// Write the disclosure_text for this device.
+///
+/// The compliance_rules table is single-row (CHECK id = 1). If a row
+/// exists it is updated; if not, it is inserted with the given
+/// organization_id. This is the first production writer of the table.
+pub fn set_disclosure_text(
+    conn: &mut Connection,
+    organization_id: &str,
+    text: Option<&str>,
+) -> Result<(), String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let exists: bool = tx
+        .query_row(
+            "SELECT 1 FROM compliance_rules WHERE id = 1",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
+    if exists {
+        tx.execute(
+            "UPDATE compliance_rules
+             SET disclosure_text = ?1, updated_at = ?2
+             WHERE id = 1",
+            params![text, &now],
+        )
+        .map_err(|e| e.to_string())?;
+    } else {
+        tx.execute(
+            "INSERT INTO compliance_rules
+                (id, organization_id, disclosure_text, updated_at)
+             VALUES (1, ?1, ?2, ?3)",
+            params![organization_id, text, &now],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Append the disclosure to the body, idempotently.
 ///
 /// - Empty or whitespace-only disclosure: returns body unchanged.

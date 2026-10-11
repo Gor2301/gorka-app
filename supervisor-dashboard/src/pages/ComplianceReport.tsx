@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Shield, Database, Server, Globe } from 'lucide-react';
+import { CheckCircle, Shield, Database, Server, Globe, Save } from 'lucide-react';
+import { localDB } from '../services/local.db';
 
 interface SystemInfo {
   serverId: string;
@@ -26,9 +27,44 @@ const ComplianceReport: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [disclosureText, setDisclosureText] = useState('');
+  const [disclosureSaving, setDisclosureSaving] = useState(false);
+  const [disclosureSaved, setDisclosureSaved] = useState(false);
+  const [disclosureError, setDisclosureError] = useState('');
+
   useEffect(() => {
     fetchComplianceData();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const text = await localDB.getDisclosureText();
+        setDisclosureText(text ?? '');
+      } catch (err) {
+        setDisclosureError(
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    })();
+  }, []);
+
+  const handleSaveDisclosure = async () => {
+    setDisclosureSaving(true);
+    setDisclosureSaved(false);
+    setDisclosureError('');
+    try {
+      const trimmed = disclosureText.trim();
+      await localDB.setDisclosureText(trimmed === '' ? null : trimmed);
+      setDisclosureSaved(true);
+    } catch (err) {
+      setDisclosureError(
+        err instanceof Error ? err.message : String(err),
+      );
+    } finally {
+      setDisclosureSaving(false);
+    }
+  };
 
   const fetchComplianceData = async () => {
 // ─── DISABLED: Old localStorage auth check ────────────────────────────
@@ -127,6 +163,89 @@ const response = await fetch('http://api.gorka.localhost:3000/api/audit/logs?lim
       <p style={{ fontSize: '16px', color: '#4A4A4A', marginBottom: '24px' }}>
         System configuration and data storage compliance report
       </p>
+
+      {/* Local Compliance Rules */}
+      <div style={{
+        background: '#FFFFFF',
+        border: '1px solid #E3E3E3',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '24px'
+      }}>
+        <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
+          Local compliance rules
+        </h2>
+        <p style={{ fontSize: '13px', color: '#6B7280', margin: '0 0 12px 0' }}>
+          This text is appended to every outbound message on this device before it is sent.
+          Leave blank to append nothing. The change applies to this device only.
+        </p>
+        {disclosureError && (
+          <div style={{
+            background: '#FEF2F2',
+            border: '1px solid #FECACA',
+            borderRadius: '6px',
+            padding: '8px 12px',
+            marginBottom: '12px',
+            fontSize: '13px',
+            color: '#991B1B'
+          }}>
+            {disclosureError}
+          </div>
+        )}
+        {disclosureSaved && (
+          <div style={{
+            background: '#F0FDF4',
+            border: '1px solid #86EFAC',
+            borderRadius: '6px',
+            padding: '8px 12px',
+            marginBottom: '12px',
+            fontSize: '13px',
+            color: '#166534'
+          }}>
+            Disclosure text saved.
+          </div>
+        )}
+        <textarea
+          value={disclosureText}
+          onChange={(e) => {
+            setDisclosureText(e.target.value);
+            setDisclosureSaved(false);
+          }}
+          rows={3}
+          placeholder="e.g. This message is from an authorized debt collector."
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '10px 12px',
+            fontSize: '14px',
+            fontFamily: 'inherit',
+            border: '1px solid #E3E3E3',
+            borderRadius: '6px',
+            resize: 'vertical'
+          }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+          <button
+            onClick={handleSaveDisclosure}
+            disabled={disclosureSaving}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              background: disclosureSaving ? '#A78BFA' : '#7C3AED',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: disclosureSaving ? 'not-allowed' : 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            <Save size={16} />
+            {disclosureSaving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
 
       {/* Data Storage Declaration */}
       <div style={{

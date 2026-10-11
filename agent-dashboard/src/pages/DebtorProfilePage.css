@@ -309,3 +309,18 @@
 .debtor-profile__relation-link:hover {
   color: var(--color-accent);
 }
+
+.debtor-profile__opt-out {
+  display: flex;
+  gap: 24px;
+  margin-top: 12px;
+}
+
+.debtor-profile__opt-out-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-normal);
+  cursor: pointer;
+}
