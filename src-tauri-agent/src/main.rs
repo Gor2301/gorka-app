@@ -265,6 +265,22 @@ fn get_disclosure_text(
 }
 
 #[command]
+fn set_disclosure_text(
+    text: Option<String>,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let organization_id = get_trusted_organization_id(&app)?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    gorka_shared::compliance::set_disclosure_text(
+        conn,
+        &organization_id,
+        text.as_deref(),
+    )
+}
+
+#[command]
 fn list_local_connectors(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
@@ -1030,6 +1046,7 @@ fn main() {
             get_debtor_count,
             set_debtor_opt_out,
             get_disclosure_text,
+            set_disclosure_text,
             list_local_connectors,
             test_connector_connection,
             send_connector_message,

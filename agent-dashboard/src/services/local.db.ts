@@ -619,6 +619,10 @@ export const localDB = {
     return await invoke<string | null>('get_disclosure_text');
   },
 
+  async setDisclosureText(text: string | null): Promise<void> {
+    await invoke('set_disclosure_text', { text });
+  },
+
   // --- Sync engine -------------------------------------------------
 
   async syncEngineStatus(): Promise<string> {

@@ -3,12 +3,12 @@
 // Per the D.6 scope decision (Q4): Settings shows About, Data,
 // Sync, and Security cards. Local password change is deferred.
 //
-// No new Rust command. The version string is hardcoded per the
-// D.6 answer: D.6.2 is authorized for exactly one new Rust
-// command (get_all_actions), and a static string does not
-// justify a second one.
+// Slice 1 adds the Compliance card: the disclosure text that is
+// appended to every outbound message on this device.
 
-import { Card } from '@/components/primitives';
+import { useEffect, useState } from 'react';
+import { Card, Button, ErrorBanner } from '@/components/primitives';
+import { localDB } from '@/services/local.db';
 import './SettingsPage.css';
 
 // Version is hardcoded for MVP. Replaced by a Rust command in a
@@ -16,6 +16,37 @@ import './SettingsPage.css';
 const APP_VERSION = '0.0.0';
 
 export default function SettingsPage() {
+  const [disclosureText, setDisclosureText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const text = await localDB.getDisclosureText();
+        setDisclosureText(text ?? '');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    })();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    setError('');
+    try {
+      const trimmed = disclosureText.trim();
+      await localDB.setDisclosureText(trimmed === '' ? null : trimmed);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="settings-page">
       <Card title="About">
@@ -55,6 +86,50 @@ export default function SettingsPage() {
             </dd>
           </div>
         </dl>
+      </Card>
+
+      <Card title="Compliance">
+        <p className="settings-page__paragraph">
+          This text is appended to every outbound message on this
+          device before it is sent. Leave blank to append nothing.
+          The change applies to this device only.
+        </p>
+        {error && <ErrorBanner message={error} />}
+        {saved && (
+          <p className="settings-page__paragraph" style={{ color: '#16a34a' }}>
+            Disclosure text saved.
+          </p>
+        )}
+        <textarea
+          value={disclosureText}
+          onChange={(e) => {
+            setDisclosureText(e.target.value);
+            setSaved(false);
+          }}
+          rows={3}
+          placeholder="e.g. This message is from an authorized debt collector."
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '10px 12px',
+            fontSize: '14px',
+            fontFamily: 'inherit',
+            border: '1px solid var(--color-border, #e5e7eb)',
+            borderRadius: '8px',
+            resize: 'vertical',
+          }}
+        />
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginTop: '12px',
+          }}
+        >
+          <Button variant="primary" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
       </Card>
 
       <Card title="Sync">
