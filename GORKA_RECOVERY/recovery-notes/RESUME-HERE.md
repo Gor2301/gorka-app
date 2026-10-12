@@ -3175,3 +3175,335 @@ END OF APPENDIX G
 ================================================================
 
 End of RESUME-HERE.md
+
+
+================================================================
+APPENDIX H — SLICE 3 CLOSE
+(added v3.1, 2026-10-12)
+================================================================
+
+H.0 — WHY THIS APPENDIX EXISTS
+
+Appendix G closed Slice 2 and pointed at Slice 3. This session
+ran Slice 3 in three sub-slices (3a, 3b, 3c): the AI boundary
+layer, the Gemini and OpenAI-compatible adapters with refusing
+production transport, and the network controls. Where this
+appendix conflicts with G.8's queue, this appendix wins.
+
+================================================================
+H.1 — MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD includes the Appendix H commit that follows.
+        Working tree clean except the two known untracked
+        files (CHAT-HANDOFF-DUMP.txt, make-dump.ps1).
+
+CLOUD:  at the same commit, after the final cloud trip for
+        3c.
+
+Slice 3 commits, in order:
+
+  3a (boundary layer):
+    df8eb02  slice 3a: AI boundary layer
+
+  3b (adapters, refusing production transport):
+    e2e3b14  slice 3b: Gemini and OpenAI-compatible adapters
+    c84790f  slice 3b fix: clone inner MockHttpClient in provider
+    c883d1c  slice 3b fix: PartialEq on ConnectorErrorKind
+    e3cd7d0  slice 3b fix: extract_value handles array indices
+
+  3c (network controls):
+    fdec4f1  slice 3c: network controls
+    75f9bb2  slice 3c fix: use .err() for non-Debug Box<dyn HttpClient>
+    bda8d0a  slice 3c fix: bracket-strip IPv6 host;
+             double-append test targets full_path_for
+    (plus the manual-tests commit)
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -15
+    git status --short
+
+================================================================
+H.2 — WHAT SLICE 3 SHIPPED
+================================================================
+
+3a — AI boundary layer (no network).
+
+  shared/src/connectors/ai_request.rs     RawOutboundAiRequest,
+                                          RawRequestOptions
+  shared/src/connectors/ai_boundary.rs    parse_and_validate,
+                                          validate_typed,
+                                          BoundaryBlock,
+                                          CanonicalAiRequest
+  shared/src/connectors/ai_mapping.rs     ProviderEnvelopeMapping,
+                                          FieldLocation,
+                                          FieldMapping,
+                                          FixedConstant,
+                                          verify_semantic_identity
+  shared/tests/slice3a_boundary.rs        22 tests
+
+  shared/src/context.rs gained Deserialize + deny_unknown_fields
+  on the five serialized structs. FallbackInput unchanged.
+  shared/Cargo.toml gained serde_jcs 0.2.0.
+
+  Decisions applied: D1(a) manual Value walk with dotted paths;
+  D2 DisallowedOption { name: String }; D3 three-case rule for
+  unknown keys (top-level -> UnknownField, inside context ->
+  UnknownField with dotted path, inside request_options ->
+  DisallowedOption); D4 float canonicalization asserted in
+  3a-14 against RFC 8785 vectors; D5 SendRequest constructed
+  with all four fields; D6 validate_typed stays pub(crate).
+
+3b — AI adapters, refusing production transport.
+
+  shared/src/connectors/transport.rs        HttpClientProvider,
+                                            RefusingHttpClientProvider,
+                                            MockHttpClientProvider
+                                            (test-gated)
+  shared/src/connectors/base_url.rs         ValidatedBaseUrl,
+                                            validate_static,
+                                            validate_resolution (stub)
+  shared/src/connectors/gemini_ai.rs        GeminiAiAdapter
+  shared/src/connectors/openai_compatible.rs OpenAiCompatibleAdapter
+  shared/tests/slice3b_gemini.rs            18 tests
+  shared/tests/slice3b_openai.rs            14 tests
+
+  shared/Cargo.toml gained a test-mock-provider feature and a
+  dev-dependency on self. shared/src/connectors/http.rs's
+  testing module was re-gated from #[cfg(test)] to
+  #[cfg(any(test, feature = "test-mock-provider"))] so
+  integration test files can see MockHttpClient.
+
+  Gemini uses x-goog-api-key header, not query string.
+  OpenAI uses Authorization: Bearer. Neither adapter touches
+  ReqwestHttpClient in the automated suite. Both factories in
+  build_default_registry pass RefusingHttpClientProvider.
+
+3c — Network controls.
+
+  base_url.rs fully implemented:
+    - validate_resolution (reject-if-any; pick first permitted)
+    - is_prohibited (full IANA IPv4 27-entry and IPv6 26-entry
+      deny-lists; IPv4-mapped IPv6 recurses on embedded v4)
+    - SystemResolver via std::net::ToSocketAddrs
+    - ValidatedBaseUrl::port()
+
+  http_reqwest.rs gained:
+    - ReqwestHttpClient::pinned(host, ip, port) -> Result<Self,
+      ConnectorError>. The Result prevents a panic on a builder
+      failure. No .expect(). Uses .redirect(Policy::none()),
+      .no_proxy(), .resolve(host, addr). TLS verification and
+      SNI preserved.
+
+  transport.rs rewritten:
+    - Trait signature changed to build(&self, base: &ValidatedBaseUrl).
+    - PinnedReqwestProvider replaces RefusingHttpClientProvider.
+      Refusing is deleted from the source tree.
+    - MockHttpClientProvider signature updated.
+    - PinnedReqwestProvider::system() convenience constructor.
+
+  gemini_ai.rs, openai_compatible.rs:
+    - Production factory now uses PinnedReqwestProvider::system().
+    - Call site: self.http_provider.build(&self.validated_base).
+
+  slice3b_gemini.rs:
+    - Deleted 3b-17 (production_provider_refuses_to_build_client)
+      and 3b-18 (adapter_with_production_provider_cannot_send).
+      Their semantic replacement is 3c-31.
+    - 3b-14 TransportError sub-case replaced with a deterministic
+      failing-resolver call against PinnedReqwestProvider.
+
+  slice3c_base_url.rs (new): 33 tests
+  slice3c_manual.rs (new): 2 #[ignore] tests (3c-M1, 3c-M2)
+
+================================================================
+H.3 — VERIFICATION
+================================================================
+
+CLOUD at Slice 3 close:
+
+  cargo test -p gorka-shared --test slice3a_boundary
+    22 passed; 0 failed
+
+  cargo test -p gorka-shared --test slice3b_gemini
+    16 passed; 0 failed (18 minus 2 deleted)
+
+  cargo test -p gorka-shared --test slice3b_openai
+    14 passed; 0 failed
+
+  cargo test -p gorka-shared --test slice3c_base_url
+    33 passed; 0 failed
+
+  cargo test -p gorka-shared --test slice3c_manual -- --ignored --nocapture
+    2 passed; 0 failed
+
+  cargo test --workspace
+    total 294 passed; 0 failed
+
+MANUAL ACCEPTANCE (recorded 2026-10-12):
+
+  3c-M1: TLS chain rejection on pinned address.
+    Observed: "error trying to connect: A certificate chain
+    processed, but terminated in a root certificate which is
+    not trusted by the trust provider. (os error -2146762487)"
+    Chain rejection, not hostname mismatch. PASS.
+
+  3c-M2: Proxy env bypass by pinned client.
+    Observed: "proxy listener got = 0 connection(s)" with
+    HTTPS_PROXY set to a live local listener. PASS.
+
+================================================================
+H.4 — FINDINGS THIS SESSION
+================================================================
+
+FG19  Url::host_str() returns IPv6 literals with brackets,
+      e.g. "[::1]". parse::<IpAddr>() on "[::1]" fails, so the
+      IP-literal check in validate_static passed IPv6 literals
+      through. Fixed in bda8d0a by trimming brackets before
+      parsing.
+
+FG20  The double-append rejection for /chat/completions lives
+      in ValidatedBaseUrl::full_path_for, not in validate_static.
+      validate_static accepts any well-formed HTTPS URL; the
+      adapter's later call to full_path_for is what rejects a
+      base that already ends with the suffix. Test 3c-10's
+      original framing called validate_static directly and
+      asserted the wrong surface. Fixed in bda8d0a to call
+      full_path_for.
+
+FG21  Notepad's Replace All did not fire reliably in several
+      files this session (context.rs partial replacements).
+      PowerShell .Replace() and -replace are deterministic.
+      Whole-file rewrites via notepad are also reliable.
+      Anchor-based incremental edits across many turns are the
+      failure mode.
+
+FG22  `Set-Content -Value $array -NoNewline` flattens an array
+      to one line (concatenates elements with no separator).
+      The intended newline-separated write requires -Value with
+      -join "`n" or omitting -NoNewline. Spliced line-range
+      replacements with -NoNewline destroyed
+      slice3c_base_url.rs mid-session and required full rewrite.
+      Use -join or don't use -NoNewline for multi-line writes.
+
+FG23  #[cfg(test)] items are not visible to integration tests
+      (shared/tests/ are separate crates). The 3b session worked
+      around this with a crate feature gate
+      (test-mock-provider) plus a dev-dependency on self. The
+      pattern is general and should be used for any test-only
+      surface an integration test needs.
+
+FG24  reqwest::Url is available transitively through reqwest.
+      No new dependency was needed for URL parsing.
+
+================================================================
+H.5 — PROCESS AMENDMENTS
+================================================================
+
+P-Z   ANCHOR-BASED EDITS ACROSS MANY TURNS ARE UNRELIABLE.
+      Prefer whole-file rewrites for files under ~600 lines.
+      For larger edits, use PowerShell .Replace / -replace
+      with exact on-disk anchors, verified with findstr
+      immediately before the edit. Never trust memory of the
+      file's state. FG21 and FG22 are the evidence.
+
+P-AA  NEVER USE -NoNewline WITH A MULTI-LINE ARRAY IN
+      Set-Content. Use -join "`n" or omit -NoNewline.
+      FG22 is the evidence.
+
+P-BB  ALL COMPILE-TIME FAILURES IN SLICE 3 WERE CAUGHT ON
+      CLOUD, NOT ON MAIN. Six across three sub-slices. Cloud
+      is the only cargo gate. Restated from P-G because it
+      remains the load-bearing process rule for this project.
+
+P-CC  TEST-ONLY SURFACES MUST BE VISIBLE TO INTEGRATION TESTS.
+      Use a crate feature (test-mock-provider pattern) rather
+      than #[cfg(test)]. FG23 is the evidence.
+
+P-DD  ONE APPENDIX PER SESSION (restated, P-J / P-M / P-V /
+      P-Y). Do not edit prior appendices. This appendix is new.
+
+================================================================
+H.6 — OPEN ITEMS
+================================================================
+
+New this session:
+
+  - None. Slice 3 is closed with no new open items beyond
+    the ones carried forward.
+
+Carried from Appendix G §G.7, unchanged:
+
+  - FG9: vite watcher EBUSY on cargo build. Unfixed.
+  - Vite config __dirname warning. Cosmetic.
+  - O1: three ghost rows on the Agent.
+  - O2: Communication Tools page shows event metadata, not
+    credential health.
+  - O3: CONNECTOR_CREDENTIAL_REPLACED remains deferred.
+  - O4 items: registration/onboarding gap; Agent
+    settings.dat user_id; Mocean HTTP shape; voice/Gemini
+    adapters (the Gemini adapter itself is now built; the
+    catalog row is still COMING_SOON); cancel-negative test;
+    .bak files.
+
+Notably resolved this session:
+
+  - The Gemini AI adapter exists. The catalog row mvpStatus
+    remains COMING_SOON; a later session flips it when the
+    Copilot command is wired.
+
+================================================================
+H.7 — QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0. F15 CLOSED.
+  SLICE 1 (Part II §II.17) — opt-out enforcement and
+  disclosure text. CLOSED 2026-10-12.
+  SLICE 2 (Part II §II.16) — Context Engine and deterministic
+  fallback. CLOSED 2026-10-12.
+  SLICE 3 (Part II §II.4, §II.5.2, §II.5.3, §II.6, §II.7) —
+  AI boundary, adapters, network controls. CLOSED 2026-10-12.
+
+IN FLIGHT
+  None.
+
+NEXT — IN ORDER
+
+  1. SLICE 4 — Strategy Engine and fact validation.
+     Part II §II.8 through §II.11. Own mini spec before code.
+
+  2. SLICE 5 — Recommendation lifecycle, reservation,
+     contact limits, and UI.
+
+  3. SLICE 6 — Integrated security and regression tests.
+
+  Then the carried items from Appendix E §E.8 / F.7 / G.8:
+
+  4.  O1 ghost-row fix (deferred by founder).
+  5.  O2 Communication Tools credential health.
+  6.  STEP 1.5 — More known providers.
+  7.  STEP 1.6 — Data-source display surface.
+  8.  CONNECTOR_CREDENTIAL_REPLACED.
+  9.  TWILIO SMS BYOP SEND VERIFICATION.
+ 10.  B7 CREDENTIAL-TRANSIT REVIEW.
+ 11.  CANCEL-NEGATIVE FOR TIER 1.
+ 12.  REGISTRATION / ONBOARDING BLOCK.
+ 13.  ACCEPTANCE — end-to-end.
+
+================================================================
+H.8 — WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  It does not amend Part II beyond the §II.3 amendment block
+  already recorded in Appendix G.
+  It does not reopen CONNECTOR-EVENT-ORDER-SPEC Part I.
+  It does not decide any remaining O1/O2 question.
+  It does not promote Slice 4 to started. Slice 4 needs its
+  own mini spec before code.
+
+================================================================
+END OF APPENDIX H
+================================================================
