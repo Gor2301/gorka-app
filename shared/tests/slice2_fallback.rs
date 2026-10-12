@@ -184,8 +184,8 @@ fn c1_context_and_fallback_from_same_facts() {
 fn c2_determinism_same_fixture_same_output() {
     let conn = open_in_memory_for_tests().expect("db init");
     seed_debtor(&conn);
-    seed_debt(&conn, "d1", 3000.0, "USD", "ACTIVE", Some("2026-08-28T00:00:00Z"));
-    seed_debt(&conn, "d2", 500.0, "USD", "ACTIVE", Some("2026-09-15T00:00:00Z"));
+    seed_debt(&conn, "d1", 3000.0, "ACTIVE", Some("2026-08-28T00:00:00Z"));
+    seed_debt(&conn, "d2", 500.0, "ACTIVE", Some("2026-09-15T00:00:00Z"));
     for i in 0..3 {
         seed_comm(&conn, &format!("o{}", i), "EMAIL", "OUTBOUND");
     }
