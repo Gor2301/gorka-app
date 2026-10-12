@@ -75,7 +75,7 @@ pub mod test_support {
 
     impl HttpClientProvider for MockHttpClientProvider {
         fn build(&self, _host: &str) -> Result<Box<dyn HttpClient>, ConnectorError> {
-            Ok(Box::new(self.client.clone()))
+            Ok(Box::new((*self.client).clone()))
         }
     }
 }
