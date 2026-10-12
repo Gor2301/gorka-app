@@ -18,6 +18,10 @@ pub mod local_record;
 pub mod ai_request;
 pub mod ai_boundary;
 pub mod ai_mapping;
+pub mod base_url;
+pub mod transport;
+pub mod gemini_ai;
+pub mod openai_compatible;
 
 /// The credential and configuration a factory passes to an adapter.
 ///
@@ -119,6 +123,8 @@ pub fn build_default_registry() -> ConnectorRegistry {
     registry.register("resend-email", crate::connectors::resend_email::factory);
     registry.register("twilio-sms", crate::connectors::twilio_sms::factory);
     registry.register("mocean-sms", crate::connectors::mocean_sms::factory);
+    registry.register("gemini-ai", crate::connectors::gemini_ai::factory);
+    registry.register("openai-compatible", crate::connectors::openai_compatible::factory);
     registry
 }
 

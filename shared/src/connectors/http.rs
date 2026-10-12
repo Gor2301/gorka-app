@@ -66,7 +66,7 @@ pub trait HttpClient: Send + Sync {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpError>;
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-mock-provider"))]
 pub mod testing {
     use super::*;
 
@@ -74,6 +74,7 @@ pub mod testing {
     /// records every request it receives. State is shared with a
     /// MockHandle so tests can inspect what the adapter sent after
     /// the client has been moved into the adapter.
+    #[derive(Clone)]
     pub struct MockHttpClient {
         responses: Arc<Mutex<Vec<Result<HttpResponse, HttpError>>>>,
         received: Arc<Mutex<Vec<HttpRequest>>>,

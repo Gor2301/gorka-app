@@ -7,6 +7,10 @@ edition = "2021"
 name = "gorka_shared"
 path = "src/lib.rs"
 
+[features]
+default = []
+test-mock-provider = []
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -26,3 +30,6 @@ tungstenite = { version = "0.21", default-features = false, features = ["handsha
 base64 = "0.22"
 serde_urlencoded = "0.7"
 serde_jcs = "0.2.0"
+
+[dev-dependencies]
+gorka-shared = { path = ".", features = ["test-mock-provider"] }

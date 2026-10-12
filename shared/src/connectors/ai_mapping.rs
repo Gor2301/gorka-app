@@ -9,6 +9,14 @@
 // added.
 //
 // Authority: SLICE 3a — SELF-CONTAINED SECTION 4, §4.3.
+//
+// 3b conformance fix: when the expected value for a mapped field is
+// `Value::Null` (the canonical request omits an optional field), the
+// walker accepts absence of that path in the provider body. It still
+// rejects a non-null value at that path. This matches spec §5.5.4:
+// "if temperature is absent in options_json, the field is omitted
+// from the provider body, and the walker does not assert its
+// presence."
 
 use serde_json::Value;
 
@@ -60,7 +68,9 @@ pub trait ProviderEnvelopeMapping {
 ///
 /// Given a provider body and parsed URL path segments, verify:
 ///   1. Every mapped canonical field's value equals the expected
-///      value from the CanonicalAiRequest.
+///      value from the CanonicalAiRequest. If the expected value
+///      is Null (optional field absent in canonical), absence of
+///      the body path is accepted.
 ///   2. Every fixed constant's value matches at its location.
 ///   3. No leaf exists outside the union of mapped and fixed
 ///      locations. Any extra leaf -> Err.
@@ -78,21 +88,29 @@ pub fn verify_semantic_identity<M: ProviderEnvelopeMapping>(
         let expected = expected_value_for(canonical, m.canonical_field);
         match &m.location {
             FieldLocation::Body(path) => {
-                let got = M::extract_value(body, path).ok_or_else(|| {
-                    format!(
-                        "mapped field {} not present at body path {}",
-                        m.canonical_field,
-                        path.join(".")
-                    )
-                })?;
-                if !values_equal(got, &expected) {
-                    return Err(format!(
-                        "mapped field {} at body path {}: expected {:?}, got {:?}",
-                        m.canonical_field,
-                        path.join("."),
-                        expected,
-                        got
-                    ));
+                match M::extract_value(body, path) {
+                    Some(got) => {
+                        if !values_equal(got, &expected) {
+                            return Err(format!(
+                                "mapped field {} at body path {}: expected {:?}, got {:?}",
+                                m.canonical_field,
+                                path.join("."),
+                                expected,
+                                got
+                            ));
+                        }
+                    }
+                    None => {
+                        // Absent path is only acceptable when the canonical
+                        // value is Null (an optional field the request omits).
+                        if !expected.is_null() {
+                            return Err(format!(
+                                "mapped field {} not present at body path {}",
+                                m.canonical_field,
+                                path.join(".")
+                            ));
+                        }
+                    }
                 }
             }
             FieldLocation::UrlPathSegment {
