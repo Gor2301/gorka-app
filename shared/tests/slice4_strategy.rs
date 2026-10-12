@@ -261,6 +261,33 @@ fn strategy_non_json_answer_returns_fallback() {
 }
 
 #[test]
+fn strategy_no_answer_field_returns_fallback() {
+    let conn = open_in_memory_for_tests().expect("db");
+    seed_debtor(&conn);
+    let mock = MockConnectorAdapter::new(MockBehavior::NoAnswerField);
+    let outcome = analyze(&conn, ORG_ID, DEBTOR_ID, ref_time(), MODEL, &mock).unwrap();
+    assert_eq!(outcome.source, StrategySource::Fallback);
+}
+
+#[test]
+fn strategy_no_provider_response_returns_fallback() {
+    let conn = open_in_memory_for_tests().expect("db");
+    seed_debtor(&conn);
+    let mock = MockConnectorAdapter::new(MockBehavior::NoProviderResponse);
+    let outcome = analyze(&conn, ORG_ID, DEBTOR_ID, ref_time(), MODEL, &mock).unwrap();
+    assert_eq!(outcome.source, StrategySource::Fallback);
+}
+
+#[test]
+fn strategy_non_string_answer_returns_fallback() {
+    let conn = open_in_memory_for_tests().expect("db");
+    seed_debtor(&conn);
+    let mock = MockConnectorAdapter::new(MockBehavior::NonStringAnswer);
+    let outcome = analyze(&conn, ORG_ID, DEBTOR_ID, ref_time(), MODEL, &mock).unwrap();
+    assert_eq!(outcome.source, StrategySource::Fallback);
+}
+
+#[test]
 fn strategy_empty_or_whitespace_answer_returns_fallback() {
     let conn = open_in_memory_for_tests().expect("db");
     seed_debtor(&conn);
