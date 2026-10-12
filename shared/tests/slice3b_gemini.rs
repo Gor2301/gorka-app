@@ -496,12 +496,12 @@ fn credential_leak_regression() {
     };
     let (mock, _h) = MockHttpClient::new(vec![]);
     let provider = Box::new(MockHttpClientProvider::new(Arc::new(mock)));
-    let err = gemini_test_factory(bad_cred, provider).unwrap_err();
+    let err = gemini_test_factory(bad_cred, provider).err().unwrap();
     check(&format!("{:?}", err), "ConfigErr debug");
     check(&format!("{}", err), "ConfigErr display");
 
     // TransportError from provider build.
-    let err = RefusingHttpClientProvider.build(EXPECTED_HOST).unwrap_err();
+    let err = RefusingHttpClientProvider.build(EXPECTED_HOST).err().unwrap();
     check(&format!("{:?}", err), "TransportErr debug");
     check(&format!("{}", err), "TransportErr display");
 
@@ -559,7 +559,7 @@ fn model_in_url_path_correct() {
 
 #[test]
 fn production_provider_refuses_to_build_client() {
-    let err = RefusingHttpClientProvider.build(EXPECTED_HOST).unwrap_err();
+    let err = RefusingHttpClientProvider.build(EXPECTED_HOST).err().unwrap();
     assert_eq!(err.kind, ConnectorErrorKind::TransportError);
     assert!(err.message.contains("Slice 3c"));
 }

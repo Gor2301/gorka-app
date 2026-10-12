@@ -65,7 +65,7 @@ pub struct SendResult {
 }
 
 /// Section 7.3.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectorErrorKind {
     AuthenticationFailed,
     InvalidRecipient,
