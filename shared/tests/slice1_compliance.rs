@@ -436,7 +436,7 @@ fn get_disclosure_text_returns_value_when_row_exists() {
     .expect("seed compliance_rules");
 
     let text = get_disclosure_text(&conn).expect("read");
-    assert!(text.is_none());
+    assert_eq!(text.as_deref(), Some("Please contact us."));
 }
 
 // ---------------------------------------------------------------------
