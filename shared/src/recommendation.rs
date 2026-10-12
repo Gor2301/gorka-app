@@ -1,13 +1,13 @@
 // gorka-shared::recommendation
 //
 // Slice 2 of the AI Copilot work.
-// Authority: SLICE-2-MINI-SPEC v1.1 §5, §6.
+// Authority: SLICE-2-MINI-SPEC v1.1, Section 5, Section 6.
 //
 // Canonical enums and the deterministic fallback.
 // Pure functions. No database, no network, no clock.
 
 /// Canonical priority vocabulary. Shared with the future AI schema.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Priority {
     Low,
     Normal,
@@ -15,7 +15,7 @@ pub enum Priority {
 }
 
 /// Canonical tone vocabulary. Shared with the future AI schema.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Tone {
     Friendly,
     Firm,
@@ -24,7 +24,7 @@ pub enum Tone {
 }
 
 /// Canonical timing vocabulary. Shared with the future AI schema.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Timing {
     Within24Hours,
     Within3Days,
@@ -32,7 +32,7 @@ pub enum Timing {
 }
 
 /// Canonical channel vocabulary. EMAIL only in the MVP.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Channel {
     Email,
 }
@@ -47,7 +47,7 @@ pub struct Recommendation {
     pub timing: Timing,
 }
 
-/// The deterministic fallback (Part II §II.9, minus the promise branch).
+/// The deterministic fallback (Part II Section II.9, minus the promise branch).
 ///
 /// Boundaries are strict:
 ///   - URGENT requires days_overdue > 60 AND response_rate < 0.2.
