@@ -122,7 +122,8 @@ pub fn validate_static(url: &str) -> Result<ValidatedBaseUrl, ConnectorError> {
     if host.is_empty() {
         return Err(config_err("base URL host is empty"));
     }
-    if host.parse::<IpAddr>().is_ok() {
+    let bare_host = host.trim_start_matches('[').trim_end_matches(']');
+    if bare_host.parse::<IpAddr>().is_ok() {
         return Err(config_err(
             "base URL host must be a hostname, not an IP literal",
         ));

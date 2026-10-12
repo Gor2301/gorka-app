@@ -129,8 +129,13 @@ fn normalizes_trailing_slash() {
 
 #[test]
 fn rejects_double_append() {
-    let err =
-        validate_static("https://api.example.com/v1/chat/completions").unwrap_err();
+    // The /chat/completions suffix policy lives in full_path_for, not
+    // in validate_static. validate_static accepts any well-formed
+    // HTTPS URL; the adapter's call to full_path_for is what rejects
+    // the double append.
+    let v = validate_static("https://api.example.com/v1/chat/completions")
+        .expect("validate_static accepts well-formed HTTPS URL");
+    let err = v.full_path_for("/chat/completions").unwrap_err();
     assert_eq!(err.kind, ConnectorErrorKind::LocalConfigurationError);
 }
 
