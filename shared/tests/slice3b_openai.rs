@@ -170,7 +170,14 @@ impl ProviderEnvelopeMapping for OpenAiMapping {
     fn extract_value<'a>(body: &'a Value, path: &[&str]) -> Option<&'a Value> {
         let mut cur = body;
         for seg in path {
-            cur = cur.get(*seg)?;
+            cur = if let Some(map) = cur.as_object() {
+                map.get(*seg)?
+            } else if let Some(arr) = cur.as_array() {
+                let idx: usize = seg.parse().ok()?;
+                arr.get(idx)?
+            } else {
+                return None;
+            };
         }
         Some(cur)
     }
