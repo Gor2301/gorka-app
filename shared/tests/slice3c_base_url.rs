@@ -609,7 +609,7 @@ fn pinned_provider_with_failing_resolver_returns_transport_error() {
         resolver: Box::new(FailingResolver),
     };
     let base = validate_static("https://example.com").unwrap();
-    let err = provider.build(&base).unwrap_err();
+    let err = provider.build(&base).err().unwrap();
     assert_eq!(err.kind, ConnectorErrorKind::TransportError);
 }
 
