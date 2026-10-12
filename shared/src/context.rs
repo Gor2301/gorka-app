@@ -14,14 +14,14 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Context {
     pub debtor: DebtorContext,
     pub communication_history: CommunicationHistory,
@@ -29,15 +29,15 @@ pub struct Context {
     pub indicators: Indicators,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DebtorContext {
     pub amount_range: String,
     pub days_overdue_range: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CommunicationHistory {
     pub total_count: i64,
     pub email_count: i64,
@@ -46,16 +46,16 @@ pub struct CommunicationHistory {
     pub response_rate_band: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DebtsSummary {
     pub total_count: i64,
     pub paid_count: i64,
     pub overdue_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Indicators {
     pub payment_reliability: String,
     pub engagement_level: String,

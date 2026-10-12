@@ -25,3 +25,4 @@ rand_core = "0.6"
 tungstenite = { version = "0.21", default-features = false, features = ["handshake"] }
 base64 = "0.22"
 serde_urlencoded = "0.7"
+serde_jcs = "0.2.0"

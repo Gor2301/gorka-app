@@ -15,6 +15,9 @@ pub mod mocean_sms;
 pub mod resend_email;
 pub mod twilio_sms;
 pub mod local_record;
+pub mod ai_request;
+pub mod ai_boundary;
+pub mod ai_mapping;
 
 /// The credential and configuration a factory passes to an adapter.
 ///
