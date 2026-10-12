@@ -4,15 +4,17 @@
 // sync_discovery.rs, which uses the same blocking client for the
 // Control Plane discovery calls.
 //
-// The client is constructed once and reused for every request;
-// reqwest::blocking::Client maintains an internal connection pool.
-// Request bodies and header values are never logged.
+// Slice 3c adds pinned(): a client that resolves a host to a
+// specific IP and connects there, with redirects disabled and
+// proxies bypassed. TLS verification is preserved (SNI and
+// hostname verification use the original hostname).
 //
 // See CONNECTOR-MODEL.md Section 7.
 
 use std::time::Duration;
 
 use super::http::{HttpClient, HttpError, HttpErrorKind, HttpMethod, HttpRequest, HttpResponse};
+use crate::connectors::{ConnectorError, ConnectorErrorKind};
 
 const CONNECT_TIMEOUT_SECS: u64 = 30;
 const READ_TIMEOUT_SECS: u64 = 60;
@@ -29,6 +31,33 @@ impl ReqwestHttpClient {
             .build()
             .expect("failed to build reqwest blocking client");
         Self { client }
+    }
+
+    /// Build a client that resolves `host` to `ip` and connects there.
+    /// All other client configuration preserved: no proxy, no redirects,
+    /// TLS verification intact, timeouts unchanged.
+    ///
+    /// Returns Result rather than panicking: a builder failure is a
+    /// credential-free TransportError.
+    pub fn pinned(
+        host: &str,
+        ip: std::net::IpAddr,
+        port: u16,
+    ) -> Result<Self, ConnectorError> {
+        let addr = std::net::SocketAddr::new(ip, port);
+        let client = reqwest::blocking::Client::builder()
+            .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
+            .timeout(Duration::from_secs(READ_TIMEOUT_SECS))
+            .redirect(reqwest::redirect::Policy::none())
+            .no_proxy()
+            .resolve(host, addr)
+            .build()
+            .map_err(|e| ConnectorError {
+                kind: ConnectorErrorKind::TransportError,
+                message: format!("pinned client builder failed: {}", e),
+                provider_response: None,
+            })?;
+        Ok(Self { client })
     }
 }
 

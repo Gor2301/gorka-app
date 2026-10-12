@@ -24,9 +24,9 @@ use gorka_shared::connectors::gemini_ai::{
 use gorka_shared::connectors::http::testing::MockHttpClient;
 use gorka_shared::connectors::http::{HttpError, HttpErrorKind, HttpResponse};
 use gorka_shared::connectors::transport::test_support::MockHttpClientProvider;
-use gorka_shared::connectors::transport::{HttpClientProvider, RefusingHttpClientProvider};
+use gorka_shared::connectors::transport::HttpClientProvider;
 use gorka_shared::connectors::{
-    ConnectorAdapter, ConnectorCredential, ConnectorErrorKind, SendRequest,
+    ConnectorAdapter, ConnectorCredential, ConnectorError, ConnectorErrorKind, SendRequest,
 };
 
 // ---------------------------------------------------------------------
@@ -507,10 +507,27 @@ fn credential_leak_regression() {
     check(&format!("{:?}", err), "ConfigErr debug");
     check(&format!("{}", err), "ConfigErr display");
 
-    // TransportError from provider build.
-    let err = RefusingHttpClientProvider.build(EXPECTED_HOST).err().unwrap();
-    check(&format!("{:?}", err), "TransportErr debug");
-    check(&format!("{}", err), "TransportErr display");
+    // TransportError from provider build. A deterministic failing
+    // resolver forces the production provider path without any socket.
+    {
+        use gorka_shared::connectors::base_url::{validate_static, DnsResolver};
+        use gorka_shared::connectors::transport::PinnedReqwestProvider;
+        struct FailResolver;
+        impl DnsResolver for FailResolver {
+            fn resolve(&self, _host: &str) -> Result<Vec<std::net::IpAddr>, ConnectorError> {
+                Err(ConnectorError {
+                    kind: ConnectorErrorKind::TransportError,
+                    message: "injected resolver failure".into(),
+                    provider_response: None,
+                })
+            }
+        }
+        let base = validate_static("https://example.com").unwrap();
+        let provider = PinnedReqwestProvider { resolver: Box::new(FailResolver) };
+        let err = provider.build(&base).err().unwrap();
+        check(&format!("{:?}", err), "TransportErr debug");
+        check(&format!("{}", err), "TransportErr display");
+    }
 
     // Parse error.
     let (adapter, _h) = make_adapter(vec![Ok(HttpResponse {
@@ -564,19 +581,3 @@ fn model_in_url_path_correct() {
 // 3b-17 .. 3b-18  —  production refusal
 // ---------------------------------------------------------------------
 
-#[test]
-fn production_provider_refuses_to_build_client() {
-    let err = RefusingHttpClientProvider.build(EXPECTED_HOST).err().unwrap();
-    assert_eq!(err.kind, ConnectorErrorKind::TransportError);
-    assert!(err.message.contains("Slice 3c"));
-}
-
-#[test]
-fn adapter_with_production_provider_cannot_send() {
-    let adapter = gemini_production_factory(cred()).expect("production factory ok");
-    assert_eq!(adapter.code(), CATALOG_CODE);
-    let req = send_request_empty_recipient();
-    let err = adapter.send(&req).unwrap_err();
-    assert_eq!(err.kind, ConnectorErrorKind::TransportError);
-    assert!(err.message.contains("Slice 3c"));
-}

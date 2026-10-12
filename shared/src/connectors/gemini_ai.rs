@@ -7,8 +7,9 @@
 //
 // In 3b, the production transport path refuses to open a socket. The
 // adapter's send() calls http_provider.build(host)? before touching
-// any network primitive. In production, RefusingHttpClientProvider
-// returns TransportError. Automated tests inject MockHttpClientProvider.
+// any network primitive. In production, PinnedReqwestProvider
+// validates the destination and pins the IP. Automated tests inject
+// MockHttpClientProvider.
 //
 // Credential value:      {"apiKey": "AIza..."}
 // Configuration:         {"model": "gemini-2.5-flash"}
@@ -19,7 +20,7 @@ use serde_json::{json, Value};
 use crate::connectors::ai_boundary::CanonicalAiRequest;
 use crate::connectors::base_url::{self, ValidatedBaseUrl};
 use crate::connectors::http::{HttpMethod, HttpRequest, HttpResponse};
-use crate::connectors::transport::{HttpClientProvider, RefusingHttpClientProvider};
+use crate::connectors::transport::{HttpClientProvider, PinnedReqwestProvider};
 use crate::connectors::{
     ConnectorAdapter, ConnectorCredential, ConnectorError, ConnectorErrorKind, SendRequest,
     SendResult,
@@ -117,7 +118,7 @@ impl ConnectorAdapter for GeminiAiAdapter {
             provider_response: None,
         })?;
 
-        let client = self.http_provider.build(self.validated_base.host())?;
+        let client = self.http_provider.build(&self.validated_base)?;
 
         let http_req = HttpRequest {
             method: HttpMethod::Post,
@@ -139,7 +140,7 @@ impl ConnectorAdapter for GeminiAiAdapter {
     }
 
     fn test_connection(&self) -> Result<(), ConnectorError> {
-        let client = self.http_provider.build(self.validated_base.host())?;
+        let client = self.http_provider.build(&self.validated_base)?;
 
         let http_req = HttpRequest {
             method: HttpMethod::Get,
@@ -178,7 +179,7 @@ pub fn factory(
 ) -> Result<Box<dyn ConnectorAdapter>, ConnectorError> {
     Ok(Box::new(GeminiAiAdapter::build(
         credential,
-        Box::new(RefusingHttpClientProvider),
+        Box::new(PinnedReqwestProvider::system()),
     )?))
 }
 

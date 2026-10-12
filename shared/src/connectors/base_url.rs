@@ -1,25 +1,54 @@
 // gorka-shared::connectors::base_url
 //
-// Slice 3b partial. Base URL validation for AI provider adapters.
+// Base URL validation and network destination policy for AI adapters.
 //
-// 3b provides:
-//   - ValidatedBaseUrl (opaque; constructible only via validate_static)
-//   - validate_static: HTTPS only, hostname only (no IP literals),
-//     no userinfo, port in 1..=65535, path allowed, no query, no
-//     fragment, no double-append of /chat/completions
-//   - validate_resolution: declared; returns Err(TransportError)
-//     in 3b. Implemented in 3c.
-//   - DnsResolver trait, SystemResolver (stub in 3b), ResolvedTarget
+// Slice 3b provided validate_static (HTTPS, hostname-only, no userinfo,
+// port range, no query, no fragment). Slice 3c adds resolution-time
+// validation and the IANA-sourced deny-list.
 //
-// Authority: SLICE 3 — SECTIONS 5 AND 6, §6.1, §6.5 (3b subset).
+// Authority: SLICE 3 — SECTIONS 5 AND 6, §6.1, §6.2, §6.5;
+//            SLICE 3c — MINI SPEC v4.
 //
-// Deviation from §6.1.1: ValidatedBaseUrl stores its components as
-// private named fields rather than a single String, so host() and
-// path() can return &str without re-parsing. External constructability
-// is still impossible — there is no public constructor. The
-// type-level guard is preserved.
+// IANA source registries (recorded at time of writing):
+//
+//   IANA IPv4 Special-Purpose Address Registry
+//     https://www.iana.org/assignments/iana-ipv4-special-registry/
+//     Last updated 2025-10-09. Consulted 2026-10-12.
+//   IANA IPv6 Special-Purpose Address Registry
+//     https://www.iana.org/assignments/iana-ipv6-special-registry/
+//     Last updated 2025-10-09. Consulted 2026-10-12.
+//   IANA IPv4 Multicast Address Space Registry
+//     https://www.iana.org/assignments/multicast-addresses/
+//     Consulted 2026-10-12. (224.0.0.0/4 only.)
+//   IANA IPv6 Multicast Address Space Registry
+//     https://www.iana.org/assignments/ipv6-multicast-addresses/
+//     Consulted 2026-10-12. (ff00::/8 only.)
+//
+// Policy: prohibit every range listed below, regardless of IANA's
+// "Globally Reachable" column. IANA's column answers a routing
+// question ("may a router forward this outside a domain?"); the AI
+// adapter's question is different ("should this adapter connect
+// here?"). No legitimate AI provider endpoint lives in any of these
+// ranges. If a DNS answer lands in one, that is either a misconfigured
+// base URL, a hijacked answer, or a probe. Fail closed.
+//
+// Multicast is included as an additional policy choice. The adapter
+// makes unicast HTTPS connections only.
+//
+// IPv4-mapped IPv6 (::ffff:a.b.c.d) is unwrapped and classified
+// against the IPv4 table.
+//
+// Addresses not listed here are permitted. The IANA registries
+// enumerate *special-purpose* ranges — set aside for uses other than
+// ordinary public unicast. They do not enumerate the ordinary public
+// unicast space, which is where every legitimate AI provider endpoint
+// lives. The deny-list is a subtraction from the normal case, not the
+// definition of the normal case.
+//
+// The tables are reviewed at each slice that touches this module.
+// A future session that updates them updates this header.
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, ToSocketAddrs};
 
 use crate::connectors::{ConnectorError, ConnectorErrorKind};
 
@@ -32,13 +61,10 @@ use crate::connectors::{ConnectorError, ConnectorErrorKind};
 /// cannot be used by an adapter.
 #[derive(Debug, Clone)]
 pub struct ValidatedBaseUrl {
-    // Normalized full URL, no trailing slash.
     full: String,
-    // Host as a hostname (never an IP literal).
     host: String,
-    // Path component. Starts with '/' when non-empty; empty string
-    // when the URL has no path.
     path: String,
+    port: u16,
 }
 
 impl ValidatedBaseUrl {
@@ -54,15 +80,18 @@ impl ValidatedBaseUrl {
         &self.path
     }
 
-    /// Construct the full URL for a suffix path. Suffix may include
-    /// or omit a leading slash; both are normalized. Rejects if the
-    /// base path already ends with the suffix's final segment in a
-    /// way that would double-append.
+    /// The validated port. 443 when the URL did not specify one.
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    /// Construct the full URL for a suffix path. Suffix may include or
+    /// omit a leading slash; both are normalized. Rejects if the base
+    /// path already ends with the suffix.
     pub fn full_path_for(&self, suffix: &str) -> Result<String, ConnectorError> {
         let suffix_trimmed = suffix.trim_matches('/');
         let path_trimmed = self.path.trim_end_matches('/');
 
-        // Double-append check: base path already ends with the suffix.
         if !suffix_trimmed.is_empty()
             && path_trimmed.ends_with(&format!("/{}", suffix_trimmed))
         {
@@ -77,10 +106,9 @@ impl ValidatedBaseUrl {
 }
 
 // ---------------------------------------------------------------------
-// Static validation
+// Static validation (from 3b; unchanged except port is now stored)
 // ---------------------------------------------------------------------
 
-/// Construction-time check. Per §6.5.
 pub fn validate_static(url: &str) -> Result<ValidatedBaseUrl, ConnectorError> {
     let parsed = reqwest::Url::parse(url).map_err(|_| config_err("malformed URL"))?;
 
@@ -109,6 +137,7 @@ pub fn validate_static(url: &str) -> Result<ValidatedBaseUrl, ConnectorError> {
             return Err(config_err("base URL port must be in 1..=65535"));
         }
     }
+    let port = parsed.port().unwrap_or(443);
 
     if parsed.query().is_some() {
         return Err(config_err("base URL must not contain a query string"));
@@ -124,9 +153,10 @@ pub fn validate_static(url: &str) -> Result<ValidatedBaseUrl, ConnectorError> {
         path_raw.trim_end_matches('/').to_string()
     };
 
-    let port_part = match parsed.port() {
-        Some(p) if p != 443 => format!(":{}", p),
-        _ => String::new(),
+    let port_part = if port == 443 {
+        String::new()
+    } else {
+        format!(":{}", port)
     };
 
     let full = format!("{}://{}{}{}", parsed.scheme(), host, port_part, path_normalized);
@@ -135,26 +165,13 @@ pub fn validate_static(url: &str) -> Result<ValidatedBaseUrl, ConnectorError> {
         full,
         host: host.to_string(),
         path: path_normalized,
+        port,
     })
 }
 
 // ---------------------------------------------------------------------
-// Resolution-time validation — 3b stub
+// Resolution-time validation
 // ---------------------------------------------------------------------
-
-/// Resolution-time check. Requires a resolver. In 3b, resolution is
-/// not enabled; this returns TransportError unconditionally. 3c
-/// implements the real check.
-pub fn validate_resolution(
-    _base: &ValidatedBaseUrl,
-    _resolver: &dyn DnsResolver,
-) -> Result<ResolvedTarget, ConnectorError> {
-    Err(ConnectorError {
-        kind: ConnectorErrorKind::TransportError,
-        message: "resolution not enabled in 3b".into(),
-        provider_response: None,
-    })
-}
 
 #[derive(Debug, Clone)]
 pub struct ResolvedTarget {
@@ -167,18 +184,164 @@ pub trait DnsResolver: Send + Sync {
     fn resolve(&self, host: &str) -> Result<Vec<IpAddr>, ConnectorError>;
 }
 
-/// Production resolver. In 3b it is declared but refuses; 3c replaces
-/// it with a real system resolver.
+/// Production resolver. Uses std::net::ToSocketAddrs.
 pub struct SystemResolver;
 
 impl DnsResolver for SystemResolver {
-    fn resolve(&self, _host: &str) -> Result<Vec<IpAddr>, ConnectorError> {
-        Err(ConnectorError {
+    fn resolve(&self, host: &str) -> Result<Vec<IpAddr>, ConnectorError> {
+        let addrs = (host, 0).to_socket_addrs().map_err(|e| ConnectorError {
             kind: ConnectorErrorKind::TransportError,
-            message: "DNS resolution not enabled in 3b".into(),
+            message: format!("DNS resolution failed for {}: {}", host, e),
             provider_response: None,
-        })
+        })?;
+        let ips: Vec<IpAddr> = addrs.map(|sa| sa.ip()).collect();
+        if ips.is_empty() {
+            return Err(ConnectorError {
+                kind: ConnectorErrorKind::TransportError,
+                message: format!("DNS returned no addresses for {}", host),
+                provider_response: None,
+            });
+        }
+        Ok(ips)
     }
+}
+
+/// Resolution-time check. Reject-if-any: if any returned address is
+/// prohibited, the whole resolution is rejected. No address is selected.
+pub fn validate_resolution(
+    base: &ValidatedBaseUrl,
+    resolver: &dyn DnsResolver,
+) -> Result<ResolvedTarget, ConnectorError> {
+    let ips = resolver.resolve(&base.host)?;
+    if ips.is_empty() {
+        return Err(ConnectorError {
+            kind: ConnectorErrorKind::TransportError,
+            message: format!("no addresses resolved for {}", base.host),
+            provider_response: None,
+        });
+    }
+    for ip in &ips {
+        if is_prohibited(*ip) {
+            return Err(ConnectorError {
+                kind: ConnectorErrorKind::TransportError,
+                message: format!(
+                    "prohibited destination address {} for host {}",
+                    ip, base.host
+                ),
+                provider_response: None,
+            });
+        }
+    }
+    let chosen = ips[0];
+    Ok(ResolvedTarget {
+        host: base.host.clone(),
+        ip: chosen,
+        port: base.port,
+    })
+}
+
+// ---------------------------------------------------------------------
+// Address policy
+// ---------------------------------------------------------------------
+
+/// True if the address falls in any range of the deny-list.
+pub fn is_prohibited(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => ipv4_prohibited(v4),
+        IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return ipv4_prohibited(v4);
+            }
+            ipv6_prohibited(v6)
+        }
+    }
+}
+
+fn ipv4_prohibited(ip: Ipv4Addr) -> bool {
+    const TABLE: &[(Ipv4Addr, u8)] = &[
+        (Ipv4Addr::new(0, 0, 0, 0), 8),
+        (Ipv4Addr::new(0, 0, 0, 0), 32),
+        (Ipv4Addr::new(10, 0, 0, 0), 8),
+        (Ipv4Addr::new(100, 64, 0, 0), 10),
+        (Ipv4Addr::new(127, 0, 0, 0), 8),
+        (Ipv4Addr::new(169, 254, 0, 0), 16),
+        (Ipv4Addr::new(172, 16, 0, 0), 12),
+        (Ipv4Addr::new(192, 0, 0, 0), 24),
+        (Ipv4Addr::new(192, 0, 0, 0), 29),
+        (Ipv4Addr::new(192, 0, 0, 8), 32),
+        (Ipv4Addr::new(192, 0, 0, 9), 32),
+        (Ipv4Addr::new(192, 0, 0, 10), 32),
+        (Ipv4Addr::new(192, 0, 0, 170), 32),
+        (Ipv4Addr::new(192, 0, 0, 171), 32),
+        (Ipv4Addr::new(192, 0, 2, 0), 24),
+        (Ipv4Addr::new(192, 31, 196, 0), 24),
+        (Ipv4Addr::new(192, 52, 193, 0), 24),
+        (Ipv4Addr::new(192, 88, 99, 0), 24),
+        (Ipv4Addr::new(192, 88, 99, 2), 32),
+        (Ipv4Addr::new(192, 168, 0, 0), 16),
+        (Ipv4Addr::new(192, 175, 48, 0), 24),
+        (Ipv4Addr::new(198, 18, 0, 0), 15),
+        (Ipv4Addr::new(198, 51, 100, 0), 24),
+        (Ipv4Addr::new(203, 0, 113, 0), 24),
+        (Ipv4Addr::new(224, 0, 0, 0), 4),
+        (Ipv4Addr::new(240, 0, 0, 0), 4),
+        (Ipv4Addr::new(255, 255, 255, 255), 32),
+    ];
+    let u = u32::from(ip);
+    for (net, prefix) in TABLE {
+        let mask = if *prefix == 0 {
+            0u32
+        } else {
+            u32::MAX << (32 - *prefix as u32)
+        };
+        if (u & mask) == (u32::from(*net) & mask) {
+            return true;
+        }
+    }
+    false
+}
+
+fn ipv6_prohibited(ip: Ipv6Addr) -> bool {
+    const TABLE: &[(Ipv6Addr, u8)] = &[
+        (Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), 128),
+        (Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 128),
+        // ::ffff:0:0/96 is handled by unwrap before this function.
+        (Ipv6Addr::new(0x64, 0xff9b, 0, 0, 0, 0, 0, 0), 96),
+        (Ipv6Addr::new(0x64, 0xff9b, 1, 0, 0, 0, 0, 0), 48),
+        (Ipv6Addr::new(0x100, 0, 0, 0, 0, 0, 0, 0), 64),
+        (Ipv6Addr::new(0x100, 0, 0, 1, 0, 0, 0, 0), 64),
+        (Ipv6Addr::new(0x2001, 0, 0, 0, 0, 0, 0, 0), 23),
+        (Ipv6Addr::new(0x2001, 0, 0, 0, 0, 0, 0, 0), 32),
+        (Ipv6Addr::new(0x2001, 1, 0, 0, 0, 0, 0, 1), 128),
+        (Ipv6Addr::new(0x2001, 1, 0, 0, 0, 0, 0, 2), 128),
+        (Ipv6Addr::new(0x2001, 1, 0, 0, 0, 0, 0, 3), 128),
+        (Ipv6Addr::new(0x2001, 2, 0, 0, 0, 0, 0, 0), 48),
+        (Ipv6Addr::new(0x2001, 3, 0, 0, 0, 0, 0, 0), 32),
+        (Ipv6Addr::new(0x2001, 4, 0x112, 0, 0, 0, 0, 0), 48),
+        (Ipv6Addr::new(0x2001, 0x10, 0, 0, 0, 0, 0, 0), 28),
+        (Ipv6Addr::new(0x2001, 0x20, 0, 0, 0, 0, 0, 0), 28),
+        (Ipv6Addr::new(0x2001, 0x30, 0, 0, 0, 0, 0, 0), 28),
+        (Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 0), 32),
+        (Ipv6Addr::new(0x2002, 0, 0, 0, 0, 0, 0, 0), 16),
+        (Ipv6Addr::new(0x2620, 0x4f, 0x8000, 0, 0, 0, 0, 0), 48),
+        (Ipv6Addr::new(0x3fff, 0, 0, 0, 0, 0, 0, 0), 20),
+        (Ipv6Addr::new(0x5f00, 0, 0, 0, 0, 0, 0, 0), 16),
+        (Ipv6Addr::new(0xfc00, 0, 0, 0, 0, 0, 0, 0), 7),
+        (Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 0), 10),
+        (Ipv6Addr::new(0xff00, 0, 0, 0, 0, 0, 0, 0), 8),
+    ];
+    let u = u128::from(ip);
+    for (net, prefix) in TABLE {
+        let mask = if *prefix == 0 {
+            0u128
+        } else {
+            u128::MAX << (128 - *prefix as u32)
+        };
+        if (u & mask) == (u128::from(*net) & mask) {
+            return true;
+        }
+    }
+    false
 }
 
 // ---------------------------------------------------------------------

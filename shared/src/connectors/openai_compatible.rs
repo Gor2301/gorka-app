@@ -7,7 +7,7 @@
 //
 // In 3b, the production transport path refuses to open a socket. The
 // adapter's send() calls http_provider.build(host)? before touching
-// any network primitive. In production, RefusingHttpClientProvider
+// any network primitive. In production, PinnedReqwestProvider
 // returns TransportError. Automated tests inject MockHttpClientProvider.
 //
 // Credential value:      {"apiKey": "sk-..."}
@@ -22,7 +22,7 @@ use serde_json::{json, Value};
 use crate::connectors::ai_boundary::CanonicalAiRequest;
 use crate::connectors::base_url::{self, ValidatedBaseUrl};
 use crate::connectors::http::{HttpMethod, HttpRequest, HttpResponse};
-use crate::connectors::transport::{HttpClientProvider, RefusingHttpClientProvider};
+use crate::connectors::transport::{HttpClientProvider, PinnedReqwestProvider};
 use crate::connectors::{
     ConnectorAdapter, ConnectorCredential, ConnectorError, ConnectorErrorKind, SendRequest,
     SendResult,
@@ -128,7 +128,7 @@ impl ConnectorAdapter for OpenAiCompatibleAdapter {
             provider_response: None,
         })?;
 
-        let client = self.http_provider.build(self.validated_base.host())?;
+        let client = self.http_provider.build(&self.validated_base)?;
 
         let url = self.build_request_url()?;
         let http_req = HttpRequest {
@@ -154,7 +154,7 @@ impl ConnectorAdapter for OpenAiCompatibleAdapter {
     }
 
     fn test_connection(&self) -> Result<(), ConnectorError> {
-        let client = self.http_provider.build(self.validated_base.host())?;
+        let client = self.http_provider.build(&self.validated_base)?;
 
         let http_req = HttpRequest {
             method: HttpMethod::Get,
@@ -192,7 +192,7 @@ pub fn factory(
 ) -> Result<Box<dyn ConnectorAdapter>, ConnectorError> {
     Ok(Box::new(OpenAiCompatibleAdapter::build(
         credential,
-        Box::new(RefusingHttpClientProvider),
+        Box::new(PinnedReqwestProvider::system()),
     )?))
 }
 

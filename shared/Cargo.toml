@@ -33,3 +33,5 @@ serde_jcs = "0.2.0"
 
 [dev-dependencies]
 gorka-shared = { path = ".", features = ["test-mock-provider"] }
+rcgen = "0.13"
+rustls = "0.23"
