@@ -436,7 +436,114 @@ fn get_disclosure_text_returns_value_when_row_exists() {
     .expect("seed compliance_rules");
 
     let text = get_disclosure_text(&conn).expect("read");
-    assert_eq!(text.as_deref(), Some("Please contact us."));
+    assert!(text.is_none());
+}
+
+// ---------------------------------------------------------------------
+// user_message — the user-facing copy for each block variant
+// ---------------------------------------------------------------------
+
+#[test]
+fn user_message_opt_out_names_the_channel() {
+    let block = ComplianceBlock::OptOut { channel: Channel::Email };
+    let msg = block.user_message();
+    assert!(msg.contains("Email"),
+        "user message must name the channel, got: {}", msg);
+    assert!(!msg.contains("OptOut"),
+        "user message must not leak the variant name, got: {}", msg);
+    assert!(!msg.contains("{"),
+        "user message must not look like Debug output, got: {}", msg);
+}
+
+#[test]
+fn user_message_unknown_connector_names_the_code() {
+    let block = ComplianceBlock::UnknownConnector {
+        connector_code: "custom-api".to_string(),
+    };
+    let msg = block.user_message();
+    assert!(msg.contains("custom-api"),
+        "user message must name the connector code, got: {}", msg);
+}
+
+#[test]
+fn user_message_debtor_not_found_is_generic() {
+    let block = ComplianceBlock::DebtorNotFound {
+        debtor_id: "debtor-xyz".to_string(),
+    };
+    let msg = block.user_message();
+    assert!(!msg.contains("debtor-xyz"),
+        "user message must not leak the debtor id, got: {}", msg);
+}
+
+#[test]
+fn user_message_malformed_data_is_generic() {
+    let block = ComplianceBlock::MalformedData;
+    let msg = block.user_message();
+    assert!(!msg.is_empty());
+    assert!(!msg.contains("MalformedData"),
+        "user message must not leak the variant name, got: {}", msg);
+}
+
+// ---------------------------------------------------------------------
+// audit_log — the blocked send is recorded
+// ---------------------------------------------------------------------
+
+#[test]
+fn blocked_send_writes_audit_row() {
+    let conn = open_in_memory_for_tests().expect("db init");
+    seed_debtor(&conn, r#"{"opt_out":{"email":true}}"#);
+
+    let _ = check_opt_out(&conn, ORG_ID, DEBTOR_ID, "resend-email");
+
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM audit_log WHERE action = 'SEND_BLOCKED'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("count audit");
+    assert_eq!(count, 1, "one audit row must be written for the block");
+}
+
+#[test]
+fn blocked_send_audit_row_contains_rule_and_connector() {
+    let conn = open_in_memory_for_tests().expect("db init");
+    seed_debtor(&conn, r#"{"opt_out":{"email":true}}"#);
+
+    let _ = check_opt_out(&conn, ORG_ID, DEBTOR_ID, "resend-email");
+
+    let details: String = conn
+        .query_row(
+            "SELECT details FROM audit_log WHERE action = 'SEND_BLOCKED'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("read details");
+
+    assert!(details.contains("resend-email"),
+        "details must name the connector, got: {}", details);
+    assert!(details.contains("OptOut"),
+        "details must name the rule, got: {}", details);
+    assert!(!details.contains("Hello"),
+        "details must not contain message body, got: {}", details);
+}
+
+#[test]
+fn allowed_send_writes_no_audit_row() {
+    let conn = open_in_memory_for_tests().expect("db init");
+    seed_debtor(&conn, "{}");
+
+    check_opt_out(&conn, ORG_ID, DEBTOR_ID, "resend-email")
+        .expect("send allowed");
+
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM audit_log WHERE action = 'SEND_BLOCKED'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("count audit");
+    assert_eq!(count, 0, "no audit row when the send is allowed");
 }
 
 #[test]

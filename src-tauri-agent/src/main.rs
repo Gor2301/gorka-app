@@ -355,7 +355,7 @@ fn send_connector_message(
         &debtor_id,
         &connector_code,
     )
-    .map_err(|block| format!("Compliance: {:?}", block))?;
+    .map_err(|block| block.user_message())?;
 
     let secret = gorka_shared::connectors::local_record::read_local_connector_credential(
         conn,

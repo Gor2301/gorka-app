@@ -42,6 +42,14 @@ impl Channel {
             Channel::Voice => "voice",
         }
     }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Channel::Email => "Email",
+            Channel::Sms => "SMS",
+            Channel::Voice => "Voice",
+        }
+    }
 }
 
 impl std::str::FromStr for Channel {
@@ -74,6 +82,36 @@ pub enum ComplianceBlock {
     /// debtors.data is not a JSON object, or the opt_out flag is
     /// not a boolean. Fail closed.
     MalformedData,
+}
+
+impl ComplianceBlock {
+    pub fn rule_name(&self) -> &'static str {
+        match self {
+            ComplianceBlock::OptOut { .. } => "OptOut",
+            ComplianceBlock::UnknownConnector { .. } => "UnknownConnector",
+            ComplianceBlock::DebtorNotFound { .. } => "DebtorNotFound",
+            ComplianceBlock::MalformedData => "MalformedData",
+        }
+    }
+
+    pub fn user_message(&self) -> String {
+        match self {
+            ComplianceBlock::OptOut { channel } => format!(
+                "This debtor has opted out of {}. Contact them through another channel or update their record.",
+                channel.display_name()
+            ),
+            ComplianceBlock::UnknownConnector { connector_code } => format!(
+                "Connector '{}' is not recognized by the compliance guard. Send blocked.",
+                connector_code
+            ),
+            ComplianceBlock::DebtorNotFound { .. } => {
+                "The debtor record is not available on this device. Send blocked.".to_string()
+            }
+            ComplianceBlock::MalformedData => {
+                "The debtor's compliance data is unreadable. Send blocked for safety.".to_string()
+            }
+        }
+    }
 }
 
 /// Map a connector code to the channel it serves, or None if the
@@ -125,6 +163,34 @@ pub fn get_opt_out(data: &Value, channel: Channel) -> Result<bool, ComplianceBlo
 ///   malformed data                    -> Err(MalformedData)
 ///   debtor row absent / read error    -> Err(DebtorNotFound)
 pub fn check_opt_out(
+    conn: &Connection,
+    organization_id: &str,
+    debtor_id: &str,
+    connector_code: &str,
+) -> Result<(), ComplianceBlock> {
+    let result = check_opt_out_inner(conn, organization_id, debtor_id, connector_code);
+
+    if let Err(block) = &result {
+        let details = format!(
+            "connector={} rule={}",
+            connector_code,
+            block.rule_name(),
+        );
+        // Best-effort audit. A logging failure must not change the
+        // enforcement decision.
+        let _ = crate::db::log_audit(
+            conn,
+            "SEND_BLOCKED",
+            Some(debtor_id),
+            1,
+            &details,
+        );
+    }
+
+    result
+}
+
+fn check_opt_out_inner(
     conn: &Connection,
     organization_id: &str,
     debtor_id: &str,
