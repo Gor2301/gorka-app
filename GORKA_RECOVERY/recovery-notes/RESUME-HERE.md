@@ -2916,5 +2916,262 @@ F.8 — WHAT THIS APPENDIX DOES NOT DO
 END OF APPENDIX F
 ================================================================
 
-End of RESUME-HERE.md
+================================================================
+APPENDIX G — SLICE 2 CLOSE
+(added v3.0, 2026-10-12)
+================================================================
 
+G.0 — WHY THIS APPENDIX EXISTS
+
+Appendix F closed Slice 1 (opt-out enforcement and disclosure
+text) and pointed at Slice 2. This session ran Slice 2:
+Deterministic Context Engine and fallback. Code, tests, cloud
+verification, and the Part II §II.3 amendment are all complete.
+
+Where this appendix conflicts with F.7's queue, this appendix
+wins.
+
+================================================================
+G.1 — MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 7cab903 plus the appendix commit that follows.
+        Pushed through 7cab903.
+
+CLOUD:  at 7cab903. Full workspace test green. Closed.
+
+Commits added this session, oldest first:
+
+  0052dd7  slice 2: context engine and deterministic fallback
+  7cab903  slice 2: fix seed_debt call sites in fallback test
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -5
+    git status --short
+
+================================================================
+G.2 — WHAT SLICE 2 SHIPPED
+================================================================
+
+Two modules, both new, both shared-crate, both local-only:
+
+shared/src/context.rs
+  - Context struct: debtor + communicationHistory + debts +
+    indicators.
+  - FallbackInput struct: exact integer/float values, local only,
+    never serialized.
+  - build_context(conn, org_id, debtor_id, reference_time).
+  - build_fallback_input(conn, org_id, debtor_id, reference_time).
+  - Internal DebtorFacts loaded once; both projections derive
+    from it. No double reads.
+  - Debt counting: totalCount = status != 'CANCELLED';
+    paidCount = status = 'PAID'; overdueCount = non-paid,
+    non-cancelled, due_date < reference_time; amountRange = sum
+    of unpaid in the primary currency.
+  - Primary currency = most common among unpaid debts; ties
+    alphabetical. No FX conversion.
+  - Communications: CALL -> voiceCount, NOTE excluded from
+    channel counts and rates, counted only in totalCount.
+  - Banding: amount, days overdue, response rate, payment
+    reliability, engagement level.
+  - communicationPreference tie-break alphabetical.
+
+shared/src/recommendation.rs
+  - Canonical enums: Priority, Tone, Timing, Channel.
+  - fallback(days_overdue, response_rate) -> Recommendation.
+  - Strict boundaries: > 60, > 30, < 0.2.
+  - timing always Within3Days (fixed in this slice).
+
+Shared crate changes:
+  - shared/src/lib.rs: pub mod context; pub mod recommendation;
+
+Tests: 38 new.
+  - shared/tests/slice2_context.rs: 27 tests.
+  - shared/tests/slice2_fallback.rs: 11 tests.
+
+Full workspace test at close: 202/202 pass.
+
+Live test: none. Slice 2 is Rust-only. No UI. No network.
+
+================================================================
+G.3 — DEVIATIONS FROM PART II §II.3
+================================================================
+
+Part II §II.3 named paymentHistory and promisesKeptRatio. No
+local payments or promises tables exist. Slice 2 substitutes
+what can be computed.
+
+The substitution is recorded as an amendment appended to
+CONNECTOR-EVENT-ORDER-SPEC.md Part II, immediately after the
+Part II END COPY marker. The amendment is additive; the original
+§II.3 text is unchanged.
+
+Future slices (3 through 6) must validate against the Slice 2
+shape, not the original §II.3 shape. When payments and promises
+become first-class local tables, that amendment is superseded by
+a new amendment.
+
+Summary of substitution:
+
+  §II.3 field                      Slice 2 result
+  ------------------------------   -----------------------------
+  debtor.amountRange               produced (primary currency)
+  debtor.daysOverdueRange          produced
+  debtor.debtOriginCategory        omitted (no local source)
+  communicationHistory counts      produced (CALL -> voiceCount)
+  communicationHistory response    produced (excl NOTE)
+  paymentHistory.*                 substituted with debts.*
+  indicators.paymentReliability    produced
+  indicators.engagementLevel       produced (excl NOTE)
+  indicators.communicationPref     produced (tie alphabetical)
+  indicators.promisesKeptRatio     omitted (no local source)
+
+================================================================
+G.4 — FINDINGS THIS SESSION
+================================================================
+
+FG14  Part II §II.3 assumed a payments table and a promises
+      representation. Neither exists in the local schema. The
+      deviation is now recorded as a Part II amendment. No code
+      in Slice 2 depends on the missing tables.
+
+FG15  debt due_date is populated per debt on insert. Reliable
+      when the operator enters it. Missing due_date is treated
+      as "not overdue" by the context engine; the tests cover
+      this with a22 and 2a-21.
+
+FG16  Currency is a per-debt free-text field, default "USD". No
+      consistency is enforced anywhere. Slice 2 does not sum
+      across currencies; it selects one primary currency and
+      sums only that. Mixed-currency debtors are handled
+      deterministically.
+
+FG17  One test file call-site mistake in slice2_fallback.rs
+      (six arguments passed to a five-argument helper). Caught
+      by cloud compile on the first run. Fixed in 7cab903.
+
+FG18  Notepad on Windows encodes § as Â§ in these recovery
+      files. Existing appendices already carry the artifact.
+      findstr for a literal § does not match; use PowerShell
+      Get-Content or findstr on ASCII substrings only. Cosmetic;
+      do not fix.
+
+================================================================
+G.5 — PROCESS AMENDMENTS
+================================================================
+
+P-W   TEST FILE HELPERS DO NOT SHARE A SIGNATURE.
+      seed_debt in slice2_context.rs takes (id, amount,
+      currency, status, due_date). seed_debt in
+      slice2_fallback.rs takes (id, amount, status, due_date).
+      Different files, different helpers. When a call site is
+      added to one file, check the local helper's signature, not
+      the other file's. FG17 is the evidence.
+
+P-X   WHEN A TEST FAILS FOR A REASON YOU DID NOT EXPECT, LOOK
+      FOR A FIXTURE BUG BEFORE SUSPECTING PRODUCTION CODE.
+      Caught twice this session: the a17 "5000" collision (band
+      label vs forbidden substring) was a fixture bug, not a
+      privacy leak. The seed_debt argument mismatch was a call
+      site bug, not a logic bug.
+
+P-Y   ONE APPENDIX PER SESSION (restated, P-M / P-J / P-V).
+      Do not edit prior appendices.
+
+================================================================
+G.6 — ENVIRONMENT NOTES
+================================================================
+
+Unchanged from Appendix F:
+
+  Client data path: %APPDATA%\click.gorka.client\data\
+                    gorka-client.db
+  Agent  data path: %APPDATA%\click.gorka.agent\data\
+                    gorka-agent.db
+  Cloud temp: set TMP and TEMP to C:\cargo-tmp. Two separate
+              lines. See P-S.
+
+================================================================
+G.7 — OPEN ITEMS
+================================================================
+
+New this session:
+
+  - None. Slice 2 is closed with no new open items.
+
+Carried from Appendix F §F.6, unchanged:
+
+  - FG9: vite watcher EBUSY on cargo build. Unfixed.
+  - Vite config `__dirname` warning. Cosmetic.
+  - O1: three ghost rows on the Agent.
+  - O2: Communication Tools page shows event metadata, not
+    credential health.
+  - O3: CONNECTOR_CREDENTIAL_REPLACED remains deferred.
+  - O4 items: registration/onboarding gap; Agent settings.dat
+    user_id; Mocean HTTP shape; voice/Gemini adapters;
+    cancel-negative test; .bak files.
+
+================================================================
+G.8 — QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0. F15 CLOSED.
+  SLICE 1 (Part II §II.17) — opt-out enforcement and
+  disclosure text. CLOSED 2026-10-12.
+  SLICE 2 (Part II §II.16) — Context Engine and deterministic
+  fallback. CLOSED 2026-10-12.
+
+IN FLIGHT
+  None.
+
+NEXT — IN ORDER
+
+  1. SLICE 3 — AI boundary and adapters.
+     Typed outbound request, canonical serialization, boundary
+     validator (Part II §II.4). Gemini and OpenAI-compatible
+     adapters (Part II §II.6, §II.7). Base URL network
+     controls (Part II §II.5.2, §II.5.3). Semantic-identity
+     acceptance tests. Secret-leak regression.
+     Own mini spec before code. This is the first slice that
+     reaches the network. Larger than Slice 2.
+
+  2. SLICE 4 — Strategy Engine and fact validation.
+
+  3. SLICE 5 — Recommendation lifecycle, reservation,
+     contact limits, and UI.
+
+  4. SLICE 6 — Integrated security and regression tests.
+
+  Then the carried items from Appendix E §E.8 / F.7:
+  5.  O1 ghost-row fix (deferred by founder).
+  6.  O2 Communication Tools credential health.
+  7.  STEP 1.5 — More known providers.
+  8.  STEP 1.6 — Data-source display surface.
+  9.  CONNECTOR_CREDENTIAL_REPLACED.
+ 10.  TWILIO SMS BYOP SEND VERIFICATION.
+ 11.  B7 CREDENTIAL-TRANSIT REVIEW.
+ 12.  CANCEL-NEGATIVE FOR TIER 1.
+ 13.  REGISTRATION / ONBOARDING BLOCK.
+ 14.  ACCEPTANCE — end-to-end.
+
+================================================================
+G.9 — WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  It does not amend Part II beyond the §II.3 amendment block.
+  It does not reopen CONNECTOR-EVENT-ORDER-SPEC Part I.
+  It does not decide any remaining O1/O2 question.
+  It does not promote Slice 3 to started. Slice 3 needs its
+  own mini spec before code. Slice 3's scope touches the
+  network and credentials; the mini spec must address
+  SSRF guardrails, semantic-identity tests, and the base URL
+  network controls before any code.
+
+================================================================
+END OF APPENDIX G
+================================================================
+
+End of RESUME-HERE.md

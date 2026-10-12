@@ -2598,3 +2598,70 @@ Next action: Slice 1 reconnaissance. Inspect the three code paths in II.17.4. No
 End of Part II.
 
 END COPY
+
+================================================================
+PART II — §II.3 AMENDMENT (added 2026-10-12, Slice 2 close)
+================================================================
+
+The local schema does not contain a payments table or a promises
+representation. Part II §II.3 named fields that cannot be computed
+from existing tables. Slice 2 substituted what can be computed.
+
+This block records the substitution. It is additive. No other
+Part II text changes.
+
+Fields named in §II.3 and their Slice 2 disposition:
+
+  debtor.amountRange
+    Produced. Sum of unpaid debts in the debtor's primary currency,
+    banded. Primary currency = most common among unpaid debts;
+    ties broken alphabetically.
+
+  debtor.daysOverdueRange
+    Produced. Days from the oldest past-due unpaid debt's due date
+    to the reference time, banded.
+
+  debtor.debtOriginCategory
+    Omitted. No local source.
+
+  communicationHistory.{totalCount, emailCount, smsCount, voiceCount}
+    Produced. Counts from communications. CALL maps to voiceCount.
+    NOTE is excluded from email/sms/voice counts; it is still
+    counted in totalCount.
+
+  communicationHistory.responseRateBand
+    Produced. inbound / outbound, both excluding NOTE. Bands:
+    NONE (0 outbound), LOW (<0.2), MEDIUM (0.2..0.5), HIGH (>=0.5).
+
+  paymentHistory.{totalCount, partialCount, missedCount}
+    Substituted with debts.{totalCount, paidCount, overdueCount}:
+      totalCount   = debts with status != 'CANCELLED'
+      paidCount    = debts with status = 'PAID'
+      overdueCount = non-paid, non-cancelled debts with a non-null
+                     due date before the reference time
+
+  indicators.paymentReliability
+    Produced. paidCount / totalCount. Bands: NO_DATA (0 debts),
+    POOR (<0.3), FAIR (0.3..0.7), GOOD (>=0.7).
+
+  indicators.engagementLevel
+    Produced. inbound / (inbound + outbound), both excluding NOTE.
+    Bands: LOW (<0.2), MEDIUM (0.2..0.5), HIGH (>=0.5). Zero
+    debtor-facing communications maps to LOW.
+
+  indicators.communicationPreference
+    Produced. Channel with the highest outbound count (excluding
+    NOTE). Tie-break alphabetical: EMAIL < SMS < VOICE. Null when
+    no outbound non-NOTE communications exist.
+
+  indicators.promisesKeptRatio
+    Omitted. No local source.
+
+Subsequent slices (3 through 6) must validate against this shape,
+not the original §II.3 shape. When payments and promises become
+first-class local tables in a future slice, this amendment is
+superseded by a new amendment that restores the original fields.
+
+================================================================
+END OF §II.3 AMENDMENT
+================================================================
