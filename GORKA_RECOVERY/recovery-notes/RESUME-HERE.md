@@ -2601,7 +2601,319 @@ NEXT — IN ORDER
  13. ACCEPTANCE — end-to-end.
 
 ================================================================
-END OF APPENDIX E
+APPENDIX F — SLICE 1 CLOSE
+(added v2.9, 2026-10-12)
+================================================================
+
+F.0 — WHY THIS APPENDIX EXISTS
+
+Appendix E closed CONNECTOR-EVENT-ORDER-SPEC v1.0 and left
+the queue pointing at the AI Copilot planning session. This
+session ran that planning session (Part II appended) and then
+implemented and live-verified Slice 1: opt-out enforcement
+and disclosure text.
+
+Where this appendix conflicts with E.8's queue, this appendix
+wins.
+
+================================================================
+F.1 — MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 28af4fd. Pushed. Clean tree except the two
+        known untracked files (CHAT-HANDOFF-DUMP.txt,
+        make-dump.ps1).
+
+CLOUD:  at 28af4fd. Full workspace test green. Cloud closed
+        at founder's discretion after the final workspace run.
+
+Commits added this session, oldest first:
+
+  16c4dc5  compliance: slice 1 opt-out guard and disclosure
+           append
+  d1779cf  agent: register set_debtor_opt_out and
+           get_disclosure_text; guard send_connector_message
+  dfbdb6c  slice 1: opt-out enforcement, disclosure append,
+           opt-out UI, compliance settings
+  2a2724b  agent: disclosure text settings UI
+  c4015ba  compliance: user-facing block messages and
+           SEND_BLOCKED audit row
+  28af4fd  slice 1: restore correct disclosure test assertion
+
+  Note: the push of 2a2724b reported a range of
+  75af862..2a2724b. The commit 75af862 is not one this
+  session is aware of creating. Verify with git log at
+  resume before assuming the list above is complete.
+
+  Note: c87c855 (Part II appended to
+  CONNECTOR-EVENT-ORDER-SPEC) was already on origin/main at
+  session start.
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -10
+    git status --short
+
+================================================================
+F.2 — WHAT SLICE 1 SHIPPED
+================================================================
+
+Per Part II §II.17.1 and the Slice 1 mini spec (v1.2).
+
+1a — Opt-out enforcement.
+
+  - shared/src/compliance.rs (new). Contains:
+      Channel enum (Email / Sms / Voice) with as_str and
+      display_name.
+      ComplianceBlock enum with user_message() and
+      rule_name().
+      channel_for_connector_code() -> Option<Channel>.
+      get_opt_out().
+      check_opt_out() wrapping check_opt_out_inner().
+      set_debtor_opt_out().
+      get_disclosure_text().
+      set_disclosure_text().
+      append_disclosure_idempotent().
+
+  - Guard call inserted in send_connector_message in
+    src-tauri-agent/src/main.rs, between the DB lock and
+    read_local_connector_credential.
+    test_connector_connection has no guard (it does not
+    contact the debtor).
+
+  - check_opt_out fails closed on unknown connector codes,
+    malformed data, and missing debtor rows.
+
+  - On block, a SEND_BLOCKED audit_log row is written with
+    connector code and rule name. Best-effort; a logging
+    failure does not change the enforcement decision.
+
+  - Toggle UI on the Agent debtor profile (Contact
+    preferences card, three checkboxes).
+
+  - Opt-out stored in debtors.data.opt_out.<channel>.
+    Whole-blob ENTITY_UPDATED. Matches Part II §II.17.1.
+
+1b — Disclosure text append.
+
+  - compliance_rules already existed (migration v9).
+    set_disclosure_text is its first production writer.
+    INSERT ... id = 1 on first write; UPDATE after.
+
+  - Client "Local compliance rules" section added to
+    ComplianceReport.tsx.
+
+  - Agent "Compliance" card added to SettingsPage.tsx.
+
+  - Composer (SendMessageModal.tsx): raw draft kept separate
+    from preview. Preview derived from (rawDraft,
+    disclosure) via finalBodyFor(). Sent body is the
+    transformed body, not the raw draft.
+
+  - The append is idempotent against the last non-empty
+    line. Whitespace-only disclosure is treated as empty.
+
+Tests: shared/tests/slice1_compliance.rs. 42 tests. All
+green on cloud.
+
+Full workspace test at close: all suites green.
+
+Live-verified on 2026-10-12:
+
+  - Opt-out set -> send blocked with user-facing message
+    ("This debtor has opted out of Email. Contact them
+    through another channel or update their record.").
+    No communications row. No email sent.
+  - Opt-out cleared -> send succeeds; real email delivered
+    via Resend; disclosure appended exactly as previewed.
+
+================================================================
+F.3 — FINDINGS THIS SESSION
+================================================================
+
+FG8   communication_type_for returns "NOTE" for unknown
+      connector codes. Latent Slice 5 gap: a send through an
+      unrecognized connector would have written a
+      communications row typed NOTE. Fixed by construction
+      in Slice 1: channel_for_connector_code returns
+      Option<Channel>, and check_opt_out refuses None
+      before the send path runs.
+
+FG9   Vite watcher EBUSY (F10 in Appendix E's carried
+      items). Still open. Crashed the Client vite during the
+      live test when cargo rebuilt the client binary.
+      Recovered by restarting vite after the build finished.
+      Root fix (server.watch.ignored for **/target/**) is
+      one line in vite.config.ts; not done this session.
+
+FG10  Test assertion for
+      get_disclosure_text_returns_value lost twice during
+      the session. Applied correctly the first time, then
+      clobbered by a later edit to the same file. Caught by
+      cloud test. Reapplied. Root cause: multiple notepad
+      edit passes on the same file across a long turn; a
+      stale buffer or a wrong anchor reverted the fix.
+
+FG11  Command chaining wedged the cloud terminal
+      repeatedly. `set VAR=x` on the same line as a later
+      command does not affect that command (cmd expands the
+      whole line first). Double pipes nest subshells and do
+      not clean up. Recovery: close the terminal, open a
+      fresh one, run one command per line.
+
+FG12  The root package.json is named "supervisor-dashboard"
+      and builds the Client. The Client's source lives in
+      supervisor-dashboard/src/, aliased by @ in
+      vite.config.ts. The supervisor-dashboard/ folder has
+      no package.json and cannot be built from. Appendix
+      D's D.6 note already said "There is no
+      supervisor-dashboard\ folder"; this session read past
+      it and wasted time. Restated in P-U.
+
+FG13  Two Slice 1 gaps found during live testing were
+      fixed in-slice, not deferred:
+        - error message was Rust Debug output; now
+          user_message() copy per CONNECTOR-MODEL.md §10.9.
+        - no SEND_BLOCKED audit row was written; now
+          written inside check_opt_out via db::log_audit.
+
+================================================================
+F.4 — PROCESS AMENDMENTS
+================================================================
+
+P-Q   ONE COMMIT PER SLICE, BULK AT THE END.
+      Do not commit per file. Write all files for the slice
+      on main, commit once at slice close, push once.
+      Additional commits within a slice are for defects
+      found after the bulk commit.
+
+P-R   NEVER CHAIN COMMANDS IN THE CLOUD TERMINAL.
+      One line, one Enter, wait for prompt. No &&. No
+      double pipes. If a step needs an environment
+      variable, it goes on its own line, Enter, then the
+      command on the next line. FG11 is the evidence.
+
+P-S   `set VAR=x` AFFECTS NOTHING ON THE SAME LINE.
+      cmd expands the whole line before executing. Split.
+
+P-T   BEFORE A FOLLOW-UP EDIT TO A FILE, RE-VERIFY THE
+      ANCHOR.
+      After any file has been edited more than once in a
+      session, run findstr / Select-String against the
+      exact line you intend to anchor to before issuing
+      the next edit. Do not trust memory of the file's
+      state across long turns. FG10 is the evidence.
+
+P-U   ROOT IS THE CLIENT. supervisor-dashboard/ IS A SOURCE
+      FOLDER, NOT AN APP.
+      Build the Client from C:\gorka-app.
+      `cd supervisor-dashboard && npm run build` fails; the
+      folder has no package.json. The Agent builds from
+      C:\gorka-app\agent-dashboard. Restates D.6's note;
+      recorded again because the same mistake happened
+      twice.
+
+P-V   ONE APPENDIX PER SESSION (restated, P-M / P-J).
+      Do not edit prior appendices.
+
+================================================================
+F.5 — ENVIRONMENT NOTES
+================================================================
+
+Local data paths (unchanged from Appendix E):
+
+  Client  %APPDATA%\click.gorka.client\data\gorka-client.db
+  Agent   %APPDATA%\click.gorka.agent\data\gorka-agent.db
+
+Cloud temp: set TMP and TEMP to C:\cargo-tmp before every
+cargo command. Two separate lines. See P-S.
+
+Vite ports: Client 5173, Agent 5174. If 5174 is held by a
+stale node.exe, kill it by PID via taskkill /F /PID <n>.
+Do not kill PID 8 or any System-owned listener.
+
+================================================================
+F.6 — OPEN ITEMS
+================================================================
+
+New this session:
+
+  - FG9: vite watcher EBUSY on cargo build. One-line fix in
+    vite.config.ts. Unfixed.
+  - Vite config warning on `__dirname` in both vite configs.
+    Cosmetic. Vite plans to disable configLoader: 'native'.
+    Fix is import.meta.dirname. Not urgent.
+  - The 75af862 commit in the 2a2724b push range. Verify at
+    resume.
+
+Carried from Appendix E §E.7, unchanged:
+
+  - O1: three ghost rows on the Agent.
+  - O2: Communication Tools page shows event metadata, not
+    credential health.
+  - O3: CONNECTOR_CREDENTIAL_REPLACED remains deferred.
+  - O4 items: registration/onboarding gap; Agent
+    settings.dat user_id; Mocean HTTP shape; voice/Gemini
+    adapters; cancel-negative test; .bak files.
+
+================================================================
+F.7 — QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0. F15 CLOSED.
+  SLICE 1 (Part II §II.17) — opt-out enforcement and
+  disclosure text. CLOSED 2026-10-12. Live-verified.
+
+IN FLIGHT
+  None.
+
+NEXT — IN ORDER
+
+  1. SLICE 2 — Deterministic Context Engine and fallback.
+     Part II §II.16. Local context from existing tables.
+     Rule-based recommendation using canonical enums and
+     deterministic calculations. Offline-capable. No
+     external calls. Own mini spec before code.
+
+  2. SLICE 3 — AI boundary and adapters.
+     Typed outbound request, canonical serialization,
+     boundary validator. Gemini and OpenAI-compatible
+     adapters. Base URL network controls.
+
+  3. SLICE 4 — Strategy Engine and fact validation.
+
+  4. SLICE 5 — Recommendation lifecycle, reservation,
+     contact limits, and UI.
+
+  5. SLICE 6 — Integrated security and regression tests.
+
+  Then the carried items from Appendix E §E.8:
+  6.  O1 ghost-row fix (deferred by founder).
+  7.  O2 Communication Tools credential health.
+  8.  STEP 1.5 — More known providers.
+  9.  STEP 1.6 — Data-source display surface.
+ 10.  CONNECTOR_CREDENTIAL_REPLACED.
+ 11.  TWILIO SMS BYOP SEND VERIFICATION.
+ 12.  B7 CREDENTIAL-TRANSIT REVIEW.
+ 13.  CANCEL-NEGATIVE FOR TIER 1.
+ 14.  REGISTRATION / ONBOARDING BLOCK.
+ 15.  ACCEPTANCE — end-to-end.
+
+================================================================
+F.8 — WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  It does not amend Part II. Part II's Slice 1 is now
+  implemented; Part II stands.
+  It does not reopen CONNECTOR-EVENT-ORDER-SPEC Part I.
+  It does not decide any remaining O1/O2 question.
+  It does not promote Slice 2 to started. Slice 2 needs its
+  own mini spec before code.
+
+================================================================
+END OF APPENDIX F
 ================================================================
 
 End of RESUME-HERE.md
