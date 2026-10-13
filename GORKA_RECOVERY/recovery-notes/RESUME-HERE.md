@@ -3819,3 +3819,218 @@ I.8 — WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX I
 ================================================================
+
+================================================================
+APPENDIX K — SLICE 5a CLOSE
+(added v3.4, 2026-10-13)
+================================================================
+
+K.0 — WHY THIS APPENDIX EXISTS
+
+Appendix J froze the Slice 5 copilot spec. This session
+implemented Slice 5a: recommendation persistence and
+lifecycle. Code, tests, cloud verification green at 403/403.
+
+Where this appendix conflicts with J.4's queue, this
+appendix wins.
+
+================================================================
+K.1 — MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD a077e47. Pushed. Clean tree except the two known
+        untracked files (CHAT-HANDOFF-DUMP.txt, make-dump.ps1).
+
+CLOUD:  at a077e47. Workspace test green (403/403). Closed.
+
+Commits added this session, oldest first:
+
+  0cacbf7  slice 5a: recommendation persistence;
+           recovery-notes: append slice 5 copilot spec
+           (bulk commit, five files)
+  6b71eee  slice 5a fix: borrow StrategySource in source_to_db
+  ...      slice 5a fix: Class B helper test expects status-
+           based refusal (hash not captured)
+  ...      slice 5a fix: close tests module (hash not captured)
+  a077e47  slice 5a fix: v10 tests accept user_version >= 10
+
+Exact hash list: run `git log --oneline -8` at resume.
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -8
+    git status --short
+
+================================================================
+K.2 — WHAT SLICE 5a SHIPPED
+================================================================
+
+Migration v11 — recommendations table + two indexes.
+
+New modules:
+
+  shared/src/recommendation_store.rs
+    RecommendationStatus, RecommendationRow, StoreError,
+    EXPIRATION_WINDOW_HOURS=72.
+    Public API: insert_pending, get, list_for_debtor,
+    mark_accepted, mark_rejected, check_freshness,
+    compute_snapshot_hash.
+    pub(crate): mark_sent, mark_send_uncertain.
+    In-module #[cfg(test)] mod tests for Class B helpers.
+
+New tests:
+
+  shared/tests/slice5_recommendation_store.rs   46 tests
+  shared/src/recommendation_store.rs mod tests   7 tests
+  Total new: 53. Workspace 350 -> 403.
+
+Edited:
+
+  shared/src/lib.rs   +1 line (pub mod recommendation_store)
+  shared/src/db.rs    +v11 migration block
+
+NOT edited: Cargo.toml — sha2 = "0.10" was already a direct
+dependency. The mini spec §8 assumed it was absent; the
+reconnaissance read corrected this.
+
+================================================================
+K.3 — DEVIATIONS FROM SLICE 5a MINI SPEC v1.2
+================================================================
+
+D1. Test 13 renamed and re-asserted. Mini spec §9.1 test 13
+    read "Add a debt in a non-primary currency -> hash
+    unchanged." Impossible: debt_status_counts is currency-
+    agnostic, so any debt addition changes the hash. Test is
+    now "snapshot_hash_changes_when_any_debt_added". No
+    snapshot semantics changed; only the test expectation.
+
+D2. Class B test renamed. Original: class_b_helpers_ignore_
+    supersession — asserted mark_sent on a superseded row
+    would succeed. Wrong: supersession sets the row to
+    REJECTED, so mark_sent refuses on status. Renamed to
+    class_b_helpers_refuse_superseded_row_via_status. Same
+    invariant (superseded rows cannot be transitioned),
+    different mechanism.
+
+D3. Cargo.toml not edited. sha2 was already present.
+
+================================================================
+K.4 — FINDINGS THIS SESSION
+================================================================
+
+FG27  StrategySource does not derive Copy (Slice 4 derives
+      Copy on Priority/Tone/Timing/Channel but not on the
+      source enum). Fixed by taking &StrategySource in
+      source_to_db. Commit 6b71eee.
+
+FG28  The v11 migration block moves the migration endpoint
+      from 10 to 11. Four assertions in migration_v10.rs
+      (lines 133, 154, 215, 318) read
+      assert_eq!(user_version(&conn), 10) and failed. Changed
+      to assert!(user_version(&conn) >= 10). Keeps the tests
+      meaningful as "v10 invariants hold" checks and does
+      not break again when v12 lands. The two = 9 assertions
+      at 179 and 297 are the rollback-path checks and were
+      left unchanged. Commit a077e47.
+
+FG29  Commit-message collision. The four 5a files were
+      already staged when the recovery-doc append was staged
+      and committed, so the first commit swept all five.
+      Renamed via --amend before push. Not a rule violation,
+      but the sequence is worth noting: do not stage a
+      recovery-doc edit while code is already staged for a
+      separate commit.
+
+FG30  notepad save discipline failures this session.
+      (a) Missing closing brace on a replacement — the
+      module's final } was consumed with the replaced
+      block. (b) The findstr check found the new function
+      name but not the missing brace. Cloud compile caught
+      it. Both are the same class as FG25/FG26: verify the
+      FULL file structure after a targeted replacement, not
+      just the changed lines.
+
+================================================================
+K.5 — PROCESS AMENDMENTS
+================================================================
+
+P-HH  AFTER ANY TARGETED REPLACEMENT IN A FILE, VERIFY THE
+      FILE'S STRUCTURE, NOT JUST THE CHANGED SYMBOL.
+      Missing braces, missing module closers, and similar
+      structural breakage do not show up in a findstr for
+      the new symbol. Use `Get-Content | Select-Object -Last N`
+      on the affected region, or a full `type` if the file
+      is small. FG30 is the evidence.
+
+P-II  DO NOT STAGE A RECOVERY-DOC EDIT WHILE CODE IS STAGED
+      FOR A SEPARATE COMMIT.
+      The two changes will be swept into one commit and the
+      commit message will lie about its contents. Commit the
+      code first, then the doc, or vice versa. FG29 is the
+      evidence.
+
+P-JJ  ONE APPENDIX PER SESSION (restated, P-J / P-M / P-V /
+      P-Y / P-DD). Do not edit prior appendices. This
+      appendix is new.
+
+================================================================
+K.6 — OPEN ITEMS
+================================================================
+
+New this session:
+
+  - None. Slice 5a is closed with no new open items.
+
+Carried from Appendix J §J.3, unchanged:
+
+  - Phase 5b first action: source reconnaissance on Agent
+    startup sequence and single-instance enforcement.
+  - Deletion semantics UI: not yet built.
+
+================================================================
+K.7 — QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0. F15 CLOSED.
+  SLICE 1 through SLICE 4. See Appendices F-I.
+  SLICE 5 copilot spec FROZEN 2026-10-13. Appendix J.
+  SLICE 5a — recommendation persistence. CLOSED 2026-10-13.
+
+IN FLIGHT
+  None.
+
+NEXT — IN ORDER
+
+  1. SLICE 5b — Send safety and orchestration.
+     Own mini spec before code.
+     First action after spec freeze: source reconnaissance on
+     the Agent startup sequence. Verify single-instance
+     enforcement is active and precedes database open, and
+     that recover_at_startup runs before any command can
+     execute against the database. If either fails, the
+     recovery design reopens and a lease-based protocol is
+     required.
+     Migration v12. send_safety.rs, copilot.rs, six Tauri
+     commands, communications.rs refactor.
+
+  2. SLICE 5c — Copilot UI.
+
+  3. SLICE 6 — Integrated security and regression tests.
+
+  Then the carried items from Appendix E §E.8 / F.7 / G.8 /
+  H.7 / I.7 / J.3.
+
+================================================================
+K.8 — WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  It does not amend Part II.
+  It does not reopen CONNECTOR-EVENT-ORDER-SPEC Part I.
+  It does not start Slice 5b. Slice 5b needs its own mini
+  spec frozen, and that is the next action.
+
+================================================================
+END OF APPENDIX K
+================================================================
