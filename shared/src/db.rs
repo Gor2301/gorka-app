@@ -1012,7 +1012,7 @@ fn run_migrations(conn: &mut Connection) -> Result<(), String> {
 
         tx.execute(
             "CREATE INDEX IF NOT EXISTS idx_communications_send_attempt
-                ON communications(organization_id, send_attempt_id)",
+                ON communications(send_attempt_id)",
             [],
         ).map_err(|e| e.to_string())?;
 
