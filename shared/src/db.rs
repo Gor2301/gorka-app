@@ -87,6 +87,8 @@ pub fn init_db(storage: &AppStorage, key: &str) -> Result<Connection, String> {
             e.to_string()
         })?;
     println!("✅ [RUST] PRAGMA key set");
+    conn.execute("PRAGMA busy_timeout = 5000", [])
+        .map_err(|e| e.to_string())?;
     
     println!("🔍 [RUST] Setting PRAGMA foreign_keys...");
 conn.execute("PRAGMA foreign_keys = ON", [])
@@ -119,6 +121,8 @@ conn.execute("PRAGMA foreign_keys = ON", [])
 /// Not for production. Plain SQLite; no SQLCipher.
 pub fn open_file_for_tests(path: &std::path::Path) -> Result<Connection, String> {
     let mut conn = Connection::open(path).map_err(|e| e.to_string())?;
+    conn.execute("PRAGMA busy_timeout = 5000", [])
+        .map_err(|e| e.to_string())?;
     conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get::<_, String>(0))
         .map_err(|e| e.to_string())?;
     conn.execute("PRAGMA foreign_keys = ON", []).map_err(|e| e.to_string())?;
@@ -174,6 +178,27 @@ pub fn is_enrolled(conn: &Connection) -> Result<bool, String> {
     Ok(count > 0)
 }
 
+/// Returns true iff the given column exists on the given table.
+/// Reads PRAGMA table_info inside the caller's transaction.
+/// Used by migration v12 as duplicate-column protection before
+/// each ALTER TABLE ... ADD COLUMN. Not tamper detection.
+fn column_exists_tx(
+    tx: &rusqlite::Transaction<'_>,
+    table: &str,
+    column: &str,
+) -> Result<bool, String> {
+    let mut stmt = tx
+        .prepare(&format!("PRAGMA table_info({})", table))
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let name: String = row.get(1).map_err(|e| e.to_string())?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
 fn run_migrations(conn: &mut Connection) -> Result<(), String> {
     let current_version: i32 = conn.query_row(
         "PRAGMA user_version",
@@ -901,6 +926,97 @@ fn run_migrations(conn: &mut Connection) -> Result<(), String> {
         ).map_err(|e| e.to_string())?;
 
         tx.execute("PRAGMA user_version = 11", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    if current_version < 12 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        // SLICE 5b. Migration v12.
+        // Two new tables and two ALTER TABLE ... ADD COLUMN statements
+        // on communications. Each ALTER is preceded by a PRAGMA
+        // table_info check; the check is duplicate-column protection,
+        // not tamper detection. It does not verify type, nullability,
+        // or constraints.
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS send_reservations (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                debtor_id TEXT NOT NULL,
+                connector_code TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                reserved_at DATETIME NOT NULL,
+                released_at DATETIME,
+                release_reason TEXT
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_send_reservations_window
+                ON send_reservations(organization_id, debtor_id, channel, reserved_at)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_send_reservations_active
+                ON send_reservations(organization_id, debtor_id, channel, released_at)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS send_attempts (
+                id TEXT PRIMARY KEY,
+                recommendation_id TEXT NOT NULL,
+                reservation_id TEXT NOT NULL,
+                debtor_id TEXT NOT NULL,
+                organization_id TEXT NOT NULL,
+                connector_code TEXT NOT NULL,
+                attempted_at DATETIME NOT NULL,
+                state TEXT NOT NULL,
+                finalized_at DATETIME,
+                payload_snapshot BLOB,
+                FOREIGN KEY (recommendation_id) REFERENCES recommendations(id) ON DELETE RESTRICT,
+                FOREIGN KEY (reservation_id) REFERENCES send_reservations(id) ON DELETE RESTRICT
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_send_attempts_state
+                ON send_attempts(organization_id, state, attempted_at)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_send_attempts_recommendation
+                ON send_attempts(organization_id, recommendation_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        if !column_exists_tx(&tx, "communications", "connector_code")? {
+            tx.execute(
+                "ALTER TABLE communications ADD COLUMN connector_code TEXT",
+                [],
+            ).map_err(|e| e.to_string())?;
+        }
+
+        if !column_exists_tx(&tx, "communications", "send_attempt_id")? {
+            tx.execute(
+                "ALTER TABLE communications ADD COLUMN send_attempt_id TEXT",
+                [],
+            ).map_err(|e| e.to_string())?;
+        }
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_communications_send_attempt
+                ON communications(organization_id, send_attempt_id)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute("PRAGMA user_version = 12", [])
             .map_err(|e| e.to_string())?;
 
         tx.commit().map_err(|e| e.to_string())?;

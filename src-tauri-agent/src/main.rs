@@ -991,6 +991,12 @@ fn import_enrollment_package(
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
+            // A second Agent process was launched. The plugin exits
+            // that process before it touches any file. The first
+            // process continues running. No action required here;
+            // window-focus UX can be added later.
+        }))
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
