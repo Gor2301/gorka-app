@@ -1059,3 +1059,4 @@ mod tests {
         let after = get(&conn, ORG, &first.id).expect("get after");
         assert_eq!(after.status, RecommendationStatus::Rejected);
     }
+}
