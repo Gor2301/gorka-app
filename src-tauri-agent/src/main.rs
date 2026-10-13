@@ -989,6 +989,400 @@ fn import_enrollment_package(
     Ok(())
 }
 
+// ---------------------------------------------------------------------
+// Slice 5b Copilot commands
+// ---------------------------------------------------------------------
+
+#[derive(serde::Serialize)]
+struct RecommendationView {
+    id: String,
+    organization_id: String,
+    debtor_id: String,
+    ai_connector_code: String,
+    created_by: String,
+    source: String,
+    channel: gorka_shared::recommendation::Channel,
+    priority: gorka_shared::recommendation::Priority,
+    tone: gorka_shared::recommendation::Tone,
+    timing: gorka_shared::recommendation::Timing,
+    draft_subject: Option<String>,
+    draft_body: String,
+    rationale: Option<String>,
+    risk_flags: Vec<String>,
+    prompt_version: String,
+    status: String,
+    created_at: String,
+    decided_at: Option<String>,
+    superseded_by: Option<String>,
+    snapshot_hash: String,
+    uncertain_attempt_id: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct SendRecommendationInput {
+    recommendation_id: String,
+    connector_code: String,
+    to: String,
+    subject: Option<String>,
+    draft_body: String,
+}
+
+#[derive(serde::Serialize)]
+struct SendRecommendationResult {
+    communication_id: Option<String>,
+    attempt_id: String,
+    uncertain: bool,
+    failure_reason: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+struct ConfirmResult {
+    communication_id: Option<String>,
+    attempt_id: String,
+}
+
+#[derive(serde::Serialize)]
+struct CopilotProviderRow {
+    connector_code: String,
+    tier: String,
+    model: Option<String>,
+}
+
+fn view_from_row(
+    row: gorka_shared::recommendation_store::RecommendationRow,
+    uncertain_attempt_id: Option<String>,
+) -> RecommendationView {
+    use gorka_shared::recommendation_store::RecommendationStatus;
+    use gorka_shared::strategy::StrategySource;
+    let status = match row.status {
+        RecommendationStatus::Pending => "PENDING",
+        RecommendationStatus::Accepted => "ACCEPTED",
+        RecommendationStatus::Rejected => "REJECTED",
+        RecommendationStatus::Sent => "SENT",
+        RecommendationStatus::Expired => "EXPIRED",
+        RecommendationStatus::SendUncertain => "SEND_UNCERTAIN",
+    }
+    .to_string();
+    let source = match row.source {
+        StrategySource::Ai => "AI",
+        StrategySource::Fallback => "FALLBACK",
+    }
+    .to_string();
+    RecommendationView {
+        id: row.id,
+        organization_id: row.organization_id,
+        debtor_id: row.debtor_id,
+        ai_connector_code: row.ai_connector_code,
+        created_by: row.created_by,
+        source,
+        channel: row.channel,
+        priority: row.priority,
+        tone: row.tone,
+        timing: row.timing,
+        draft_subject: row.draft_subject,
+        draft_body: row.draft_body,
+        rationale: row.rationale,
+        risk_flags: row.risk_flags,
+        prompt_version: row.prompt_version,
+        status,
+        created_at: row.created_at.to_rfc3339(),
+        decided_at: row.decided_at.map(|d| d.to_rfc3339()),
+        superseded_by: row.superseded_by,
+        snapshot_hash: row.snapshot_hash,
+        uncertain_attempt_id,
+    }
+}
+
+#[tauri::command]
+fn analyze_debtor(
+    debtor_id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<RecommendationView, String> {
+    let org_id = get_trusted_organization_id(&app)?;
+    let user_id = crate::auth::get_user_id(app.clone())?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+
+    let selected = gorka_shared::copilot::select_ai_provider(conn, &org_id)
+        .map_err(|e| e.to_string())?;
+    let adapter = gorka_shared::copilot::build_selected_adapter(&selected)
+        .map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now();
+    let row = gorka_shared::copilot::analyze_debtor(
+        conn,
+        &org_id,
+        &debtor_id,
+        &selected.model,
+        adapter.as_ref(),
+        &user_id,
+        now,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(view_from_row(row, None))
+}
+
+#[tauri::command]
+fn list_recommendations_for_debtor(
+    debtor_id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<RecommendationView>, String> {
+    let org_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let rows = gorka_shared::recommendation_store::list_for_debtor(conn, &org_id, &debtor_id, 100)
+        .map_err(|e| format!("{:?}", e))?;
+
+    let mut views = Vec::with_capacity(rows.len());
+    for row in rows {
+        let uncertain: Option<String> = conn
+            .query_row(
+                "SELECT id FROM send_attempts
+                  WHERE organization_id = ?1 AND recommendation_id = ?2
+                    AND state = 'UNCERTAIN' LIMIT 1",
+                rusqlite::params![&org_id, &row.id],
+                |r| r.get(0),
+            )
+            .ok();
+        views.push(view_from_row(row, uncertain));
+    }
+    Ok(views)
+}
+
+#[tauri::command]
+fn decide_recommendation(
+    id: String,
+    decision: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let org_id = get_trusted_organization_id(&app)?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    let now = chrono::Utc::now();
+    match decision.as_str() {
+        "accept" => gorka_shared::recommendation_store::mark_accepted(conn, &org_id, &id, now)
+            .map_err(|e| format!("{:?}", e))?,
+        "reject" => gorka_shared::recommendation_store::mark_rejected(conn, &org_id, &id, now)
+            .map_err(|e| format!("{:?}", e))?,
+        other => return Err(format!("unknown decision: {}", other)),
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn send_recommendation(
+    input: SendRecommendationInput,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<SendRecommendationResult, String> {
+    let org_id = get_trusted_organization_id(&app)?;
+    let user_id = crate::auth::get_user_id(app.clone())?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    let now = chrono::Utc::now();
+
+    let rec = gorka_shared::recommendation_store::get(conn, &org_id, &input.recommendation_id)
+        .map_err(|e| format!("{:?}", e))?;
+
+    let disclosure = gorka_shared::compliance::get_disclosure_text(conn)
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
+    let final_body =
+        gorka_shared::compliance::append_disclosure_idempotent(&input.draft_body, &disclosure);
+
+    let subject_str = input.subject.as_deref().unwrap_or("");
+    let flags = gorka_shared::fact_validation::validate_draft(
+        conn,
+        &org_id,
+        &rec.debtor_id,
+        subject_str,
+        &final_body,
+        0,
+    )
+    .map_err(|e| format!("{:?}", e))?;
+    for flag in &flags {
+        match &flag.verification {
+            gorka_shared::fact_validation::Verification::Mismatch { .. } => {
+                return Err(format!(
+                    "draft has unresolved mismatch: {}",
+                    flag.matched_text
+                ));
+            }
+            gorka_shared::fact_validation::Verification::Unverifiable => {
+                return Err(format!(
+                    "draft has unverifiable claim: {}",
+                    flag.matched_text
+                ));
+            }
+            gorka_shared::fact_validation::Verification::Verified { .. } => {}
+        }
+    }
+
+    gorka_shared::compliance::check_opt_out(conn, &org_id, &rec.debtor_id, &input.connector_code)
+        .map_err(|block| block.user_message())?;
+
+    let channel = gorka_shared::compliance::channel_for_connector_code(&input.connector_code)
+        .ok_or_else(|| format!("unknown connector: {}", input.connector_code))?;
+    gorka_shared::send_safety::check_contact_limit(conn, &org_id, &rec.debtor_id, channel, now)
+        .map_err(|e| format!("{:?}", e))?;
+
+    let secret = gorka_shared::connectors::local_record::read_local_connector_credential(
+        conn,
+        &org_id,
+        &input.connector_code,
+    )
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| format!("connector {} is not enabled on this device", input.connector_code))?;
+
+    let from = secret
+        .configuration
+        .get("from")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Connector configuration has no 'from' field".to_string())?
+        .to_string();
+
+    let cred = gorka_shared::connectors::ConnectorCredential {
+        value: secret.credential_value.clone(),
+        configuration: secret.configuration.clone(),
+    };
+    let registry = gorka_shared::connectors::build_default_registry();
+    let factory = registry
+        .factory(&input.connector_code)
+        .ok_or_else(|| format!("No adapter registered for {}", input.connector_code))?;
+    let adapter = factory(cred).map_err(|e| format!("{:?}", e))?;
+
+    let snapshot = gorka_shared::send_safety::SendAttemptSnapshot {
+        to: input.to.clone(),
+        subject: input.subject.clone(),
+        from: from.clone(),
+        final_body: final_body.clone(),
+        connector_code: input.connector_code.clone(),
+        channel: channel.as_str().to_string(),
+        recommendation_id: input.recommendation_id.clone(),
+        debtor_id: rec.debtor_id.clone(),
+        created_at: now.to_rfc3339(),
+    };
+    let snapshot_bytes = snapshot.to_json().map_err(|e| format!("{:?}", e))?;
+
+    let (attempt, _reservation_id) = gorka_shared::send_safety::begin_send(
+        conn,
+        &org_id,
+        &rec.debtor_id,
+        &input.recommendation_id,
+        &input.connector_code,
+        &snapshot_bytes,
+        now,
+    )
+    .map_err(|e| format!("{:?}", e))?;
+
+    let send_request = gorka_shared::connectors::SendRequest {
+        to: input.to.clone(),
+        subject: input.subject.clone(),
+        from,
+        body: final_body.clone(),
+    };
+    let send_result = adapter.send(&send_request);
+
+    let attempt_id = attempt.id.clone();
+    match send_result {
+        Ok(result) if result.success => {
+            let comm_id =
+                gorka_shared::send_safety::finalize_success(conn, &org_id, &attempt_id, &user_id, now)
+                    .map_err(|e| format!("{:?}", e))?;
+            Ok(SendRecommendationResult {
+                communication_id: Some(comm_id),
+                attempt_id,
+                uncertain: false,
+                failure_reason: None,
+            })
+        }
+        Ok(_) => {
+            gorka_shared::send_safety::finalize_failure(conn, &org_id, &attempt_id, now)
+                .map_err(|e| format!("{:?}", e))?;
+            Ok(SendRecommendationResult {
+                communication_id: None,
+                attempt_id,
+                uncertain: false,
+                failure_reason: Some("provider reported failure".to_string()),
+            })
+        }
+        Err(e) => {
+            gorka_shared::send_safety::finalize_uncertain(conn, &org_id, &attempt_id, now)
+                .map_err(|e| format!("{:?}", e))?;
+            Ok(SendRecommendationResult {
+                communication_id: None,
+                attempt_id,
+                uncertain: true,
+                failure_reason: Some(format!("{:?}", e)),
+            })
+        }
+    }
+}
+
+#[tauri::command]
+fn list_copilot_providers(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<CopilotProviderRow>, String> {
+    let org_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+    let mut out = Vec::new();
+    for code in gorka_shared::copilot::AI_PROVIDER_CODES {
+        let row: Option<(String, String)> = conn
+            .query_row(
+                "SELECT tier, configuration FROM local_connectors
+                  WHERE organization_id = ?1 AND connector_code = ?2 AND status = 'ENABLED'",
+                rusqlite::params![&org_id, *code],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .ok();
+        if let Some((tier, config_str)) = row {
+            let model = serde_json::from_str::<serde_json::Value>(&config_str)
+                .ok()
+                .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from));
+            out.push(CopilotProviderRow {
+                connector_code: (*code).to_string(),
+                tier,
+                model,
+            });
+        }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn confirm_uncertain_attempt(
+    attempt_id: String,
+    delivered: bool,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<ConfirmResult, String> {
+    let org_id = get_trusted_organization_id(&app)?;
+    let user_id = crate::auth::get_user_id(app.clone())?;
+    let mut db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_mut().ok_or("Database not unlocked")?;
+    let now = chrono::Utc::now();
+    if delivered {
+        let comm_id = gorka_shared::send_safety::confirm_delivered(
+            conn, &org_id, &attempt_id, &user_id, now,
+        )
+        .map_err(|e| format!("{:?}", e))?;
+        Ok(ConfirmResult {
+            communication_id: Some(comm_id),
+            attempt_id,
+        })
+    } else {
+        gorka_shared::send_safety::confirm_not_delivered(conn, &org_id, &attempt_id, now)
+            .map_err(|e| format!("{:?}", e))?;
+        Ok(ConfirmResult {
+            communication_id: None,
+            attempt_id,
+        })
+    }
+}
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
@@ -1094,6 +1488,12 @@ fn main() {
             start_sync_engine,
             stop_sync_engine,
             sync_engine_status,
+            analyze_debtor,
+            list_recommendations_for_debtor,
+            decide_recommendation,
+            send_recommendation,
+            list_copilot_providers,
+            confirm_uncertain_attempt,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

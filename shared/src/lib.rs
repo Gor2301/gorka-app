@@ -40,6 +40,7 @@ pub mod sync_relay;
 pub mod sync_session;
 pub mod sync_transport;
 pub mod send_safety;
+pub mod copilot;
 
 pub mod recover;
 
