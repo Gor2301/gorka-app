@@ -1026,10 +1026,11 @@ mod tests {
     }
 
     #[test]
-    fn class_b_helpers_ignore_supersession() {
-        // Primitive-level behavior: Class B helpers do not consult
-        // superseded_by. Preserving REJECTED for a superseded
-        // recommendation is a Slice 5b caller obligation.
+    fn class_b_helpers_refuse_superseded_row_via_status() {
+        // Class B helpers do not separately check superseded_by. A
+        // superseded recommendation is already REJECTED, so the helper
+        // refuses on its status precondition. The effect is the same:
+        // a superseded row cannot be transitioned by a Class B helper.
         let mut conn = open_in_memory_for_tests().expect("db");
         seed_debtor(&conn);
         let first = insert_pending(&mut conn, ORG, D_ID, "gemini-ai", USER, &outcome(), t0())
@@ -1043,11 +1044,18 @@ mod tests {
         assert_eq!(before.status, RecommendationStatus::Rejected);
         assert!(before.superseded_by.is_some());
 
-        // Class B helper called directly transitions it to SENT, ignoring
-        // supersession. This is the primitive's documented behavior.
-        // Slice 5b's caller must not do this; it checks superseded_by first.
-        mark_sent(&mut conn, ORG, &first.id, t0()).expect("primitive does not refuse");
+        // Class B helper called directly refuses on status: the row is
+        // REJECTED, not ACCEPTED.
+        let err = mark_sent(&mut conn, ORG, &first.id, t0()).unwrap_err();
+        match err {
+            StoreError::WrongStatus { current, expected } => {
+                assert_eq!(current, RecommendationStatus::Rejected);
+                assert_eq!(expected, RecommendationStatus::Accepted);
+            }
+            other => panic!("expected WrongStatus, got {:?}", other),
+        }
+
+        // Status unchanged.
         let after = get(&conn, ORG, &first.id).expect("get after");
-        assert_eq!(after.status, RecommendationStatus::Sent);
+        assert_eq!(after.status, RecommendationStatus::Rejected);
     }
-}
