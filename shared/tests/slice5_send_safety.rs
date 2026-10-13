@@ -305,13 +305,19 @@ fn begin_send_requires_accepted() {
 #[test]
 fn begin_send_refuses_opt_out() {
     let mut conn = open_in_memory_for_tests().unwrap();
-    let rec_id = accepted_recommendation(&mut conn);
-    seed_local_connector(&conn);
+    // Set opt_out BEFORE insert_pending so the snapshot hash reflects
+    // it. Otherwise Phase 1 sees the changed hash and returns
+    // RecommendationExpired before Phase 2 reaches the opt-out check.
     conn.execute(
-        "UPDATE debtors SET data = ?1 WHERE id = ?2",
-        params![r#"{"opt_out":{"email":true,"sms":false,"voice":false}}"#, DEBTOR],
+        "INSERT OR IGNORE INTO debtors (id, organization_id, name, surname, email, phone,
+                                        data, deleted, created_at, updated_at)
+         VALUES (?1, ?2, 'X', 'Y', 'x@example.invalid', '+1',
+                 ?3, 'false', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        params![DEBTOR, ORG, r#"{"opt_out":{"email":true,"sms":false,"voice":false}}"#],
     )
     .unwrap();
+    let rec_id = accepted_recommendation(&mut conn);
+    seed_local_connector(&conn);
     let snap = valid_snapshot(&rec_id);
     let err = begin_send(&mut conn, ORG, DEBTOR, &rec_id, CONNECTOR, &snap, now()).unwrap_err();
     assert!(matches!(err, SafetyError::OptOut { .. }));

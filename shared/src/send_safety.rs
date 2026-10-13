@@ -822,12 +822,15 @@ fn finalize_success_impl(
             return Err(SafetyError::InconsistentFinalizedState { attempt_id: attempt_id.to_string() });
         }
         // Preserve REJECTED. Proceed.
-    } else if rec_status == "ACCEPTED" {
+    } else if rec_status == "ACCEPTED" || rec_status == "SEND_UNCERTAIN" {
+        // A confirmed delivery moves the recommendation to SENT,
+        // whether it was ACCEPTED (direct success) or SEND_UNCERTAIN
+        // (confirmed after an uncertain attempt).
         let rows = tx
             .execute(
                 "UPDATE recommendations SET status = 'SENT', decided_at = ?1
                   WHERE organization_id = ?2 AND id = ?3
-                    AND status = 'ACCEPTED' AND superseded_by IS NULL",
+                    AND status IN ('ACCEPTED','SEND_UNCERTAIN') AND superseded_by IS NULL",
                 params![now.to_rfc3339(), org_id, attempt.recommendation_id],
             )
             .map_err(|e| SafetyError::DbError(e.to_string()))?;
@@ -1051,6 +1054,32 @@ fn finalize_failure_impl(
         if rec_status != "REJECTED" {
             drop(tx);
             return Err(SafetyError::InconsistentFinalizedState { attempt_id: attempt_id.to_string() });
+        }
+    } else if rec_status == "SEND_UNCERTAIN" {
+        // A confirmed non-delivery after uncertainty returns the
+        // recommendation to ACCEPTED for retry. decided_at is
+        // preserved â€” the user's original acceptance time stands.
+        let rows = tx
+            .execute(
+                "UPDATE recommendations SET status = 'ACCEPTED'
+                  WHERE organization_id = ?1 AND id = ?2
+                    AND status = 'SEND_UNCERTAIN' AND superseded_by IS NULL",
+                params![org_id, attempt.recommendation_id],
+            )
+            .map_err(|e| SafetyError::DbError(e.to_string()))?;
+        if rows == 0 {
+            let recheck = load_recommendation_status(&tx, org_id, &attempt.recommendation_id)?;
+            match recheck {
+                None => { drop(tx); return Err(SafetyError::InconsistentFinalizedState { attempt_id: attempt_id.to_string() }); }
+                Some((s, sup)) => {
+                    if sup.is_some() || s == "ACCEPTED" {
+                        // fine
+                    } else {
+                        drop(tx);
+                        return Err(SafetyError::InconsistentFinalizedState { attempt_id: attempt_id.to_string() });
+                    }
+                }
+            }
         }
     } else {
         match rec_status.as_str() {
