@@ -2665,3 +2665,1072 @@ superseded by a new amendment that restores the original fields.
 ================================================================
 END OF §II.3 AMENDMENT
 ================================================================
+
+SLICE 5 — MINI SPEC v1.0 (FROZEN)
+Strategy Engine lifecycle, send safety, and the Copilot UI.
+
+Status: FROZEN 2026-10-13.
+Authority: Part II §II.11, §II.12, §II.13.3.
+Depends on: Slice 4 (frozen), Slice 1 (frozen), Slice 3 (frozen).
+Supersedes: every prior Slice 5 draft (v0.1 through v0.5).
+Does not reopen: Part I, CONNECTOR-EVENT-ORDER-SPEC, Slice 4, any frozen surface.
+
+1. Goal
+After Slice 5, the Agent can:
+
+Trigger an AI analysis of a specific debtor from the debtor profile page.
+
+Receive a persisted recommendation (PENDING initially; ACCEPTED on agent approval; REJECTED on discard).
+
+Edit the drafted message, resolve fact-validation flags, and send it through the existing connector stack with all §II.11.3 preconditions enforced in Rust.
+
+Survive a crash mid-send without leaving a communication row out of sync with the attempt record.
+
+Recover from an uncertain send attempt by confirming or denying delivery.
+
+See contact-limit enforcement applied to Copilot sends.
+
+See the AI provider status page in the sidebar.
+
+No cloud AI. No new sync events. No change to the connector stack. No new wire formats.
+
+2. Scope discipline
+In scope:
+
+Local tables: recommendations (v11), send_reservations and send_attempts (v12).
+
+Two new nullable columns on communications (v12): connector_code TEXT, send_attempt_id TEXT.
+
+Persistence and lifecycle for recommendations.
+
+Expiration snapshot with SHA-256.
+
+The send command send_recommendation with the seven active preconditions.
+
+Reservation-then-attempt pattern.
+
+Startup recovery scan.
+
+Contact-limit storage (existing compliance_rules columns) plus enforcement and per-device editor UI.
+
+Copilot panel on the debtor profile.
+
+Copilot status page in the sidebar.
+
+Refusal semantics: if the AI connector is disabled mid-session, the analysis command returns a clear user-facing refusal.
+
+Out of scope:
+
+Sync of recommendations or attempts to other devices (§II.15).
+
+Cross-device reconciliation of contact limits (§II.13.3).
+
+New event types.
+
+Any change to send_connector_message (the raw-send command).
+
+The two-placeholder pattern (§II.4.8). Deferred.
+
+Auto-retries.
+
+Any quiet-hours enforcement (Part II §II.13.6).
+
+Secure erasure of the payload snapshot from SQLite journals, WAL files, or storage media. This spec performs logical deletion only (sets the column to NULL). Physical erasure is a separate concern.
+
+Multi-process access to the local Agent database. Slice 5 requires single-instance ownership of the Agent application (§7). If two instances can open the same SQLCipher file, the recovery contract below does not hold, and a lease-based protocol would be required — deferred.
+
+3. Files
+New (Rust, shared):
+
+shared/src/recommendation_store.rs
+
+shared/src/send_safety.rs
+
+shared/src/copilot.rs
+
+shared/tests/slice5_recommendation_store.rs
+
+shared/tests/slice5_send_safety.rs
+
+New (Rust, agent binary):
+
+Six new #[command] fns in src-tauri-agent/src/main.rs.
+
+If the Agent binary does not currently enforce single-instance, tauri-plugin-single-instance is added in Phase 5b. Precondition of Phase 5b's STOP gate.
+
+New (TypeScript, agent-dashboard):
+
+src/components/CopilotPanel.tsx + .css
+
+src/components/CopilotFlagList.tsx + .css
+
+src/pages/CopilotPage.tsx + .css
+
+src/services/local.db.ts additions
+
+Edited:
+
+shared/src/db.rs — migration v11 (Phase 5a); migration v12 (Phase 5b).
+
+shared/src/communications.rs — new insert_communication_in_tx(&Transaction, ...); existing insert_communication becomes a thin wrapper.
+
+shared/src/lib.rs — three pub mod.
+
+agent-dashboard/src/pages/DebtorProfilePage.tsx — mount CopilotPanel Card.
+
+agent-dashboard/src/components/SendMessageModal.tsx — optional prefill prop.
+
+agent-dashboard/src/components/Sidebar.tsx — one new nav item.
+
+agent-dashboard/src/App.tsx — one new route.
+
+Not touched: strategy.rs, fact_validation.rs, claim_resolution.rs, prompts.rs, any adapter, any sync module, src-tauri/src/main.rs.
+
+Dependency added: sha2 = "0.10" in shared/Cargo.toml.
+
+4. Decisions locked
+Two-placeholder pattern. Deferred. Slice 5 ships without it.
+
+Superseded definition. Any other PENDING or ACCEPTED recommendation for the same organization and debtor is superseded by a new insertion, inside the same transaction, by explicit status transition to REJECTED and superseded_by = new_id. No timestamp comparison.
+
+Validation consumption. Rust re-runs validation against the exact final payload. Frontend resolution records are advisory.
+
+Rationale/risk_flags. Columns on the recommendation row. risk_flags as a validated JSON array. Rationale labeled "AI explanation — unverified".
+
+Contact-limit editor. Agent Settings page. Effective limit displayed read-only in the debtor Copilot panel.
+
+Discard-from-ACCEPTED. Not offered in Slice 5. mark_rejected accepts only PENDING. After CONFIRMED_FAILURE, the recommendation returns to ACCEPTED and remains available for retry until expiry. Any future discard-from-ACCEPTED requires an explicit state-machine change.
+
+5. Schema
+5.1 Migration v11 — Phase 5a
+sql
+CREATE TABLE IF NOT EXISTS recommendations (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL,
+    debtor_id TEXT NOT NULL,
+    ai_connector_code TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+
+    source TEXT NOT NULL,                -- 'AI' | 'FALLBACK'
+    channel TEXT NOT NULL,
+    priority TEXT NOT NULL,
+    tone TEXT NOT NULL,
+    timing TEXT NOT NULL,
+    draft_subject TEXT,
+    draft_body TEXT NOT NULL,
+    rationale TEXT,
+    risk_flags TEXT NOT NULL DEFAULT '[]',
+    prompt_version TEXT NOT NULL,
+
+    status TEXT NOT NULL,                -- PENDING | ACCEPTED | REJECTED | SENT | EXPIRED | SEND_UNCERTAIN
+    created_at DATETIME NOT NULL,
+    decided_at DATETIME,
+    superseded_by TEXT,
+
+    snapshot_hash TEXT NOT NULL,
+
+    FOREIGN KEY (debtor_id) REFERENCES debtors(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_recommendations_debtor
+    ON recommendations(organization_id, debtor_id, created_at DESC);
+CREATE INDEX idx_recommendations_org_status
+    ON recommendations(organization_id, status);
+Version gate: if current_version < 11 { ... PRAGMA user_version = 11 ... }. Transactional. Idempotent.
+
+5.2 Migration v12 — Phase 5b
+sql
+CREATE TABLE IF NOT EXISTS send_reservations (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL,
+    debtor_id TEXT NOT NULL,
+    connector_code TEXT NOT NULL,
+    channel TEXT NOT NULL,               -- 'email' | 'sms' | 'voice'
+    reserved_at DATETIME NOT NULL,
+    released_at DATETIME,
+    release_reason TEXT                  -- 'CONVERTED' | 'RELEASED' | NULL
+);
+CREATE INDEX idx_send_reservations_window
+    ON send_reservations(organization_id, debtor_id, channel, reserved_at);
+CREATE INDEX idx_send_reservations_active
+    ON send_reservations(organization_id, debtor_id, channel, released_at);
+
+CREATE TABLE IF NOT EXISTS send_attempts (
+    id TEXT PRIMARY KEY,
+    recommendation_id TEXT NOT NULL,
+    reservation_id TEXT NOT NULL,
+    debtor_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL,
+    connector_code TEXT NOT NULL,        -- the DELIVERY provider for this attempt
+    attempted_at DATETIME NOT NULL,
+    state TEXT NOT NULL,                 -- IN_PROGRESS | CONFIRMED_SUCCESS | CONFIRMED_FAILURE | UNCERTAIN
+    finalized_at DATETIME,
+    payload_snapshot BLOB,               -- NULL after terminal finalization
+    FOREIGN KEY (recommendation_id) REFERENCES recommendations(id) ON DELETE RESTRICT,
+    FOREIGN KEY (reservation_id) REFERENCES send_reservations(id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_send_attempts_state
+    ON send_attempts(organization_id, state, attempted_at);
+CREATE INDEX idx_send_attempts_recommendation
+    ON send_attempts(organization_id, recommendation_id);
+
+ALTER TABLE communications ADD COLUMN connector_code TEXT;
+ALTER TABLE communications ADD COLUMN send_attempt_id TEXT;
+CREATE INDEX idx_communications_send_attempt
+    ON communications(organization_id, send_attempt_id);
+Deletion contract (table comment):
+
+A recommendation with a linked send attempt cannot be deleted. Every attempt is retained for the lifetime of its recommendation, in every state. Terminal attempts are not purged.
+
+Consequence: deleting a debtor whose recommendations have linked attempts fails. This is the intended behavior: the system refuses to silently destroy the evidence of a send, whether confirmed, failed, or uncertain. The UI surfaces the constraint at the point of debtor deletion as Cannot delete: this debtor has send attempts on record.
+
+Idempotence. Version-gated. Transactional. Each v11 and v12 block is preceded by a defensive column-existence check via PRAGMA table_info for any ALTER TABLE ADD COLUMN; if a column already exists, the corresponding statement is skipped. This is duplicate-column protection, not tamper detection. It does not verify type, nullability, or constraints.
+
+6. Module recommendation_store.rs
+6.1 Public types
+rust
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecommendationStatus {
+    Pending, Accepted, Rejected, Sent, Expired, SendUncertain,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecommendationRow {
+    pub id: String,
+    pub organization_id: String,
+    pub debtor_id: String,
+    pub ai_connector_code: String,
+    pub created_by: String,
+    pub source: StrategySource,
+    pub channel: Channel,
+    pub priority: Priority,
+    pub tone: Tone,
+    pub timing: Timing,
+    pub draft_subject: Option<String>,
+    pub draft_body: String,
+    pub rationale: Option<String>,
+    pub risk_flags: Vec<String>,
+    pub prompt_version: String,
+    pub status: RecommendationStatus,
+    pub created_at: DateTime<Utc>,
+    pub decided_at: Option<DateTime<Utc>>,
+    pub superseded_by: Option<String>,
+    pub snapshot_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StoreError {
+    NotFound,
+    Superseded(String),
+    Expired,
+    WrongStatus {
+        current: RecommendationStatus,
+        expected: RecommendationStatus,
+    },
+    DbError(String),
+}
+
+pub const EXPIRATION_WINDOW_HOURS: i64 = 72;
+6.2 Public functions
+rust
+pub fn insert_pending(
+    conn: &mut Connection,
+    org_id: &str,
+    debtor_id: &str,
+    ai_connector_code: &str,
+    created_by: &str,
+    outcome: &StrategyOutcome,
+    now: DateTime<Utc>,
+) -> Result<RecommendationRow, StoreError>;
+
+pub fn get(conn: &Connection, org_id: &str, id: &str) -> Result<RecommendationRow, StoreError>;
+
+pub fn list_for_debtor(
+    conn: &Connection,
+    org_id: &str,
+    debtor_id: &str,
+    limit: usize,
+) -> Result<Vec<RecommendationRow>, StoreError>;
+
+// Class A — user-driven transitions. Refuse a superseded row.
+pub fn mark_accepted(conn: &mut Connection, org_id: &str, id: &str, now: DateTime<Utc>) -> Result<(), StoreError>;
+pub fn mark_rejected(conn: &mut Connection, org_id: &str, id: &str, now: DateTime<Utc>) -> Result<(), StoreError>;
+
+// Class B — attempt finalization transitions.
+// pub(crate). Callable only from send_safety.
+pub(crate) fn mark_sent(conn: &mut Connection, org_id: &str, id: &str, now: DateTime<Utc>) -> Result<(), StoreError>;
+pub(crate) fn mark_send_uncertain(conn: &mut Connection, org_id: &str, id: &str, now: DateTime<Utc>) -> Result<(), StoreError>;
+
+pub fn check_freshness(conn: &mut Connection, org_id: &str, id: &str, now: DateTime<Utc>) -> Result<(), StoreError>;
+
+pub fn compute_snapshot_hash(conn: &Connection, org_id: &str, debtor_id: &str) -> Result<String, StoreError>;
+6.3 insert_pending semantics
+text
+BEGIN.
+1. new_id := Uuid::new_v4().
+2. snapshot_hash := compute_snapshot_hash(conn, org_id, debtor_id)?.
+3. UPDATE recommendations
+     SET status = 'REJECTED',
+         decided_at = ?now,
+         superseded_by = ?new_id
+     WHERE organization_id = ?
+       AND debtor_id = ?
+       AND id != ?new_id
+       AND status IN ('PENDING', 'ACCEPTED').
+4. INSERT INTO recommendations (...) VALUES (...).
+COMMIT.
+Supersession runs before the INSERT so the new id is available and the UPDATE cannot target the new row. Both statements commit together.
+
+source mapped from StrategySource::Ai → 'AI', StrategySource::Fallback → 'FALLBACK'. Enum mappings by explicit match against canonical strings; any future variant added to those enums fails to compile here, which is the desired safety net.
+
+risk_flags serialized with serde_json::to_string. Empty vec → '[]'.
+
+6.4 Transition rules
+Function	Class	Precondition on status	Precondition on superseded_by	New status
+mark_accepted	A	PENDING	IS NULL	ACCEPTED, decided_at = now
+mark_rejected	A	PENDING	IS NULL	REJECTED, decided_at = now
+mark_sent	B	ACCEPTED	ignored	SENT, decided_at = now
+mark_send_uncertain	B	ACCEPTED	ignored	SEND_UNCERTAIN, decided_at = now
+Any status precondition failure → WrongStatus { current, expected }. A row with superseded_by IS NOT NULL on a Class A call → Superseded(new_id).
+
+mark_rejected is PENDING-only. No in-flight guard is provided or needed: begin_send requires ACCEPTED, so a PENDING row cannot have a linked IN_PROGRESS attempt. After a CONFIRMED_FAILURE returns a recommendation to ACCEPTED, the recommendation is available for retry; it is not user-rejectable. Discard-from-ACCEPTED is not offered in Slice 5.
+
+All transitions are scoped by (organization_id, id). Wrong-org id → NotFound.
+
+6.5 check_freshness
+text
+1. Load row (org, id). Not found → NotFound.
+2. If status = EXPIRED → return Err(Expired).
+3. If status is not ACCEPTED or PENDING → return Ok(()) (freshness is only
+   meaningful for sendable states).
+4. current_hash := compute_snapshot_hash(current DB state).
+5. If current_hash != row.snapshot_hash OR (now - row.created_at).num_hours() > 72:
+     BEGIN.
+     UPDATE recommendations SET status='EXPIRED', decided_at=?now
+       WHERE organization_id=? AND id=? AND status IN ('ACCEPTED','PENDING').
+     COMMIT.
+     Return Err(Expired).
+6. Return Ok(()).
+The UPDATE commits before Err(Expired) is returned. A stale recommendation is not left apparently sendable.
+
+6.6 Snapshot specification
+Canonical JSON structure (keys alphabetical at every level; produced via serde_jcs::to_string):
+
+json
+{
+  "amount_cents_total": <i64>,
+  "communication_count": <i64>,
+  "debt_status_counts": { "<STATUS>": <i64>, ... },
+  "debtor_id": "<string>",
+  "opt_out": { "email": <bool>, "sms": <bool>, "voice": <bool> }
+}
+Field sources:
+
+amount_cents_total: sum of debts.amount for debts with status NOT IN ('PAID','CANCELLED') and currency == primary_currency, converted to cents. Primary currency matches context.rs: most common among unpaid debts; ties alphabetical. No unpaid debts → 0.
+
+communication_count: COUNT(*) from communications for the debtor, all types including NOTE.
+
+debt_status_counts: SELECT status, COUNT(*) FROM debts WHERE debtor_id=? GROUP BY status. BTreeMap; JCS sorts keys.
+
+debtor_id: literal.
+
+opt_out: from debtors.data.opt_out; missing keys false; malformed data → all three false. The snapshot is a data-reduction, not a policy decision; a stable conservative hash is the correct outcome.
+
+Hash: sha2::Sha256 over the JCS-serialized bytes; hex lowercase, 64 chars.
+
+Cents conversion:
+
+rust
+fn to_cents(amount: f64) -> Result<i64, StoreError> {
+    const MAX_ABS_AMOUNT: f64 = 1_000_000_000_000.0;
+    if !amount.is_finite() || amount.abs() > MAX_ABS_AMOUNT {
+        return Err(StoreError::DbError(
+            "debt amount outside supported range".to_string(),
+        ));
+    }
+    Ok((amount * 100.0).round() as i64)
+}
+Sum uses checked_add; overflow → DbError("snapshot amount overflow"). Error messages never include the offending amount.
+
+6.7 Module header
+Documents: the Class A vs Class B distinction and the reason (attempt finalization must remain possible on a superseded row; user-driven transitions must not revive one); the snapshot canonical form and hash; the pub(crate) visibility of Class B helpers.
+
+7. Module send_safety.rs
+7.1 Single-instance precondition
+Slice 5 requires at most one Agent process can open the local database at any time. Under this precondition:
+
+At startup, any send_attempts row in IN_PROGRESS is, by definition, an orphan from a prior process that has exited. No timestamp threshold, no process identity.
+
+At any other moment, there are no orphan IN_PROGRESS rows: every such row belongs to the current process and its provider call is either active or about to finalize.
+
+The claim is "no other process can be running now," enforced by the plugin, not by a heuristic.
+
+7.2 Types
+rust
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttemptState {
+    InProgress, ConfirmedSuccess, ConfirmedFailure, Uncertain,
+}
+
+pub struct AttemptRow {
+    pub id: String,
+    pub recommendation_id: String,          // NOT NULL
+    pub reservation_id: String,
+    pub debtor_id: String,
+    pub organization_id: String,
+    pub connector_code: String,
+    pub attempted_at: DateTime<Utc>,
+    pub state: AttemptState,
+    pub finalized_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SafetyError {
+    ContactLimitExceeded { limit: i64, window_hours: i64, current: i64 },
+    RecommendationNotAccepted,
+    RecommendationExpired,
+    RecommendationSuperseded(String),
+    OptOut { channel: Channel },
+    ConnectorNotEnabled,
+    AttemptNotConfirmable,
+    AttemptNotFound,
+    SnapshotMissing,
+    SnapshotInvalid,
+    InconsistentFinalizedState { attempt_id: String },
+    DbError(String),
+}
+
+pub const RECOVER_AFTER_MINUTES: i64 = 30;  // retained for logging; not used as a filter
+7.3 Public functions
+rust
+pub fn check_contact_limit(
+    conn: &Connection,
+    org_id: &str,
+    debtor_id: &str,
+    channel: Channel,
+    now: DateTime<Utc>,
+) -> Result<(), SafetyError>;
+
+pub fn begin_send(
+    conn: &mut Connection,
+    org_id: &str,
+    debtor_id: &str,
+    recommendation_id: &str,
+    connector_code: &str,
+    payload_snapshot: &[u8],
+    now: DateTime<Utc>,
+) -> Result<(AttemptRow, String), SafetyError>;
+
+pub fn finalize_success(
+    conn: &mut Connection,
+    org_id: &str,
+    attempt_id: &str,
+    created_by: &str,
+    now: DateTime<Utc>,
+) -> Result<String, SafetyError>;
+
+pub fn finalize_failure(
+    conn: &mut Connection,
+    org_id: &str,
+    attempt_id: &str,
+    now: DateTime<Utc>,
+) -> Result<(), SafetyError>;
+
+pub fn finalize_uncertain(
+    conn: &mut Connection,
+    org_id: &str,
+    attempt_id: &str,
+    now: DateTime<Utc>,
+) -> Result<(), SafetyError>;
+
+pub fn confirm_delivered(
+    conn: &mut Connection,
+    org_id: &str,
+    attempt_id: &str,
+    created_by: &str,
+    now: DateTime<Utc>,
+) -> Result<String, SafetyError>;
+
+pub fn confirm_not_delivered(
+    conn: &mut Connection,
+    org_id: &str,
+    attempt_id: &str,
+    now: DateTime<Utc>,
+) -> Result<(), SafetyError>;
+
+pub fn recover_at_startup(
+    conn: &mut Connection,
+    now: DateTime<Utc>,
+) -> Result<u32, SafetyError>;
+
+pub fn read_snapshot(
+    conn: &Connection,
+    org_id: &str,
+    attempt_id: &str,
+) -> Result<Vec<u8>, SafetyError>;
+recover_at_startup takes no org_id: it scans the whole local database. The Agent may be single-org today, but recovery must not silently leave other orgs' attempts unresolved.
+
+7.4 begin_send — two-phase freshness
+text
+Phase 1 (freshness check, separate committed transaction):
+
+1. Load recommendation (org, id).
+2. Recompute snapshot.
+3. If snapshot changed OR window exceeded OR superseded:
+     BEGIN.
+     UPDATE recommendations SET status='EXPIRED', decided_at=?now
+       WHERE organization_id=? AND id=? AND status='ACCEPTED'.
+     COMMIT.
+     Return Err(RecommendationExpired).
+   Else proceed to Phase 2.
+
+Phase 2 (transactional reservation + attempt):
+
+BEGIN.
+4. SELECT recommendation. Require status='ACCEPTED', superseded_by IS NULL.
+5. Re-run check_opt_out → on block, rollback, Err(OptOut).
+6. Re-run check_contact_limit → on block, rollback, Err(ContactLimitExceeded).
+7. Re-verify connector ENABLED → on failure, rollback, Err(ConnectorNotEnabled).
+8. INSERT reservation (released_at=NULL).
+9. INSERT attempt (state='IN_PROGRESS', payload_snapshot=?).
+COMMIT.
+Return (AttemptRow, reservation_id).
+The Phase 1 commit is deliberate: a stale recommendation is not left apparently sendable. The Phase 1 UPDATE is a no-op if the status is no longer ACCEPTED; the caller still receives RecommendationExpired. Failure at any Phase 2 step leaves no reservation and no attempt.
+
+7.5 recover_at_startup
+Runs once, after DB unlock and before any command can execute against the database (see §7.11).
+
+text
+BEGIN.
+1. SELECT id, organization_id, recommendation_id FROM send_attempts
+     WHERE state = 'IN_PROGRESS'.
+   Under the single-instance precondition every such row is an orphan.
+   No time, process, or organization filter.
+2. transitioned := 0.
+3. For each attempt:
+   a. UPDATE send_attempts SET state='UNCERTAIN' WHERE id=?.
+   b. transitioned += 1.
+   c. Load recommendation (attempt.recommendation_id, attempt.organization_id).
+      If not found → rollback, Err(InconsistentFinalizedState { attempt_id }).
+      If recommendation.superseded_by IS NOT NULL: no status change.
+      Else if recommendation.status = 'ACCEPTED':
+        UPDATE recommendations SET status='SEND_UNCERTAIN' WHERE id=?.
+      Else: no status change.
+COMMIT.
+Return transitioned.
+Return value: the number actually transitioned from IN_PROGRESS to UNCERTAIN in this call. Idempotent: a second call selects zero rows. Never calls the provider.
+
+A missing recommendation row is a data-integrity failure, not a normal case. Rollback, no silent skip, no partial recovery.
+
+7.6 finalize_success and confirm_delivered — snapshot-derived
+text
+BEGIN.
+1. Load attempt (org, id).
+   finalize_success: require state IN_PROGRESS.
+   confirm_delivered: require state UNCERTAIN.
+   Idempotent case: if state is already CONFIRMED_SUCCESS, look up the
+   linked communication and return its id. If none is found, return
+   Err(InconsistentFinalizedState { attempt_id }).
+2. Load snapshot. If NULL → rollback, Err(SnapshotMissing).
+3. Parse with SendAttemptSnapshot::from_json (deny_unknown_fields).
+   Any parse failure → rollback, Err(SnapshotInvalid).
+4. Cross-record validation:
+   a. snapshot.connector_code == attempt.connector_code.
+   b. snapshot.recommendation_id == attempt.recommendation_id.
+   c. snapshot.debtor_id == attempt.debtor_id.
+   d. snapshot.debtor_id == reservation.debtor_id.
+   e. channel_for_connector_code(snapshot.connector_code)
+        == Some(channel_from(snapshot.channel)).
+   f. attempt.organization_id == org_id
+        == reservation.organization_id
+        == recommendation.organization_id.
+   g. recommendation.debtor_id == attempt.debtor_id.
+   Any failure → rollback, Err(SnapshotInvalid).
+5. Load recommendation. If superseded_by IS NOT NULL:
+     do not change recommendation status.
+   Else if recommendation.status = 'ACCEPTED':
+     UPDATE recommendations SET status='SENT' WHERE id=?.
+   Else:
+     leave unchanged.
+6. insert_communication_in_tx with:
+     content     = snapshot.final_body
+     subject     = snapshot.subject
+     to          = snapshot.to
+     connector_code  = attempt.connector_code
+     send_attempt_id = attempt.id
+     type        = channel_for_connector_code(attempt.connector_code)
+7. UPDATE send_attempts
+     SET state='CONFIRMED_SUCCESS', finalized_at=?now, payload_snapshot=NULL
+     WHERE id=?.
+8. UPDATE send_reservations
+     SET released_at=?now, release_reason='CONVERTED'
+     WHERE id=?.
+COMMIT.
+The communication body is taken from the snapshot, never from the frontend.
+
+Snapshot structure:
+
+rust
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SendAttemptSnapshot {
+    pub to: String,
+    pub subject: Option<String>,
+    pub from: String,
+    pub final_body: String,
+    pub connector_code: String,
+    pub channel: String,
+    pub recommendation_id: String,
+    pub debtor_id: String,
+    pub created_at: String,
+}
+No credential or authorization token is in the snapshot. from is the sender address, not a secret. A unit test asserts the serialized snapshot JSON contains none of the credential bytes.
+
+7.7 finalize_failure and confirm_not_delivered
+text
+BEGIN.
+1. Load attempt (org, id). Require the relevant source state
+   (IN_PROGRESS for finalize; UNCERTAIN for confirm).
+   Idempotent case: already CONFIRMED_FAILURE → verify the reservation is
+   released with release_reason='RELEASED'. Otherwise → Err(InconsistentFinalizedState).
+2. Load recommendation.
+3. If recommendation.superseded_by IS NOT NULL:
+     UPDATE recommendations SET status='REJECTED', decided_at=?now WHERE id=?.
+   Else:
+     UPDATE recommendations SET status='ACCEPTED', decided_at=?now WHERE id=?.
+4. UPDATE send_attempts
+     SET state='CONFIRMED_FAILURE', finalized_at=?now, payload_snapshot=NULL
+     WHERE id=?.
+5. UPDATE send_reservations
+     SET released_at=?now, release_reason='RELEASED'
+     WHERE id=?.
+COMMIT.
+A superseded recommendation never silently returns to a usable state. The attempt is finalized; the recommendation remains REJECTED.
+
+7.8 finalize_uncertain — supersession preserved
+text
+BEGIN.
+1. Load attempt (org, id). Require state IN_PROGRESS. Already UNCERTAIN → no-op Ok.
+2. UPDATE send_attempts SET state='UNCERTAIN', finalized_at=NULL WHERE id=?.
+3. Load recommendation.
+   If superseded_by IS NOT NULL: no status change (remains REJECTED).
+   Else if status = 'ACCEPTED':
+     UPDATE recommendations SET status='SEND_UNCERTAIN' WHERE id=?.
+   Else: no status change.
+4. Reservation retained.
+COMMIT.
+Explicit rule: a recommendation superseded while its attempt was in flight stays REJECTED after the attempt becomes UNCERTAIN. The attempt remains visible, retains its snapshot, and permits confirmation. The UI surfaces unresolved attempts independently of the recommendation's status.
+
+7.9 Manual confirmation gate
+confirm_delivered and confirm_not_delivered accept only state='UNCERTAIN'. Any other state → Err(AttemptNotConfirmable). Crash recovery flow: recover_at_startup first, then confirmation.
+
+7.10 read_snapshot gate
+Returns Err(SnapshotMissing) if the attempt's payload_snapshot IS NULL, and Err(AttemptNotConfirmable) if the state is not UNCERTAIN. It exists only for the recovery display flow. It is not a message-history API.
+
+7.11 Single-instance startup contract
+Required ordering in the Agent startup sequence:
+
+Process launched.
+
+Single-instance enforcement takes effect. If another instance already holds the app, this launch exits before touching any file.
+
+SQLCipher database opened with its key.
+
+run_migrations executes.
+
+recover_at_startup runs.
+
+Tauri command handlers become callable.
+
+UI is enabled.
+
+Invariant: no command that reads or writes send_attempts can execute before step 5 completes. The exact mechanism that enforces step 6 (tauri::Builder ordering vs. a startup state flag) is verified in reconnaissance at the start of Phase 5b. The contract requires the invariant; the implementation chooses the mechanism.
+
+7.12 Contact-limit counting
+Counts reservations where:
+
+reserved_at >= now - {24|168|720}h from compliance_rules.contact_limit_period (DAY/WEEK/MONTH), AND
+
+released_at IS NULL (held, including uncertain), OR
+
+release_reason = 'CONVERTED' (successful contacts).
+
+Excludes release_reason = 'RELEASED' (known failures).
+
+All queries scope by organization_id first.
+
+7.13 Idempotent finalization
+All four finalization functions check state at step 1. If already in the target terminal state:
+
+finalize_success / confirm_delivered on CONFIRMED_SUCCESS: return the linked communication id. If absent → Err(InconsistentFinalizedState).
+
+finalize_failure / confirm_not_delivered on CONFIRMED_FAILURE: verify reservation released with release_reason='RELEASED'. Otherwise → Err(InconsistentFinalizedState).
+
+finalize_uncertain on UNCERTAIN: no-op Ok.
+
+Prevents duplicate communications and duplicate COMMUNICATION_LOGGED events.
+
+8. Module copilot.rs
+rust
+pub fn analyze_debtor(
+    conn: &mut Connection,
+    org_id: &str,
+    debtor_id: &str,
+    model: &str,
+    adapter: &dyn ConnectorAdapter,
+    now: DateTime<Utc>,
+) -> Result<RecommendationRow, CopilotError>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CopilotError {
+    AiConnectorUnavailable,
+    NoDebtor,
+    StoreError(String),
+    DbError(String),
+}
+Flow:
+
+Confirm at least one AI connector is enabled and can be constructed. If none → Err(AiConnectorUnavailable).
+
+strategy::analyze(...).
+
+recommendation_store::insert_pending(...) (which supersedes prior in the same transaction).
+
+Return the row.
+
+AI connector selection: first enabled connector in the catalog whose code is a registered AI provider, ordered gemini-ai, then openai-compatible, then any future entries in registration order. The selected code is recorded as ai_connector_code on the recommendation row.
+
+analyze_debtor neither receives nor stores any process identity.
+
+9. Command surface
+Six new #[command] fns in src-tauri-agent/src/main.rs:
+
+rust
+#[command] fn analyze_debtor(debtor_id: String, app, state) -> Result<RecommendationRow, String>;
+
+#[command] fn list_recommendations_for_debtor(
+    debtor_id: String,
+    app,
+    state,
+) -> Result<Vec<RecommendationView>, String>;
+
+#[command] fn decide_recommendation(id: String, decision: String, app, state) -> Result<(), String>;
+
+#[command] fn send_recommendation(
+    input: SendRecommendationInput,
+    app,
+    state,
+) -> Result<SendRecommendationResult, String>;
+
+#[command] fn list_copilot_providers(app, state) -> Result<Vec<CopilotProviderRow>, String>;
+
+#[command] fn confirm_uncertain_attempt(
+    attempt_id: String,
+    delivered: bool,
+    app,
+    state,
+) -> Result<ConfirmResult, String>;
+rust
+pub struct SendRecommendationInput {
+    pub recommendation_id: String,
+    pub connector_code: String,          // DELIVERY provider
+    pub to: String,
+    pub subject: Option<String>,
+    pub draft_body: String,              // raw, no disclosure applied
+}
+
+pub struct SendRecommendationResult {
+    pub communication_id: Option<String>,
+    pub attempt_id: String,
+    pub uncertain: bool,
+    pub failure_reason: Option<String>,
+}
+
+pub struct ConfirmResult {
+    pub communication_id: Option<String>,
+    pub attempt_id: String,
+}
+
+pub struct RecommendationView {
+    pub row: RecommendationRow,
+    pub uncertain_attempt_id: Option<String>,  // populated when an UNCERTAIN attempt is linked
+}
+list_recommendations_for_debtor returns every status, ordered created_at DESC. RecommendationView carries the optional uncertain attempt id so the UI can surface the confirm/deny buttons even when the recommendation is REJECTED.
+
+confirm_uncertain_attempt carries no process identity, no body, no subject. Actor identity comes from get_user_id(app).
+
+send_recommendation flow:
+
+text
+1. Load recommendation (org, id). Require ACCEPTED, not superseded.
+2. Read disclosure_text from compliance_rules.
+3. final_body := append_disclosure_idempotent(&input.draft_body, &disclosure_text).
+4. validate_draft(conn, org_id, debtor_id, subject, final_body, 0).
+   Block on Mismatch or Unverifiable. Verified flags do not block.
+   (draft_id = 0: Slice 4's draft_id is UI-only bookkeeping for resolve_claim's
+    stale-flag check. The send-time gate revalidates the exact final payload;
+    the value is inert here.)
+5. Read-only preflight: check_opt_out, check_contact_limit, connector enabled.
+6. Read credential. Build adapter. Any failure → return Err, nothing written.
+7. Canonicalize the exact final payload (to, subject, final_body, connector_code,
+   from). begin_send handles Phase 1 freshness and Phase 2 reservation+attempt.
+8. adapter.send(&SendRequest{ to, subject, from, body: final_body }).
+9. On Ok(success=true)  → finalize_success(conn, org, attempt_id, user_id, now).
+   On Ok(success=false) → finalize_failure(conn, org, attempt_id, now).
+   On Err(_)            → finalize_uncertain(conn, org, attempt_id, now).
+Bounded claim wording (module header):
+
+The send-time gate enforces the implemented verification rules. It does not guarantee factual correctness in every possible draft. A claim that does not match a supported Slice 4 claim type is not detected, not flagged, not blocked. The absence of a blocking flag is not proof of truth.
+
+"Sent via" in the UI reads from the communication row's connector_code, or from the linked send_attempt.connector_code. Never from recommendation.ai_connector_code. The two roles are distinct in the schema and never merged for display.
+
+10. Preconditions
+§II.11.3 lists eight. Slice 5 activates seven:
+
+Recommendation exists with status ACCEPTED. ✓
+
+Belongs to the current debtor. ✓
+
+Not EXPIRED and not superseded. ✓
+
+Final edited draft passes fact validation. ✓
+
+Opt-out flags allow the send. ✓
+
+Contact-limit configuration, if set, allows the send. ✓
+
+Connector credential present and connector is ENABLED. ✓
+
+~~Configuration-only-change window is not in progress.~~ Dropped.
+
+Precondition 8's rationale: local-first architecture provides no "change pending" signal to the Agent. The Agent knows only that the DISABLED event has arrived or not. Once it arrives, precondition 7 covers the send. The window before arrival is a property of eventual consistency, not a condition this precondition can enforce. The runtime refusal at analyze_debtor (Q6) covers the analysis-time case; the send-time equivalent is precondition 7.
+
+11. UI — Copilot panel (debtor profile)
+Mounted as a new Card in DebtorProfilePage.tsx immediately after CommunicationCard.
+
+Collapsed: header Copilot with chevron; subtitle AI drafts a message for {debtor.name}. Nothing is sent without your approval.
+
+Expanded, pre-run: Analyze debtor button. Footnote: Recommendations expire 72 hours after creation.
+
+Expanded, loading: spinner + Analyzing…
+
+Expanded, PENDING:
+
+Source badge: AI (blue) or Fallback — AI unavailable (amber).
+
+Recommendation block: Channel, Priority, Tone, Timing.
+
+Rationale (AI only): prefixed AI explanation — unverified:.
+
+Draft: Subject + Body, Edit button.
+
+Claim flags via CopilotFlagList.
+
+Actions: Accept and Review (opens SendMessageModal prefilled) or Reject.
+
+Footer: Expires {created_at + 72h}.
+
+Expanded, ACCEPTED: Accepted. Edit and send from the composer, or let it expire.
+
+Expanded, SENT: Sent via {connector_code} at {decided_at}.
+
+Expanded, SEND_UNCERTAIN: amber message The provider did not confirm delivery. The message may or may not have been sent. Buttons Confirm delivered / Confirm not delivered.
+
+Expanded, connector unavailable: Q6 message.
+
+Unresolved attempt on a REJECTED recommendation: the panel displays a small amber sub-card: Unresolved send attempt from {attempted_at}. with the confirm/deny buttons. Uncertainty is visible even when the recommendation is not sendable.
+
+Contact-limit footnote (read-only): if compliance_rules.contact_limit_enabled = 1, display Daily contact limit: {count} per {period} or equivalent. Otherwise No contact limit set.
+
+12. UI — Copilot status page (sidebar)
+New route /copilot, new sidebar entry between Communication Tools and Settings.
+
+Sections: Header; Providers (list of enabled AI connectors, read-only); How it works (Part II §II.3 summary); What to expect (72h expiration; fallback labeling; unverified rationale; blocking claim types); Disclosure (from compliance_rules.disclosure_text or empty-state).
+
+No actions.
+
+13. Test inventory
+Behavioral cases are the acceptance criterion. Counts are estimates.
+
+slice5_recommendation_store.rs (~32 tests):
+
+Persistence and round-trip (6); snapshot hash (8); lifecycle transitions (8); supersession (4); freshness (4); scoping and constraints (2). Specific behaviors:
+
+insert_pending writes one row; every field round-trips.
+
+Fallback source: source = FALLBACK, rationale = None, risk_flags = [].
+
+AI source: source = AI, rationale present, risk_flags preserved.
+
+Snapshot hash: 64-char lowercase hex; stable across identical state; changes on debt amount, debt status, communication count, opt-out flip; unchanged on a non-primary-currency debt.
+
+to_cents overflow → DbError("debt amount outside supported range"); message does not contain the amount.
+
+mark_accepted PENDING → ACCEPTED; on ACCEPTED → WrongStatus.
+
+mark_rejected PENDING → REJECTED; on ACCEPTED → WrongStatus.
+
+mark_sent ACCEPTED → SENT.
+
+mark_send_uncertain ACCEPTED → SEND_UNCERTAIN.
+
+Class A transitions refuse a superseded row.
+
+Class B transitions ignore superseded_by and proceed.
+
+All transitions with wrong org_id → NotFound.
+
+Supersession: prior PENDING and prior ACCEPTED superseded by a new PENDING; prior REJECTED untouched; other debtor untouched; superseded_by recorded.
+
+check_freshness passes on unchanged state; marks EXPIRED on amount change; marks EXPIRED on 72h window; Err(Expired) on already-EXPIRED with no re-write.
+
+get wrong org → NotFound.
+
+Cascade delete on debtor delete.
+
+slice5_send_safety.rs (~44 tests):
+
+Contact-limit disabled → Ok; below limit → Ok; at limit → Err.
+
+Windows DAY / WEEK / MONTH.
+
+Converted reservations count toward the limit; released (failed) do not; held (unresolved) do.
+
+begin_send requires ACCEPTED; refuses expired, superseded, opt-out, connector disabled, contact-limit.
+
+begin_send Phase 1 commits status='EXPIRED' before returning RecommendationExpired.
+
+After Phase 1, the recommendation is not ACCEPTED in the DB.
+
+begin_send happy path: reservation + attempt IN_PROGRESS.
+
+begin_send on failure: no reservation, no attempt.
+
+Snapshot round-trips via read_snapshot; read_snapshot on non-UNCERTAIN → error.
+
+finalize_success: attempt CONFIRMED_SUCCESS; reservation CONVERTED; communication written with connector_code and send_attempt_id; COMMUNICATION_LOGGED originated; snapshot NULL; recommendation SENT.
+
+finalize_failure: attempt CONFIRMED_FAILURE; reservation RELEASED; no communication; snapshot NULL; recommendation ACCEPTED.
+
+finalize_uncertain: attempt UNCERTAIN; reservation held; snapshot retained; recommendation SEND_UNCERTAIN.
+
+finalize_uncertain on superseded recommendation: attempt UNCERTAIN; recommendation stays REJECTED; snapshot retained.
+
+recover_at_startup flips all IN_PROGRESS regardless of age.
+
+recover_at_startup iterates across organizations.
+
+recover_at_startup is idempotent within one call.
+
+recover_at_startup returns the number actually transitioned.
+
+recover_at_startup on missing recommendation → InconsistentFinalizedState, rollback, no partial.
+
+confirm_delivered on UNCERTAIN: full finalize; snapshot NULL.
+
+confirm_delivered on a superseded recommendation's UNCERTAIN attempt: communication written; recommendation stays REJECTED.
+
+confirm_delivered on IN_PROGRESS → AttemptNotConfirmable.
+
+confirm_not_delivered on a superseded recommendation's UNCERTAIN attempt: reservation released; recommendation stays REJECTED.
+
+Cross-record validation: mismatched connector_code, recommendation_id, debtor_id (snapshot vs attempt), debtor_id (snapshot vs reservation), channel inconsistency, recommendation.debtor_id != attempt.debtor_id — each → SnapshotInvalid, no writes.
+
+Snapshot JSON contains no credential bytes.
+
+Idempotent finalize_success retry when the linked communication is missing → InconsistentFinalizedState.
+
+Idempotent finalize_success retry when the linked communication exists → Ok with same id.
+
+Idempotent finalize_failure retry → Ok with verification of released reservation.
+
+No test calls adapter.send twice for the same attempt.
+
+Migration re-run with columns already present → no-op.
+
+Migration rollback path: forced failure after one ALTER → user_version unchanged, columns absent.
+
+Orchestration tests (~10):
+
+analyze_debtor with no AI connector enabled → AiConnectorUnavailable.
+
+analyze_debtor with one enabled → PENDING row, correct source and ai_connector_code.
+
+analyze_debtor supersedes prior.
+
+send_recommendation on a draft with an unresolved Unverifiable claim → Err, no writes.
+
+send_recommendation on a draft with a Verified claim → proceeds.
+
+send_recommendation applies disclosure before validating the final body (assert the body sent contains disclosure and equals the validated body).
+
+Two sequential insert_pending calls under simulated concurrency yield one PENDING.
+
+send_recommendation with recommendation superseded between preflight and begin_send → RecommendationExpired or RecommendationNotAccepted, no reservation.
+
+14. Phased implementation plan
+Phase 5a — Recommendation persistence.
+Files: recommendation_store.rs, migration v11 in db.rs, lib.rs, slice5_recommendation_store.rs. No command surface, no UI.
+STOP gate: all tests green; PRAGMA user_version = 11; migration re-run safe; organization-scoped access verified; diff inspected.
+
+Phase 5b — Send safety and orchestration.
+Files: send_safety.rs, copilot.rs, migration v12 in db.rs, communications.rs refactor, six commands in agent binary, slice5_send_safety.rs. No UI.
+First action: source reconnaissance on the Agent startup sequence. Verify single-instance enforcement is active and precedes database open; verify recover_at_startup is reachable before any command can execute against the database. If either fails, the recovery design reopens and a lease-based protocol is required.
+STOP gate: all tests green; PRAGMA user_version = 12; migration re-run safe; snapshot lifecycle verified; disclosure and final-body validation enforced in Rust; no auto-retries; send_connector_message unchanged; single-instance verified; diff inspected.
+
+Phase 5c — Copilot UI.
+Files: all TypeScript.
+STOP gate: cloud trip includes both npm run build commands; all six commands wired; frontend cannot bypass Rust checks; Slice 4 flag-resolution behavior consistent; live end-to-end test from Analyze → Send → SEND_UNCERTAIN simulation → Confirm delivered.
+
+At every gate: inspect the actual diff, run the relevant tests, do not advance on the spec's word alone.
+
+15. What this spec does not do
+Does not define the two-placeholder pattern (deferred).
+
+Does not sync anything new.
+
+Does not add an event type.
+
+Does not re-open Part I.
+
+Does not touch any AI provider HTTP shape.
+
+Does not change send_connector_message.
+
+Does not guarantee factual correctness of drafts beyond the Slice 4 verification rules.
+
+Does not guarantee secure erasure of snapshot bytes from SQLite journals, WAL files, or storage media.
+
+Does not support multi-process access to the local Agent database.
+
+16. First actions after freeze
+Apply the corresponding removals to the Slice 5a mini spec's §5.4 and §5.7 (no forward-compatible in-flight guard; mark_rejected is PENDING-only). Freeze Slice 5a — MINI SPEC v1.0.
+
+Begin Phase 5a: run its three verification checks, then write the test file.
+
+Respect the Phase 5a STOP gate before beginning Phase 5b.
+
+Phase 5b's first action is source reconnaissance on the Agent startup sequence and single-instance enforcement.
+
+17. Open items
+Phase 5b first action — source reconnaissance. Verify the single-instance plugin is active, enforcement precedes database open, and recover_at_startup runs before any command can touch send_attempts. If any of these fail, the recovery design reopens and a lease-based protocol is required. Until verified, the recovery contract in §7.5 is provisional.
+
+Deletion semantics. The RESTRICT contract blocks debtor deletion while linked attempts exist. UI must surface the constraint. Documented; not a blocker.
+
+Snapshot erasure. Logical deletion only. Physical erasure tracked as a separate concern in Part I §11.
+
+APPENDIX — Revision history
+v0.1 — Initial draft.
+
+v0.2 — First review: migration split (v11/v12), claim-validation gate (blocking vs verified), UNCERTAIN-only manual confirmation, snapshot lifecycle, contact-limit counting, Rust-side disclosure, preflight ordering, deterministic supersession, org scoping.
+
+v0.3 — Second review: payload_snapshot made nullable (logical deletion), process_run_id introduced, snapshot-derived confirmation, AI vs delivery provider identity separated (ai_connector_code vs connector_code), freshness commit-before-Err, supersession-aware finalization.
+
+v0.4 — Third review: process_run_id removed in favor of a single-instance precondition; recover_at_startup replaces mark_stale_attempts_uncertain; recovery becomes startup-only; error-message hygiene; idempotent finalization consistency error.
+
+v0.5 — Fourth review: send_attempts.recommendation_id made NOT NULL with ON DELETE RESTRICT; debtor_id added to SendAttemptSnapshot; recover_at_startup scans all organizations; startup ordering contract documented; Class A/B helper visibility enforced; retry integrity for all finalization paths.
+
+v1.0 — FROZEN 2026-10-13 — Fifth review corrections: mark_rejected is PENDING-only (discard-from-ACCEPTED not offered); nullable-ID branch removed from recover_at_startup (missing recommendation is a hard error); recommendation-to-debtor cross-check added to finalization validation.
+
+End of frozen specification.
+
+

@@ -25,6 +25,7 @@ pub mod fact_validation;
 pub mod models;
 pub mod prompts;
 pub mod recommendation;
+pub mod recommendation_store;
 pub mod relations;
 pub mod storage;
 pub mod strategy;

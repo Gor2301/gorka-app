@@ -855,6 +855,57 @@ fn run_migrations(conn: &mut Connection) -> Result<(), String> {
         tx.commit().map_err(|e| e.to_string())?;
     }
 
+    if current_version < 11 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        // SLICE 5a. Recommendation persistence.
+        // One new table, two indexes. No ALTER TABLE, so no pre-existing-
+        // column defense is needed here; that arrives in v12.
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS recommendations (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                debtor_id TEXT NOT NULL,
+                ai_connector_code TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                source TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                priority TEXT NOT NULL,
+                tone TEXT NOT NULL,
+                timing TEXT NOT NULL,
+                draft_subject TEXT,
+                draft_body TEXT NOT NULL,
+                rationale TEXT,
+                risk_flags TEXT NOT NULL DEFAULT '[]',
+                prompt_version TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                decided_at DATETIME,
+                superseded_by TEXT,
+                snapshot_hash TEXT NOT NULL,
+                FOREIGN KEY (debtor_id) REFERENCES debtors(id) ON DELETE CASCADE
+            )",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_recommendations_debtor
+                 ON recommendations(organization_id, debtor_id, created_at DESC)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_recommendations_org_status
+                 ON recommendations(organization_id, status)",
+            [],
+        ).map_err(|e| e.to_string())?;
+
+        tx.execute("PRAGMA user_version = 11", [])
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 
