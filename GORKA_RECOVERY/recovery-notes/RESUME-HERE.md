@@ -3507,3 +3507,315 @@ H.8 — WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX H
 ================================================================
+
+================================================================
+APPENDIX I — SLICE 4 CLOSE
+(added v3.2, 2026-10-13)
+================================================================
+
+I.0 — WHY THIS APPENDIX EXISTS
+
+Appendix H closed Slice 3 and pointed the queue at Slice 4
+(Strategy Engine and fact validation). The frozen Slice 4
+mini spec v1.0 was produced in a prior session. This session
+implemented it: four new modules, two new test files, two
+edits, one bulk commit plus one defect-fix commit, cloud
+verification green at 350/350.
+
+Where this appendix conflicts with H.7's queue, this
+appendix wins.
+
+================================================================
+I.1 — MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD ab4a61f plus the Appendix I commit that follows.
+        Pushed. Working tree clean except the two known
+        untracked files (CHAT-HANDOFF-DUMP.txt, make-dump.ps1).
+
+CLOUD:  at ab4a61f. Full workspace test green (350/350).
+
+Commits added this session, oldest first:
+
+  25d06b2  slice 4: strategy engine and fact validation
+  ab4a61f  slice 4 fix: cover absent/non-string/missing
+           provider_response answer cases
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -5
+    git status --short
+
+================================================================
+I.2 — WHAT SLICE 4 SHIPPED
+================================================================
+
+Per SLICE 4 MINI SPEC v1.0 (FROZEN), Sections 5-8.
+
+New modules (shared/src/):
+
+  prompts.rs           PROMPT_VERSION, SYSTEM_PROMPT,
+                       USER_MESSAGE_TEMPLATE. Fixed templates.
+                       No debtor data placeholders.
+
+  strategy.rs          StrategySource, StrategyOutcome,
+                       StrategyError, analyze(). The fallback
+                       contract: build_fallback_input runs
+                       first; failure there is Err; every AI-side
+                       failure returns Ok(Fallback).
+
+  fact_validation.rs   ClaimType, ClaimSource, Verification,
+                       ClaimFlag, FactValidationError,
+                       validate_draft(). Five claim types.
+                       Read-only DB. Deterministic comparison.
+
+  claim_resolution.rs  ResolutionChoice, ResolutionRecord,
+                       ResolutionError, resolve_claim().
+                       Stale-flag rejection via draft_id.
+                       In-memory records only. No persistence.
+
+Edited:
+
+  shared/src/lib.rs              four pub mod lines
+  shared/src/recommendation.rs   serde derives on the four
+                                 enums; no logic change
+
+New test files (shared/tests/):
+
+  slice4_strategy.rs           19 tests
+  slice4_fact_validation.rs    37 tests
+
+Total new tests: 56. Workspace went from 294 to 350.
+
+Not touched: any adapter, any HTTP client, any Tauri binary,
+any frontend, any migration, compliance.rs, ai_boundary.rs,
+ai_request.rs, ai_mapping.rs, base_url.rs, transport.rs,
+context.rs. Per Section 3.
+
+================================================================
+I.3 — DEVIATIONS FROM SLICE 4 MINI SPEC v1.0
+================================================================
+
+D1. Section 9 items #2, #3, #14 dropped as unreachable.
+
+    #2 "Context build failure -> Ok(Fallback)":
+       build_fallback_input and build_context both call
+       load_facts on the same connection with the same args.
+       If one succeeds, the other cannot independently fail.
+       The branch in analyze is defensive only.
+
+    #3 "Boundary rejection via analyze -> Ok(Fallback)":
+       analyze builds the request internally from fixed
+       prompt constants and a Context that serializes into
+       the accepted schema. No caller-supplied input can
+       produce a BoundaryBlock through the analyze signature.
+       Boundary rejection is covered by slice3a_boundary.rs
+       against parse_and_validate directly.
+
+    #14 "Fallback path: zero adapter.send calls":
+       the earliest reachable AI-path failure is the adapter
+       itself. Any fallback caused by an AI-side failure
+       occurs after send() has been called once. The
+       one-call expectation on the AI path is covered by
+       strategy_ai_path_calls_adapter_exactly_once.
+
+    Reasons recorded in the header comment of
+    slice4_strategy.rs.
+
+D2. Section 6.5 step 2 names RawOutboundAiRequest as the value
+    to serialize. That type derives Deserialize only, and
+    ai_request.rs is in Section 3's not-touched list. The
+    implementation builds a serde_json::json! value with the
+    same shape and passes it through parse_and_validate. Same
+    boundary, same result. Recorded as an implementation note
+    in the header of strategy.rs.
+
+D3. Section 8.3 EditRemoved contract. Founder direction adopted
+    to resolve the span-equality-vs-removed contradiction:
+
+      flag.draft_id > current_draft_id   -> StaleFlag
+      flag.draft_id == current_draft_id  -> ClaimStillPresent
+                                            (no edit since flag)
+      flag.draft_id < current_draft_id   -> bounds check, then
+                                            equality check,
+                                            then Ok(EditRemoved)
+
+    A global substring check was considered and rejected: a
+    draft may contain the same phrase twice, and a global check
+    would refuse resolution when an unrelated occurrence remains.
+    The span-not-edit-mapping limitation is documented verbatim
+    in the module header of claim_resolution.rs, with the
+    caller workflow that makes it safe (re-validate after every
+    edit; resolve the stale flag only when the matching claim is
+    absent from the fresh flag set).
+
+D4. Section 7.5 CalendarDate detection is DD-MM-YYYY
+    (day 01-31, month 01-12). YYYY-MM-DD is not detected.
+    Founder direction in this session. DB storage is RFC 3339;
+    the verification path parses both sides to NaiveDate and
+    compares dates, not strings.
+
+D5. Section 11 said "One bulk commit." Delivered two: the bulk
+    commit 25d06b2 plus defect-fix commit ab4a61f. P-Q permits
+    a follow-up commit when a defect is found after the bulk.
+    See I.4 FG24.
+
+D6. Section 9 reachability audit. Before any test file was
+    written, every planned test was checked for a concrete
+    setup path through the frozen public interface. The three
+    unreachable cases (D1) were removed from the file before
+    the cloud trip; the remaining 16 strategy cases and 33
+    fact-validation cases were confirmed reachable. The
+    audit itself was the reason two cloud trips were not
+    wasted on tests that could not have passed.
+
+================================================================
+I.4 — FINDINGS THIS SESSION
+================================================================
+
+FG24  The mock adapter carried three unused MockBehavior
+      variants (NoAnswerField, NoProviderResponse,
+      NonStringAnswer) from the initial test draft. Rust
+      warned "never constructed" on the strategy test binary.
+      The variants represented Section 6.5 step 5 coverage
+      (answer absent, non-string, provider_response absent)
+      that had been declared but not tested. Fixed by adding
+      the three tests, not by deleting the variants. Commit
+      ab4a61f.
+
+FG25  Notepad on Windows saved a file to the wrong path or
+      with a .txt suffix three times in this session when the
+      target did not already exist. The reliable pattern is
+      the one already documented in prior appendices: confirm
+      the on-disk state with `type <path>` before pasting;
+      if the file does not exist, open notepad with the full
+      path and answer Yes to the create-file prompt; use
+      Save-as-type All Files (*.*) to prevent a .txt suffix;
+      verify with `dir <path>` immediately after saving.
+
+FG26  An earlier draft of fact_validation.rs carried a stray
+      placeholder use statement (use crate::fact_validation_
+      types::*;) from a mis-paste. Caught by the fifth findstr
+      pattern on the file (fact_validation_types) at
+      verification time, before the cloud trip. The pattern
+      set now includes that pattern permanently as a guard.
+
+================================================================
+I.5 — PROCESS AMENDMENTS
+================================================================
+
+P-EE  UNREACHABLE TESTS ARE DROPPED AND THE REASON IS
+      DOCUMENTED, NOT IGNORED.
+      When a mini spec names a test whose setup path does
+      not exist through the frozen public interface, the
+      test is removed from the acceptance file, not
+      #[ignore]d. The reason is recorded in the test file's
+      header, together with the interface change that would
+      make the test possible in a future slice. FG24 is one
+      example of the cost of carrying declared-but-unreached
+      coverage; the fix is not to hide it under #[ignore],
+      it is to close it with a reachable test or remove it
+      with a written reason.
+
+P-FF  A REACHABILITY AUDIT IS RUN BEFORE THE FIRST TEST
+      IS WRITTEN.
+      Every planned test must name a concrete setup path
+      through the frozen public interface: an input to the
+      entry function, a mock injected at a defined seam, a
+      DB row, or a literal value of a public type. Tests
+      that fail the audit are addressed with the founder
+      before any code is written. This session's audit
+      caught three unreachable cases and avoided two cloud
+      trips.
+
+P-GG  THE FIVE-OR-MORE VERIFY PATTERN FOR A NEW FILE
+      INCLUDES A NEGATIVE GUARD.
+      When a new file is written and its content was pasted
+      from a chat, the verification pattern set includes at
+      least one pattern that must NOT appear (a stray
+      identifier from an earlier bad paste). Absence of the
+      negative match confirms the file was replaced whole,
+      not appended to. FG26 is the evidence.
+
+================================================================
+I.6 — OPEN ITEMS
+================================================================
+
+New this session:
+
+  - None. Slice 4 is closed with no new open items beyond
+    the ones carried forward.
+
+Carried from Appendix H Section H.6, unchanged:
+
+  - FG9: vite watcher EBUSY on cargo build. Unfixed.
+  - Vite config __dirname warning. Cosmetic.
+  - O1: three ghost rows on the Agent.
+  - O2: Communication Tools page shows event metadata, not
+    credential health.
+  - O3: CONNECTOR_CREDENTIAL_REPLACED remains deferred.
+  - O4 items: registration/onboarding gap; Agent
+    settings.dat user_id; Mocean HTTP shape; voice adapter;
+    cancel-negative test; .bak files. (The Gemini adapter
+    itself is built; its catalog row is still COMING_SOON.)
+
+Notably resolved this session:
+
+  - None from prior open items. Slice 4 was additive.
+
+================================================================
+I.7 — QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0. F15 CLOSED.
+  SLICE 1 (Part II Section II.17) — opt-out enforcement and
+    disclosure text. CLOSED 2026-10-12.
+  SLICE 2 (Part II Section II.16) — Context Engine and
+    deterministic fallback. CLOSED 2026-10-12.
+  SLICE 3 (Part II Section II.4, II.5.2, II.5.3, II.6,
+    II.7) — AI boundary, adapters, network controls.
+    CLOSED 2026-10-12.
+  SLICE 4 (Part II Sections II.8-II.11) — Strategy Engine
+    and fact validation. CLOSED 2026-10-13.
+
+IN FLIGHT
+  None.
+
+NEXT — IN ORDER
+
+  1. SLICE 5 — Recommendation lifecycle, reservation,
+     contact limits, and UI. Own mini spec before code.
+     First slice that persists recommendation state and
+     touches the send path. Larger than Slice 4.
+
+  2. SLICE 6 — Integrated security and regression tests.
+
+  Then the carried items from Appendix E Section E.8 /
+  F.7 / G.8 / H.7:
+
+  3.  O1 ghost-row fix (deferred by founder).
+  4.  O2 Communication Tools credential health.
+  5.  STEP 1.5 — More known providers.
+  6.  STEP 1.6 — Data-source display surface.
+  7.  CONNECTOR_CREDENTIAL_REPLACED.
+  8.  TWILIO SMS BYOP SEND VERIFICATION.
+  9.  B7 CREDENTIAL-TRANSIT REVIEW.
+ 10.  CANCEL-NEGATIVE FOR TIER 1.
+ 11.  REGISTRATION / ONBOARDING BLOCK.
+ 12.  ACCEPTANCE — end-to-end.
+
+================================================================
+I.8 — WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  It does not amend Part II. Part II stands.
+  It does not reopen CONNECTOR-EVENT-ORDER-SPEC Part I.
+  It does not decide any remaining O1/O2 question.
+  It does not promote Slice 5 to started. Slice 5 needs
+  its own mini spec before code.
+
+================================================================
+END OF APPENDIX I
+================================================================
