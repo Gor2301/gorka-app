@@ -39,6 +39,7 @@ pub mod sync_pipeline;
 pub mod sync_relay;
 pub mod sync_session;
 pub mod sync_transport;
+pub mod send_safety;
 
 pub mod recover;
 

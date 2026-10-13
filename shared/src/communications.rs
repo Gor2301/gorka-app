@@ -67,14 +67,14 @@ pub fn get_communications(
     Ok(communications)
 }
 
-pub fn insert_communication(
-    conn: &mut Connection,
+pub fn insert_communication_in_tx(
+    tx: &rusqlite::Transaction<'_>,
     organization_id: &str,
     input: CommunicationInput,
     created_by: &str,
+    connector_code: Option<&str>,
+    send_attempt_id: Option<&str>,
 ) -> Result<Communication, String> {
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
-
     let debtor_ok: i64 = tx.query_row(
         "SELECT COUNT(*) FROM debtors WHERE id = ?1 AND organization_id = ?2 AND deleted != 'true'",
         params![&input.debtor_id, organization_id],
@@ -106,8 +106,8 @@ pub fn insert_communication(
     let direction_str = direction.as_str();
 
     tx.execute(
-        "INSERT INTO communications (id, debtor_id, type, direction, content, duration, created_by, data, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO communications (id, debtor_id, type, direction, content, duration, created_by, data, created_at, connector_code, send_attempt_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             &id,
             &input.debtor_id,
@@ -118,6 +118,8 @@ pub fn insert_communication(
             Some(created_by.to_string()),
             &data_json,
             &now,
+            connector_code,
+            send_attempt_id,
         ],
     ).map_err(|e| e.to_string())?;
 
@@ -149,8 +151,6 @@ pub fn insert_communication(
 
     db::log_audit(&tx, "INSERT_COMM", Some(&input.debtor_id), 1, "Inserted communication")?;
 
-    tx.commit().map_err(|e| e.to_string())?;
-
     Ok(Communication {
         id,
         debtor_id: input.debtor_id,
@@ -162,6 +162,28 @@ pub fn insert_communication(
         data,
         created_at: now,
     })
+}
+
+/// Thin wrapper. Opens a transaction, delegates to
+/// `insert_communication_in_tx` with `None` for the two connector
+/// fields (the raw-send path from Slice 4), and commits.
+pub fn insert_communication(
+    conn: &mut Connection,
+    organization_id: &str,
+    input: CommunicationInput,
+    created_by: &str,
+) -> Result<Communication, String> {
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let result = insert_communication_in_tx(
+        &tx,
+        organization_id,
+        input,
+        created_by,
+        None,
+        None,
+    )?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(result)
 }
 
 pub fn delete_communication(
