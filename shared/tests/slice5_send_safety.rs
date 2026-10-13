@@ -721,8 +721,11 @@ fn read_snapshot_only_on_uncertain() {
     let bytes = read_snapshot(&conn, ORG, &attempt_id).unwrap();
     assert!(bytes.len() > 0);
 
-    // After successful confirm, snapshot is gone.
-    finalize_success(&mut conn, ORG, &attempt_id, USER, now()).unwrap();
+    // Confirm delivery. finalize_success is only for IN_PROGRESS
+    // attempts; an UNCERTAIN attempt is confirmed via
+    // confirm_delivered. After confirmation, state is
+    // CONFIRMED_SUCCESS and read_snapshot refuses.
+    confirm_delivered(&mut conn, ORG, &attempt_id, USER, now()).unwrap();
     let err = read_snapshot(&conn, ORG, &attempt_id).unwrap_err();
     assert!(matches!(err, SafetyError::AttemptNotConfirmable));
 }
