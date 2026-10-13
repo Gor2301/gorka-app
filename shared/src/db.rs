@@ -87,7 +87,7 @@ pub fn init_db(storage: &AppStorage, key: &str) -> Result<Connection, String> {
             e.to_string()
         })?;
     println!("✅ [RUST] PRAGMA key set");
-    conn.execute("PRAGMA busy_timeout = 5000", [])
+    conn.query_row("PRAGMA busy_timeout = 5000", [], |row| row.get::<_, i64>(0))
         .map_err(|e| e.to_string())?;
     
     println!("🔍 [RUST] Setting PRAGMA foreign_keys...");
@@ -121,7 +121,7 @@ conn.execute("PRAGMA foreign_keys = ON", [])
 /// Not for production. Plain SQLite; no SQLCipher.
 pub fn open_file_for_tests(path: &std::path::Path) -> Result<Connection, String> {
     let mut conn = Connection::open(path).map_err(|e| e.to_string())?;
-    conn.execute("PRAGMA busy_timeout = 5000", [])
+    conn.query_row("PRAGMA busy_timeout = 5000", [], |row| row.get::<_, i64>(0))
         .map_err(|e| e.to_string())?;
     conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get::<_, String>(0))
         .map_err(|e| e.to_string())?;
