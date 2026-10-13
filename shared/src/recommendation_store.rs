@@ -134,7 +134,7 @@ pub enum StoreError {
 // Enum <-> db string mappings
 // ---------------------------------------------------------------------
 
-fn source_to_db(s: StrategySource) -> &'static str {
+fn source_to_db(s: &StrategySource) -> &'static str {
     match s {
         StrategySource::Ai => "AI",
         StrategySource::Fallback => "FALLBACK",
@@ -268,7 +268,7 @@ pub fn insert_pending(
             debtor_id,
             ai_connector_code,
             created_by,
-            source_to_db(outcome.source),
+            source_to_db(&outcome.source),
             channel_to_db(outcome.recommendation.channel),
             priority_to_db(outcome.recommendation.priority),
             tone_to_db(outcome.recommendation.tone),
