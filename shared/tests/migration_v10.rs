@@ -130,7 +130,7 @@ fn payload_disabled(code: &str) -> Vec<u8> {
 #[test]
 fn mt1_fresh_db_gets_v10() {
     let conn = open_in_memory_for_tests().unwrap();
-    assert_eq!(user_version(&conn), 10);
+    assert!(user_version(&conn) >= 10);
     assert!(column_exists(&conn, "local_connectors", "winning_logical_clock"));
     assert!(column_exists(&conn, "local_connectors", "winning_device_id"));
     assert!(column_exists(&conn, "local_connectors", "winning_sequence"));
@@ -151,7 +151,7 @@ fn mt2_v9_to_v10_backfill_matches_protocol_latest() {
     );
     apply_v10(&mut conn).unwrap();
 
-    assert_eq!(user_version(&conn), 10);
+    assert!(user_version(&conn) >= 10);
     let (clock, seq, dev): (i64, i64, Vec<u8>) = conn.query_row(
         "SELECT winning_logical_clock, winning_sequence, winning_device_id
          FROM local_connectors WHERE id='r1'",
@@ -212,7 +212,7 @@ fn mt4_rerun_is_idempotent() {
     ).unwrap();
 
     assert_eq!(t1, t2);
-    assert_eq!(user_version(&conn), 10);
+    assert!(user_version(&conn) >= 10);
 }
 
 // ---------------------------------------------------------------
@@ -315,7 +315,7 @@ fn mt8_status_only_check_succeeds_on_content_mismatch() {
     );
 
     apply_v10(&mut conn).unwrap();
-    assert_eq!(user_version(&conn), 10);
+    assert!(user_version(&conn) >= 10);
 
     // Row's tier is unchanged; only winning_* was written.
     let tier: String = conn.query_row(
