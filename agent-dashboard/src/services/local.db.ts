@@ -280,6 +280,73 @@ export interface SendConnectorMessageInput {
   subject?: string | null;
 }
 
+// --- Copilot (Slice 5c) -----------------------------------------
+
+export interface RecommendationView {
+  id: string;
+  organization_id: string;
+  debtor_id: string;
+  ai_connector_code: string;
+  created_by: string;
+  source: 'AI' | 'FALLBACK';
+  channel: 'Email' | 'Sms' | 'Voice';
+  priority: 'Low' | 'Normal' | 'High';
+  tone: 'Friendly' | 'Firm' | 'Urgent' | 'FinalNotice';
+  timing: 'Within24Hours' | 'Within3Days' | 'Within7Days';
+  draft_subject: string | null;
+  draft_body: string;
+  rationale: string | null;
+  risk_flags: string[];
+  prompt_version: string;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'SENT' | 'EXPIRED' | 'SEND_UNCERTAIN';
+  created_at: string;
+  decided_at: string | null;
+  superseded_by: string | null;
+  snapshot_hash: string;
+  uncertain_attempt_id: string | null;
+}
+
+export interface SendRecommendationInput {
+  recommendationId: string;
+  connectorCode: string;
+  to: string;
+  subject: string | null;
+  draftBody: string;
+}
+
+export interface SendRecommendationResult {
+  communication_id: string | null;
+  attempt_id: string;
+  uncertain: boolean;
+  failure_reason: string | null;
+}
+
+export interface ConfirmResult {
+  communication_id: string | null;
+  attempt_id: string;
+}
+
+export interface CopilotProviderRow {
+  connector_code: string;
+  tier: string;
+  model: string | null;
+}
+
+export interface ClaimFlagView {
+  claim_type:
+    | 'DollarAmount'
+    | 'CalendarDate'
+    | 'InvoiceRef'
+    | 'PriorPromisePayment'
+    | 'LegalOrCreditConsequence';
+  source: 'Subject' | 'Body';
+  span_start: number;
+  span_end: number;
+  matched_text: string;
+  verification_kind: 'Verified' | 'Mismatch' | 'Unverifiable';
+  db_value: string | null;
+  draft_id: number;
+}
 // --- Local DB ---
 
 export const localDB = {
@@ -623,6 +690,64 @@ export const localDB = {
     await invoke('set_disclosure_text', { text });
   },
 
+  // --- Copilot (Slice 5c) -----------------------------------------
+
+  async analyzeDebtor(debtorId: string): Promise<RecommendationView> {
+    return await invoke<RecommendationView>('analyze_debtor', { debtorId });
+  },
+
+  async listRecommendationsForDebtor(debtorId: string): Promise<RecommendationView[]> {
+    return await invoke<RecommendationView[]>('list_recommendations_for_debtor', {
+      debtorId,
+    });
+  },
+
+  async decideRecommendation(
+    id: string,
+    decision: 'accept' | 'reject',
+  ): Promise<void> {
+    await invoke('decide_recommendation', { id, decision });
+  },
+
+  async sendRecommendation(
+    input: SendRecommendationInput,
+  ): Promise<SendRecommendationResult> {
+    return await invoke<SendRecommendationResult>('send_recommendation', {
+      input: {
+        recommendation_id: input.recommendationId,
+        connector_code: input.connectorCode,
+        to: input.to,
+        subject: input.subject,
+        draft_body: input.draftBody,
+      },
+    });
+  },
+
+  async listCopilotProviders(): Promise<CopilotProviderRow[]> {
+    return await invoke<CopilotProviderRow[]>('list_copilot_providers');
+  },
+
+  async confirmUncertainAttempt(
+    attemptId: string,
+    delivered: boolean,
+  ): Promise<ConfirmResult> {
+    return await invoke<ConfirmResult>('confirm_uncertain_attempt', {
+      attemptId,
+      delivered,
+    });
+  },
+
+  async validateDraftForCopilot(
+    debtorId: string,
+    subject: string | null,
+    body: string,
+  ): Promise<ClaimFlagView[]> {
+    return await invoke<ClaimFlagView[]>('validate_draft_for_copilot', {
+      debtorId,
+      subject,
+      body,
+    });
+  },
   // --- Sync engine -------------------------------------------------
 
   async syncEngineStatus(): Promise<string> {
