@@ -127,7 +127,15 @@ const connectors = [
       credentials: [
         { name: 'apiKey', label: 'API Key', type: 'password', required: true },
       ],
-      configuration: [],
+      configuration: [
+        {
+          name: 'model',
+          label: 'Model',
+          type: 'text',
+          required: true,
+          default: 'gemini-2.5-flash',
+        },
+      ],
     },
   },
   {
