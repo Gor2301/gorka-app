@@ -23,6 +23,11 @@ interface SendMessageModalProps {
     to?: string;
     connector_code?: string;
   };
+  /**
+   * Copilot mode only. Restricts the "Send via" picker to connectors
+   * matching the recommendation's channel. Direct mode omits it.
+   */
+  channelFilter?: 'email' | 'sms' | 'voice';
   onClose: () => void;
   onSent: () => void;
 }
@@ -70,6 +75,7 @@ export default function SendMessageModal({
   presetConnectorCode,
   mode = 'direct',
   prefill,
+  channelFilter,
   onClose,
   onSent,
 }: SendMessageModalProps) {
@@ -92,13 +98,17 @@ export default function SendMessageModal({
           localDB.getDebtor(debtorId),
           localDB.getDisclosureText(),
         ]);
-        const enabled = rows.filter(
+        let enabled = rows.filter(
           (r) =>
             r.status === 'ENABLED' &&
             (r.connector_code.endsWith('-sms') ||
               r.connector_code.endsWith('-email') ||
               r.connector_code.endsWith('-voice')),
         );
+        if (channelFilter) {
+          const suffix = `-${channelFilter}`;
+          enabled = enabled.filter((r) => r.connector_code.endsWith(suffix));
+        }
         setConnectors(enabled);
         const phone = debtor.phone ?? '';
         const email = debtor.email ?? '';
@@ -124,7 +134,7 @@ export default function SendMessageModal({
         setError(err instanceof Error ? err.message : String(err));
       }
     })();
-  }, [debtorId, presetConnectorCode, prefill]);
+  }, [debtorId, presetConnectorCode, prefill, channelFilter]);
 
   const handleConnectorChange = (newCode: string) => {
     setSelectedCode(newCode);

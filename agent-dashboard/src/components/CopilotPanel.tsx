@@ -14,6 +14,20 @@ import './CopilotPanel.css';
 const REGEN_LIMIT = 3;
 const FLAG_DEBOUNCE_MS = 300;
 
+function channelFilterFor(
+  channel: RecommendationView['channel'],
+): 'email' | 'sms' | 'voice' {
+  switch (channel) {
+    case 'Email':
+      return 'email';
+    case 'Sms':
+      return 'sms';
+    case 'Voice':
+      return 'voice';
+  }
+}
+const FLAG_DEBOUNCE_MS = 300;
+
 interface CopilotPanelProps {
   debtorId: string;
   debtorName: string;
@@ -208,10 +222,13 @@ export default function CopilotPanel({
     setError('');
     try {
       await localDB.decideRecommendation(rec.id, 'accept');
-      const latest = await refresh();
-      const target = latest ?? rec;
+      // Transition locally. Do not refresh() here: refresh() would
+      // overwrite draftBody with the DB value (empty for a fallback
+      // recommendation), losing the user's edit before the composer
+      // opens. The panel refreshes after the send completes.
+      setRec({ ...rec, status: 'ACCEPTED' });
       setComposer({
-        recommendationId: target.id,
+        recommendationId: rec.id,
         subject: draftSubject || null,
         body: draftBody,
       });
@@ -310,7 +327,7 @@ export default function CopilotPanel({
           {body}
         </div>
       </section>
-      {composer && (
+      {composer && rec && (
         <SendMessageModal
           debtorId={debtorId}
           debtorName={debtorName}
@@ -320,6 +337,7 @@ export default function CopilotPanel({
             subject: composer.subject,
             body: composer.body,
           }}
+          channelFilter={channelFilterFor(rec.channel)}
           onClose={() => setComposer(null)}
           onSent={async () => {
             setComposer(null);
