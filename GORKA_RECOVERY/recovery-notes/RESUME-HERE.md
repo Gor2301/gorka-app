@@ -4941,3 +4941,284 @@ edit prior appendices. M.17 records the exception.
 ================================================================
 END OF APPENDIX M (CONTINUED)
 ================================================================
+
+$path='C:\Users\kucha\gorka-app\GORKA_RECOVERY\recovery-notes\RESUME-HERE.md'
+$c=@'
+
+================================================================
+APPENDIX N - SLICE 5c CLOSE
+(added v3.7, 2026-10-14)
+================================================================
+
+N.0 - WHY THIS APPENDIX EXISTS
+
+Appendix M recorded Slice 5c as in progress. It closed with
+two pending fixes (FD8, FD9) and a focused retest checklist
+(M.15). This session applied those fixes, ran the cloud trip,
+and completed the focused retest. All four checkpoints pass.
+Slice 5c is closed.
+
+This appendix is the close record. Appendix M is left in
+place as the audit trail of the live test and defect
+discovery. Prior appendices are not edited. Convention:
+P-JJ, P-M, P-V, P-Y, P-DD.
+
+Where this appendix conflicts with M.17's status block,
+this appendix wins.
+
+================================================================
+N.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 99fb39b. Pushed to origin/main. Clean tree
+        except the two known untracked files
+        (CHAT-HANDOFF-DUMP.txt, make-dump.ps1).
+
+CLOUD:  at 99fb39b. Cloud trip PASSED. Live retest PASSED.
+        Cloud closed at founder's discretion after the
+        retest.
+
+FD8 + FD9 commit, single commit this session:
+
+  99fb39b  slice 5c fix: SENT shows delivery connector;
+           SENT offers Analyze (FD8, FD9)
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -5
+    git status --short
+
+================================================================
+N.2 - WHAT FD8 AND FD9 CHANGED
+================================================================
+
+Per Appendix M.12. Three files. One commit. No migration.
+No new sync events. No change to any of the six commands
+that shipped in 5b.
+
+RUST -- src-tauri-agent/src/main.rs
+
+  - RecommendationView struct gains a field:
+      delivery_connector_code: Option<String>
+  - view_from_row signature gains the same parameter.
+  - view_from_row return block sets the field.
+  - analyze_debtor call site becomes:
+      Ok(view_from_row(row, None, None))
+  - list_recommendations_for_debtor: after fetching the
+    uncertain attempt id, also fetches the latest
+    CONFIRMED_SUCCESS send_attempt's connector_code:
+
+      SELECT connector_code FROM send_attempts
+       WHERE organization_id = ?1 AND recommendation_id = ?2
+         AND state = 'CONFIRMED_SUCCESS'
+       ORDER BY finalized_at DESC LIMIT 1
+
+    and passes it as the third argument to view_from_row.
+
+TS -- agent-dashboard/src/services/local.db.ts
+
+  - RecommendationView interface gains a field:
+      delivery_connector_code: string | null
+
+PANEL -- agent-dashboard/src/components/CopilotPanel.tsx
+
+  - SENT case display: replaced
+      {r.ai_connector_code}
+    with
+      {r.delivery_connector_code ?? 'an unknown connector'}
+  - SENT case gained a button row with an "Analyze debtor"
+    Button that calls handleAnalyze.
+
+Invariant enforced: no component reads ai_connector_code
+for display as "sent via". This matches Slice 5c Mini Spec
+Section 9.3 and Part II Section II.15.
+
+================================================================
+N.3 - CLOUD TRIP RESULT (5c.8 compile gate - PASSED)
+================================================================
+
+CLOUD at 99fb39b:
+
+  git pull                        85983d8..99fb39b
+  cargo build --workspace         PASS. Finished in 9.00s.
+                                  Known benign warnings only.
+  cargo test --workspace          449 passed, 3 ignored,
+                                  0 failed.
+  npm run build (root, Client)    PASS. Built in 17.60s.
+  cd agent-dashboard
+  npm run build (Agent)           PASS. Built in 4.81s.
+                                  dist/assets/index-_Uw5NWhP.js
+                                  628.53 kB / 183.59 kB gzip
+  cd ..
+
+Warnings, all benign and pre-existing:
+  - gorka-recover linker PDB note (ossl_static.pdb)
+  - auth.rs::is_unlocked is never used
+  - Vite __dirname configLoader warning
+  - bundle size > 500 kB
+
+No 5c defects caught on this trip.
+
+================================================================
+N.4 - LIVE RETEST RESULT (M.15 - ALL FOUR PASS)
+================================================================
+
+Ran 2026-10-14 on cloud with the founder driving the Agent
+window. Focused on the four M.15 checkpoints.
+
+CP1 - Composer channel + body (FD5, FD6 retest)   PASS
+  Accept and Review opened the composer with:
+    - Connector: Resend Email (not mocean-sms)
+    - Subject: "Payment reminder" (prefilled, visible)
+    - Body: "Please contact us about your account."
+      (preserved through accept, not empty)
+  Disclosure preview rendered client-side:
+    "This message is from GORKA Agent."
+
+CP2 - Email body + disclosure (FD6 retest)        PASS
+  Email received at the founder's inbox.
+    - Subject: "Payment reminder"
+    - Body: "Please contact us about your account."
+    - Disclosure line present at the bottom.
+
+CP3 - FD8                                       PASS
+  Panel SENT state reads:
+    "Sent via resend-email at 2026-10-14T10:25:50.871..."
+  Correct delivery connector shown. Not gemini-ai.
+
+CP4 - FD9                                       PASS
+  Panel SENT state offers an "Analyze debtor" button
+  under the SENT text. User can start a new analysis
+  without navigating away.
+
+The Communications card on the debtor profile shows the
+sent message with the disclosure line.
+
+Note on the empty DRAFT state observed at the start of the
+retest: this is the fallback-outcome case (OI-4, carried
+from M.14). The fallback path returns priority / tone /
+timing but no subject or body. The user must type content.
+This is expected and not a 5c defect. The retest was
+exercised with typed content, which is the case FD6 retest
+needed.
+
+================================================================
+N.5 - PROCESS AMENDMENTS
+================================================================
+
+P-OO  USE APPENDIX N, DO NOT EDIT APPENDIX M.
+      M.17 granted an in-place-edit exception to M, but
+      the exception was scoped to "when FD8 and FD9 land
+      and the focused retest passes". In practice M had
+      grown into a long working appendix (M.10 through
+      M.17 continuation). Editing it in place would have
+      obscured the working history of the live test and
+      defect discovery. The clean convention was chosen
+      instead: one appendix per session. M stands as the
+      audit trail, N is the close record. Same pattern as
+      Appendix C stands before Appendix D.
+
+P-PP  ON THE CLOUD RETEST, THE FRONTEND BUILDS ARE THE
+      GATE FOR RUST-VISIBLE-TO-TS FIELD ADDITIONS.
+      FD8 added a Rust field that both the TS interface
+      and CopilotPanel consume. cargo build alone would
+      not have caught a mismatch. The agent-dashboard
+      npm run build is the gate that proves the
+      type-check passes end to end.
+
+P-QQ  ONE APPENDIX PER SESSION (restated, P-JJ / P-M /
+      P-V / P-Y / P-DD). This appendix is new. Appendix M
+      is untouched.
+
+================================================================
+N.6 - OPEN ITEMS
+================================================================
+
+New this session:
+
+  OI-6 - decided_at renders in full RFC 3339 with
+    microseconds and UTC offset:
+      2026-10-14T10:25:50.871185400+00:00
+    The Mini Spec Section 11 said "Sent via {connector_code}
+    at {decided_at}" and did not specify format. Cosmetic,
+    not a defect. Candidate for a future CopilotPanel
+    formatting slice. Preferred format: local date-time
+    with minute precision.
+
+Carried from Appendix M Section M.14:
+
+  - OI-3: strategy::analyze silently discards AI-path
+    failures. The panel shows "Fallback - AI unavailable"
+    with no diagnostic. Candidate for a logging slice.
+  - OI-4: fallback_outcome produces an empty draft.
+    Candidate for a fallback-draft slice.
+  - OI-5: SENT state exposes no path to start a new
+    analysis until FD9 ships. CLOSED by FD9.
+
+Carried from Appendix E Section E.8 / F.7 / G.8 / H.7 /
+I.7 / K.7 / L.6:
+
+  - Three unused-import warnings in slice5_send_safety.rs.
+    Cosmetic.
+  - O1 ghost-row fix (deferred by founder).
+  - O2 Communication Tools credential health.
+  - STEP 1.5 - More known providers.
+  - STEP 1.6 - Data-source display surface.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - REGISTRATION / ONBOARDING BLOCK.
+  - ACCEPTANCE - end-to-end.
+
+================================================================
+N.7 - QUEUE
+================================================================
+
+DONE
+
+  CONNECTOR-EVENT-ORDER-SPEC v1.0. F15 CLOSED.
+  SLICE 1 through SLICE 4. See Appendices F-I.
+  SLICE 5 copilot spec FROZEN 2026-10-13. Appendix J.
+  SLICE 5a - recommendation persistence. CLOSED 2026-10-13.
+  SLICE 5b - send safety and orchestration. CLOSED
+    2026-10-14.
+  SLICE 5c - Copilot UI. CLOSED 2026-10-14.
+    Cloud green at 449/449 (3 ignored).
+    Live retest: four checkpoints pass.
+
+IN FLIGHT
+
+  None.
+
+NEXT - IN ORDER
+
+  1. SLICE 6 - Integrated security and regression tests.
+     Per Part II Section II.16. Offline/stale rules,
+     opt-out changes, concurrent sends, provider
+     failures, malformed output, altered drafts,
+     expiration, credential leakage, embedded
+     identifiers, base-URL attack scenarios, uncertain
+     outcomes, crash recovery. Own mini spec before code.
+
+  Then the carried items from N.6.
+
+================================================================
+N.8 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I or Part II.
+  Does not reopen any frozen spec.
+  Does not edit Appendix M.
+  Does not start Slice 6. Slice 6 needs its own mini
+  spec before code.
+  Does not decide any O1/O2 question.
+  Does not add any new event type, wire format, or sync
+  surface.
+
+================================================================
+END OF APPENDIX N
+================================================================
+'@
+[System.IO.File]::AppendAllText($path, $c, (New-Object System.Text.UTF8Encoding($false)))
