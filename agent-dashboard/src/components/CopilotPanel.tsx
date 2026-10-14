@@ -26,7 +26,6 @@ function channelFilterFor(
       return 'voice';
   }
 }
-const FLAG_DEBOUNCE_MS = 300;
 
 interface CopilotPanelProps {
   debtorId: string;
