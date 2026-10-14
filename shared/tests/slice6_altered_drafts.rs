@@ -47,13 +47,24 @@ fn now() -> DateTime<Utc> {
 // Mock adapter
 // -----------------------------------------------------------------
 
+#[derive(Clone, Copy)]
+enum MockOutcome {
+    Success,
+    Error,
+}
+
 struct MockDeliveryAdapter {
+    outcome: MockOutcome,
     calls: RefCell<Vec<SendRequest>>,
 }
 
 impl MockDeliveryAdapter {
     fn new() -> Self {
+        Self::new_with(MockOutcome::Success)
+    }
+    fn new_with(outcome: MockOutcome) -> Self {
         Self {
+            outcome,
             calls: RefCell::new(Vec::new()),
         }
     }
@@ -73,12 +84,19 @@ impl ConnectorAdapter for MockDeliveryAdapter {
             subject: request.subject.clone(),
             from: request.from.clone(),
         });
-        Ok(SendResult {
-            success: true,
-            provider_message_id: Some("mock-msg".to_string()),
-            provider_status: None,
-            provider_response: None,
-        })
+        match self.outcome {
+            MockOutcome::Success => Ok(SendResult {
+                success: true,
+                provider_message_id: Some("mock-msg".to_string()),
+                provider_status: None,
+                provider_response: None,
+            }),
+            MockOutcome::Error => Err(ConnectorError {
+                kind: gorka_shared::connectors::ConnectorErrorKind::ProviderTransientError,
+                message: "mock error".to_string(),
+                provider_response: None,
+            }),
+        }
     }
     fn test_connection(&self) -> Result<(), ConnectorError> {
         Ok(())
@@ -276,7 +294,10 @@ fn frozen_order_validated_equals_sent() {
     let rec_id = accepted_recommendation(&mut conn);
     seed_local_connector(&conn);
 
-    let adapter = MockDeliveryAdapter::new();
+    // Err outcome: finalize_uncertain retains the snapshot, so we
+    // can compare the sent body against the stored final_body. The
+    // adapter records the SendRequest before returning Err.
+    let adapter = MockDeliveryAdapter::new_with(MockOutcome::Error);
     execute_send_with_adapter(
         &mut conn,
         ORG,
