@@ -63,8 +63,8 @@ fn seed_debtor(conn: &mut rusqlite::Connection, org: &str, debtor: &str, seed: u
     let record = encode_event_record(
         &evt_id(seed),
         DEVICE_A,
-        100,
         seed as u64,
+        100,
         EVT_DEBTOR_CREATED,
         ETYPE_DEBTOR,
         debtor.as_bytes(),
@@ -89,8 +89,8 @@ fn apply_data_update(
     let record = encode_event_record(
         &evt_id(seed),
         DEVICE_A,
-        clock,
         seq,
+        clock,
         EVT_ENTITY_UPDATED,
         ETYPE_DEBTOR,
         debtor.as_bytes(),

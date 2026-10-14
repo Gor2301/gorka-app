@@ -67,8 +67,8 @@ fn seed_via_sync_debtor_created(conn: &mut rusqlite::Connection) {
     let record = encode_event_record(
         &evt_id(1),
         DEVICE_A,
-        100,
         1,
+        100,
         EVT_DEBTOR_CREATED,
         ETYPE_DEBTOR,
         DEBTOR.as_bytes(),
@@ -113,8 +113,8 @@ fn client_opt_out_reaches_agent_and_blocks() {
     let record = encode_event_record(
         &evt_id(2),
         DEVICE_A,
-        101,
         2,
+        101,
         EVT_ENTITY_UPDATED,
         ETYPE_DEBTOR,
         DEBTOR.as_bytes(),
@@ -149,8 +149,8 @@ fn unrelated_key_survives_entity_updated() {
     let record = encode_event_record(
         &evt_id(3),
         DEVICE_A,
-        102,
         3,
+        102,
         EVT_ENTITY_UPDATED,
         ETYPE_DEBTOR,
         DEBTOR.as_bytes(),
@@ -180,8 +180,8 @@ fn protocol_order_loser_recorded_in_history() {
     let record_w = encode_event_record(
         &evt_id(4),
         DEVICE_A,
-        200,
         4,
+        200,
         EVT_ENTITY_UPDATED,
         ETYPE_DEBTOR,
         DEBTOR.as_bytes(),
@@ -198,8 +198,8 @@ fn protocol_order_loser_recorded_in_history() {
     let record_l = encode_event_record(
         &evt_id(5),
         DEVICE_B,
-        150,
         5,
+        150,
         EVT_ENTITY_UPDATED,
         ETYPE_DEBTOR,
         DEBTOR.as_bytes(),
@@ -246,8 +246,8 @@ fn empty_blob_round_trip() {
     let record = encode_event_record(
         &evt_id(6),
         DEVICE_A,
-        110,
         6,
+        110,
         EVT_ENTITY_UPDATED,
         ETYPE_DEBTOR,
         DEBTOR.as_bytes(),
@@ -279,8 +279,8 @@ fn clear_opt_out_after_sync_unblocks() {
     let set_record = encode_event_record(
         &evt_id(7),
         DEVICE_A,
-        120,
         7,
+        120,
         EVT_ENTITY_UPDATED,
         ETYPE_DEBTOR,
         DEBTOR.as_bytes(),
@@ -303,8 +303,8 @@ fn clear_opt_out_after_sync_unblocks() {
     let clear_record = encode_event_record(
         &evt_id(8),
         DEVICE_A,
-        121,
         8,
+        121,
         EVT_ENTITY_UPDATED,
         ETYPE_DEBTOR,
         DEBTOR.as_bytes(),
