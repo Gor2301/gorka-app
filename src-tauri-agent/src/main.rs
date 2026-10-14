@@ -1383,6 +1383,89 @@ fn confirm_uncertain_attempt(
         })
     }
 }
+// ---------------------------------------------------------------------
+// Slice 5c. Advisory draft validation.
+// ---------------------------------------------------------------------
+
+#[derive(serde::Serialize)]
+struct ClaimFlagView {
+    claim_type: &'static str,
+    source: &'static str,
+    span_start: usize,
+    span_end: usize,
+    matched_text: String,
+    verification_kind: &'static str,
+    db_value: Option<String>,
+    draft_id: u64,
+}
+
+fn claim_type_str(t: gorka_shared::fact_validation::ClaimType) -> &'static str {
+    use gorka_shared::fact_validation::ClaimType;
+    match t {
+        ClaimType::DollarAmount => "DollarAmount",
+        ClaimType::CalendarDate => "CalendarDate",
+        ClaimType::InvoiceRef => "InvoiceRef",
+        ClaimType::PriorPromisePayment => "PriorPromisePayment",
+        ClaimType::LegalOrCreditConsequence => "LegalOrCreditConsequence",
+    }
+}
+
+fn claim_source_str(s: gorka_shared::fact_validation::ClaimSource) -> &'static str {
+    use gorka_shared::fact_validation::ClaimSource;
+    match s {
+        ClaimSource::Subject => "Subject",
+        ClaimSource::Body => "Body",
+    }
+}
+
+/// Advisory fact-validation for the Copilot panel. Read-only. No
+/// state transitions. No provider call. send_recommendation remains
+/// the authoritative validation gate.
+#[tauri::command]
+fn validate_draft_for_copilot(
+    debtor_id: String,
+    subject: Option<String>,
+    body: String,
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<Vec<ClaimFlagView>, String> {
+    use gorka_shared::fact_validation::Verification;
+
+    let org_id = get_trusted_organization_id(&app)?;
+    let db_guard = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = db_guard.as_ref().ok_or("Database not unlocked")?;
+
+    let subject_str = subject.as_deref().unwrap_or("");
+    let flags = gorka_shared::fact_validation::validate_draft(
+        conn,
+        &org_id,
+        &debtor_id,
+        subject_str,
+        &body,
+        0,
+    )
+    .map_err(|e| format!("{:?}", e))?;
+
+    let mut out = Vec::with_capacity(flags.len());
+    for f in flags {
+        let (kind, db_value) = match f.verification {
+            Verification::Verified { db_value } => ("Verified", Some(db_value)),
+            Verification::Mismatch { db_value } => ("Mismatch", Some(db_value)),
+            Verification::Unverifiable => ("Unverifiable", None),
+        };
+        out.push(ClaimFlagView {
+            claim_type: claim_type_str(f.claim_type),
+            source: claim_source_str(f.source),
+            span_start: f.span_start,
+            span_end: f.span_end,
+            matched_text: f.matched_text,
+            verification_kind: kind,
+            db_value,
+            draft_id: f.draft_id,
+        });
+    }
+    Ok(out)
+}
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
@@ -1494,6 +1577,7 @@ fn main() {
             send_recommendation,
             list_copilot_providers,
             confirm_uncertain_attempt,
+            validate_draft_for_copilot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

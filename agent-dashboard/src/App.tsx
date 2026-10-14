@@ -21,6 +21,7 @@ import DebtorProfilePage from '@/pages/DebtorProfilePage';
 import PlanPage from '@/pages/PlanPage';
 import ActionsPage from '@/pages/ActionsPage';
 import CommunicationToolsPage from '@/pages/CommunicationToolsPage';
+import CopilotPage from '@/pages/CopilotPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { EntryCard, Spinner } from '@/components/primitives';
 type EntryStep = 'loading' | 'login' | 'unlock' | 'enroll' | 'shell';
@@ -126,15 +127,7 @@ export default function App() {
               />
             }
           />
-          <Route
-            path="/copilot"
-            element={
-              <StubPage
-                title="Copilot"
-                subtitle="The AI Copilot arrives in a later phase."
-              />
-            }
-          />
+          <Route path="/copilot" element={<CopilotPage />} />
           <Route
             path="/support"
             element={

@@ -1,0 +1,104 @@
+.copilot-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.copilot-page__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+  color: var(--color-text);
+}
+
+.copilot-page__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.copilot-page__section-title {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.copilot-page__center {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.copilot-page__muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.copilot-page__paragraph {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text);
+}
+
+.copilot-page__paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.copilot-page__list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.copilot-page__list li {
+  margin-bottom: 6px;
+}
+
+.copilot-page__list li:last-child {
+  margin-bottom: 0;
+}
+
+.copilot-page__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.copilot-page__table th,
+.copilot-page__table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.copilot-page__table th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted);
+}
+
+.copilot-page__disclosure {
+  margin: 0;
+  padding: 10px 12px;
+  background-color: #F9FAFB;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text);
+}

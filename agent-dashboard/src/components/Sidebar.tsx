@@ -29,7 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/communication-tools', label: 'Communication Tools', icon: MessageSquare },
   { to: '/actions', label: 'Actions', icon: ClipboardList },
   { to: '/documents', label: 'Documents', icon: FileText },
-  { to: '/copilot', label: 'Copilot', icon: Sparkles, disabled: true },
+  { to: '/copilot', label: 'Copilot', icon: Sparkles },
   { to: '/support', label: 'Support', icon: LifeBuoy, disabled: true },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];

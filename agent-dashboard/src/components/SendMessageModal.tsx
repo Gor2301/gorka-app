@@ -5,6 +5,7 @@ import {
   localDB,
   LocalConnector,
   SendConnectorMessageInput,
+  SendRecommendationInput,
 } from '@/services/local.db';
 import './SendMessageModal.css';
 
@@ -12,6 +13,16 @@ interface SendMessageModalProps {
   debtorId: string;
   debtorName: string;
   presetConnectorCode?: string;
+  /** "direct" (default) calls send_connector_message; "copilot" calls send_recommendation. */
+  mode?: 'direct' | 'copilot';
+  /** Copilot mode only. Populates the composer and carries the recommendation id. */
+  prefill?: {
+    recommendation_id?: string;
+    subject?: string | null;
+    body?: string;
+    to?: string;
+    connector_code?: string;
+  };
   onClose: () => void;
   onSent: () => void;
 }
@@ -57,6 +68,8 @@ export default function SendMessageModal({
   debtorId,
   debtorName,
   presetConnectorCode,
+  mode = 'direct',
+  prefill,
   onClose,
   onSent,
 }: SendMessageModalProps) {
@@ -65,8 +78,8 @@ export default function SendMessageModal({
   const [debtorPhone, setDebtorPhone] = useState('');
   const [debtorEmail, setDebtorEmail] = useState('');
   const [to, setTo] = useState('');
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  const [subject, setSubject] = useState(prefill?.subject ?? '');
+  const [body, setBody] = useState(prefill?.body ?? '');
   const [disclosure, setDisclosure] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -95,18 +108,23 @@ export default function SendMessageModal({
 
         let pick = enabled[0]?.connector_code ?? '';
         if (
+          prefill?.connector_code &&
+          enabled.some((c) => c.connector_code === prefill.connector_code)
+        ) {
+          pick = prefill.connector_code;
+        } else if (
           presetConnectorCode &&
           enabled.some((c) => c.connector_code === presetConnectorCode)
         ) {
           pick = presetConnectorCode;
         }
         setSelectedCode(pick);
-        setTo(defaultRecipientFor(pick, phone, email));
+        setTo(prefill?.to ?? defaultRecipientFor(pick, phone, email));
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
     })();
-  }, [debtorId, presetConnectorCode]);
+  }, [debtorId, presetConnectorCode, prefill]);
 
   const handleConnectorChange = (newCode: string) => {
     setSelectedCode(newCode);
@@ -139,14 +157,28 @@ export default function SendMessageModal({
     setSending(true);
     setError('');
     try {
-      const input: SendConnectorMessageInput = {
-        connectorCode: selectedCode,
-        debtorId,
-        to: to.trim(),
-        subject: isEmail ? subject.trim() : null,
-        body: finalBody,
-      };
-      await localDB.sendConnectorMessage(input);
+      if (mode === 'copilot') {
+        if (!prefill?.recommendation_id) {
+          throw new Error('Missing recommendation id.');
+        }
+        const copilotInput: SendRecommendationInput = {
+          recommendationId: prefill.recommendation_id,
+          connectorCode: selectedCode,
+          to: to.trim(),
+          subject: isEmail ? subject.trim() : null,
+          draftBody: body,
+        };
+        await localDB.sendRecommendation(copilotInput);
+      } else {
+        const input: SendConnectorMessageInput = {
+          connectorCode: selectedCode,
+          debtorId,
+          to: to.trim(),
+          subject: isEmail ? subject.trim() : null,
+          body: finalBody,
+        };
+        await localDB.sendConnectorMessage(input);
+      }
       onSent();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

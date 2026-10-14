@@ -25,6 +25,7 @@ import ActionEditModal from '@/components/ActionEditModal';
 import CommunicationEditModal from '@/components/CommunicationEditModal';
 import RelationEditModal, { RelationRole } from '@/components/RelationEditModal';
 import CommunicationCard from '@/components/CommunicationCard';
+import CopilotPanel from '@/components/CopilotPanel';
 import './DebtorProfilePage.css';
 
 const DOCUMENT_CATEGORIES: { value: string; label: string }[] = [
@@ -637,6 +638,12 @@ export default function DebtorProfilePage() {
           onSent={handleCommunicationSaved}
         />
       </Card>
+
+      <CopilotPanel
+        debtorId={debtor.id}
+        debtorName={`${debtor.name} ${debtor.surname}`.trim()}
+        onSendComplete={handleCommunicationSaved}
+      />
 
       <Card>
         <div className="debtor-profile__card-header">
