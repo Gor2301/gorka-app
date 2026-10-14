@@ -111,7 +111,7 @@ const connectors = [
   },
   {
     code: 'gemini-ai',
-    mvpStatus: 'COMING_SOON',
+    mvpStatus: 'LIVE',
     name: 'Gemini AI',
     description: 'AI completion, analysis, and recommendations.',
     category: 'AI',
