@@ -41,6 +41,7 @@ pub mod sync_session;
 pub mod sync_transport;
 pub mod send_safety;
 pub mod copilot;
+pub mod send_orchestration;
 
 pub mod recover;
 
