@@ -304,6 +304,7 @@ export interface RecommendationView {
   superseded_by: string | null;
   snapshot_hash: string;
   uncertain_attempt_id: string | null;
+  delivery_connector_code: string | null;
 }
 
 export interface SendRecommendationInput {

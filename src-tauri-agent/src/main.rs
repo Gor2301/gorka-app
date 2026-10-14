@@ -1016,6 +1016,7 @@ struct RecommendationView {
     superseded_by: Option<String>,
     snapshot_hash: String,
     uncertain_attempt_id: Option<String>,
+    delivery_connector_code: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -1051,6 +1052,7 @@ struct CopilotProviderRow {
 fn view_from_row(
     row: gorka_shared::recommendation_store::RecommendationRow,
     uncertain_attempt_id: Option<String>,
+    delivery_connector_code: Option<String>,
 ) -> RecommendationView {
     use gorka_shared::recommendation_store::RecommendationStatus;
     use gorka_shared::strategy::StrategySource;
@@ -1090,6 +1092,7 @@ fn view_from_row(
         superseded_by: row.superseded_by,
         snapshot_hash: row.snapshot_hash,
         uncertain_attempt_id,
+        delivery_connector_code,
     }
 }
 
@@ -1119,7 +1122,7 @@ fn analyze_debtor(
         now,
     )
     .map_err(|e| e.to_string())?;
-    Ok(view_from_row(row, None))
+    Ok(view_from_row(row, None, None))
 }
 
 #[tauri::command]
@@ -1145,7 +1148,17 @@ fn list_recommendations_for_debtor(
                 |r| r.get(0),
             )
             .ok();
-        views.push(view_from_row(row, uncertain));
+        let delivery_connector_code: Option<String> = conn
+            .query_row(
+                "SELECT connector_code FROM send_attempts
+                  WHERE organization_id = ?1 AND recommendation_id = ?2
+                    AND state = 'CONFIRMED_SUCCESS'
+                  ORDER BY finalized_at DESC LIMIT 1",
+                rusqlite::params![&org_id, &row.id],
+                |r| r.get(0),
+            )
+            .ok();
+        views.push(view_from_row(row, uncertain, delivery_connector_code));
     }
     Ok(views)
 }

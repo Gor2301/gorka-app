@@ -404,8 +404,13 @@ export default function CopilotPanel({
         return (
           <div className="copilot-panel__section">
             <p className="copilot-panel__status-ok">
-              Sent via {r.ai_connector_code} at {r.decided_at ?? r.created_at}.
+              Sent via {r.delivery_connector_code ?? 'an unknown connector'} at {r.decided_at ?? r.created_at}.
             </p>
+            <div className="copilot-panel__actions">
+              <Button onClick={handleAnalyze} loading={analyzing}>
+                Analyze debtor
+              </Button>
+            </div>
           </div>
         );
       case 'EXPIRED':
