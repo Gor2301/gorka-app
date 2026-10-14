@@ -4034,3 +4034,339 @@ K.8 — WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX K
 ================================================================
+
+
+================================================================
+APPENDIX L — SLICE 5b CLOSE
+(added v3.5, 2026-10-14)
+================================================================
+
+L.0 — WHY THIS APPENDIX EXISTS
+
+Appendix K closed Slice 5a and pointed at Slice 5b. This
+session ran 5b end to end: reconnaissance, single-instance
+plugin, migration v12, send_safety.rs, copilot.rs, six Tauri
+commands. Cloud green at 449/449 (3 ignored). Seven commits,
+three of them fixes caught on cloud. Where this appendix
+conflicts with K.7's queue, this appendix wins.
+
+================================================================
+L.1 — MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 90c9fe7. Pushed. Clean tree except the two known
+        untracked files (CHAT-HANDOFF-DUMP.txt, make-dump.ps1).
+
+CLOUD:  at 90c9fe7. Workspace test green. Closed at founder's
+        discretion.
+
+Slice 5b commits, oldest first:
+
+  3d5d5b3  slice 5b: single-instance plugin, busy_timeout,
+           migration v12, migration tests
+  5945292  slice 5b fix: communications has no organization_id;
+           single-column index on send_attempt_id
+  fd0036b  slice 5b fix: PRAGMA busy_timeout returns a row;
+           query_row not execute
+  ac090be  slice 5b: send_safety module, communications refactor,
+           integration tests
+  7ab43f7  slice 5b fix: SEND_UNCERTAIN source state in finalize;
+           opt-out test seeds before snapshot
+  76b63b3  slice 5b fix: read_snapshot test uses confirm_delivered
+           for UNCERTAIN attempt
+  90c9fe7  slice 5b: copilot module and six Tauri commands
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -10
+    git status --short
+
+================================================================
+L.2 — WHAT SLICE 5b SHIPPED
+================================================================
+
+Per SLICE 5b MINI SPEC v1.0 (FROZEN), §6 through §9.
+
+Migration v12 (db.rs):
+  - send_reservations table + idx_send_reservations_window and
+    idx_send_reservations_active.
+  - send_attempts table + idx_send_attempts_state and
+    idx_send_attempts_recommendation.
+  - communications gains connector_code TEXT and
+    send_attempt_id TEXT via ALTER TABLE, each guarded by
+    PRAGMA table_info duplicate-column protection.
+  - idx_communications_send_attempt on communications(send_attempt_id).
+  - New helper: column_exists_tx(&Transaction, table, column).
+
+shared/src/db.rs:
+  - PRAGMA busy_timeout = 5000 in init_db and
+    open_file_for_tests, via query_row.
+
+shared/src/send_safety.rs (new):
+  - AttemptState, AttemptRow, SafetyError, SendAttemptSnapshot.
+  - check_contact_limit, begin_send (two-phase freshness),
+    recover_at_startup, read_snapshot.
+  - finalize_success, finalize_failure, finalize_uncertain,
+    confirm_delivered, confirm_not_delivered — all five use
+    BEGIN IMMEDIATE, all five re-read on zero-row UPDATE.
+  - Device-wide compliance_rules read; org-scoped reservation
+    count. Malformed contact-limit config fails closed (DbError).
+  - SEND_UNCERTAIN is a valid source state for
+    confirm_delivered and confirm_not_delivered.
+
+shared/src/copilot.rs (new):
+  - AI_PROVIDER_CODES = ["gemini-ai", "openai-compatible"].
+  - select_ai_provider, build_selected_adapter, analyze_debtor.
+  - CopilotError enum.
+
+shared/src/communications.rs:
+  - insert_communication_in_tx(&Transaction, ...,
+    connector_code: Option<&str>, send_attempt_id: Option<&str>).
+  - insert_communication is a thin wrapper that opens a
+    transaction, calls the inner, commits.
+
+shared/src/lib.rs:
+  - pub mod send_safety; pub mod copilot;
+
+src-tauri-agent/src/main.rs:
+  - tauri-plugin-single-instance registered as first plugin.
+  - Six new commands: analyze_debtor,
+    list_recommendations_for_debtor, decide_recommendation,
+    send_recommendation, list_copilot_providers,
+    confirm_uncertain_attempt. All registered in
+    generate_handler!.
+  - Types: RecommendationView, SendRecommendationInput,
+    SendRecommendationResult, ConfirmResult, CopilotProviderRow.
+
+Tests:
+  - shared/tests/migration_v12.rs: 8 tests.
+  - shared/tests/slice5_send_safety.rs: 38 tests, 1 ignored
+    (the >5s lock-contention test).
+  - Workspace 403 -> 449, 3 ignored total.
+
+Not touched:
+  - strategy.rs, fact_validation.rs, claim_resolution.rs,
+    prompts.rs, any adapter, any sync module,
+    src-tauri/src/main.rs, any frontend file.
+  - send_connector_message unchanged.
+
+================================================================
+L.3 — DEFECTS CAUGHT ON CLOUD
+================================================================
+
+FD1 — Slice 5 spec §5.2 wrote an index on a nonexistent column.
+  The frozen Slice 5 spec §5.2 stated:
+    CREATE INDEX idx_communications_send_attempt
+      ON communications(organization_id, send_attempt_id);
+  communications has no organization_id column. Actual schema:
+    id, debtor_id, type, direction, content, duration,
+    created_by, data, created_at.
+  Org scoping on communications is done via a debtors join.
+  Caught on the first cloud trip: 7 in-module
+  recommendation_store tests failed with
+  "no such column: organization_id".
+  Correction: single-column index on send_attempt_id, matching
+  the existing idx_communications_debtor_id pattern.
+  Commit 5945292.
+
+FD2 — PRAGMA busy_timeout returns a row; execute rejects it.
+  The 5b.1a amendment wrote:
+    conn.execute("PRAGMA busy_timeout = 5000", [])
+  in db::init_db and db::open_file_for_tests. rusqlite's
+  execute rejects any statement that returns rows.
+  PRAGMA busy_timeout = N reports the resulting value as a
+  single-row result.
+  Caught by sync_engine.rs::direct_sync_propagates_debtor:
+  "Execute returned results - did you mean to call query?".
+  Correction: conn.query_row("PRAGMA busy_timeout = 5000",
+  [], |row| row.get::<_, i64>(0)). Same pattern as the
+  existing PRAGMA key and PRAGMA journal_mode calls in the
+  same functions.
+  Same defect class as FG1 (Slice 1 close, gorka-recover).
+  Now three instances — see P-KK.
+  Commit fd0036b.
+
+FD3 — Frozen Slice 5 spec §6.5 and §6.7 state classification
+      omitted SEND_UNCERTAIN.
+  Recovery sets a recommendation to SEND_UNCERTAIN after an
+  UNCERTAIN attempt. The frozen §6.5 and §6.7 classification
+  listed only ACCEPTED, EXPIRED, SENT as handled states.
+  confirm_delivered and confirm_not_delivered therefore
+  returned InconsistentFinalizedState on a legitimate
+  post-recovery path.
+  The v0.3 amendment inherited the omission.
+  Caught by four tests:
+    confirm_delivered_from_uncertain
+    confirm_not_delivered_from_uncertain
+    read_snapshot_only_on_uncertain
+    (and a fourth triggered by the same root cause)
+  Correction applied in code:
+    §6.5 success path: ACCEPTED || SEND_UNCERTAIN -> SENT.
+    §6.7 failure path: SEND_UNCERTAIN -> ACCEPTED (retriable),
+      decided_at preserved.
+  Frozen spec text was NOT updated. This is a code-first fix
+  with a spec-text amendment recorded here. The mini spec v1.0
+  is superseded on this point by §L.3 of this appendix.
+  Commit 7ab43f7.
+
+Test-only fix: read_snapshot_only_on_uncertain.
+  The test called finalize_success on an UNCERTAIN attempt.
+  finalize_success requires IN_PROGRESS. The correct call is
+  confirm_delivered. Source state gate is working as designed.
+  Commit 76b63b3.
+
+================================================================
+L.4 — RECONNAISSANCE FINDINGS
+================================================================
+
+Performed 2026-10-14, before any 5b code.
+
+compliance_rules: single-row per device (id INTEGER PRIMARY
+  KEY CHECK (id = 1)). Column names match the spec:
+  contact_limit_enabled, contact_limit_count INTEGER (nullable),
+  contact_limit_period TEXT (nullable), disclosure_text TEXT.
+  Nullable count and period drive the fail-closed policy.
+
+debtors: organization_id TEXT NOT NULL; deleted TEXT NOT NULL
+  DEFAULT 'false'. Canonical predicate across the codebase is
+  deleted != 'true'. Confirmed by grep in debtors.rs, debts.rs,
+  actions.rs, communications.rs, compliance.rs, context.rs,
+  recommendation_store.rs. No alternate form.
+
+recommendations: column-by-column match against frozen 5a
+  spec §5.1. No 5a defect.
+
+Single-instance: absent from Cargo.toml. Added in 5b as the
+  first .plugin(...) in the builder chain.
+
+DB open timing: DB opens inside unlock_database, not at
+  process start. Every DB-touching command gates on
+  state.db.is_some(). recover_at_startup was inserted in
+  unlock_database after verify_password and before
+  *db_guard = Some(conn), so no command can reach
+  send_attempts before recovery completes.
+
+Engine connection: opens after state.db is populated.
+  No race with recovery.
+
+Model field: Gemini's model identifier lives in the
+  connector's configuration JSON as {"model": "..."}.
+  copilot::select_ai_provider reads it from there.
+
+================================================================
+L.5 — PROCESS AMENDMENTS
+================================================================
+
+P-KK — BEFORE ADDING ANY PRAGMA, VERIFY ITS RETURN SHAPE.
+  Some PRAGMAs return rows and must be called with query_row:
+    PRAGMA key
+    PRAGMA journal_mode
+    PRAGMA busy_timeout
+    PRAGMA table_info
+    PRAGMA user_version
+  Some do not and must be called with execute:
+    PRAGMA foreign_keys = ON
+  Getting this wrong fails only at runtime. Three instances:
+    FG1 (Slice 1): gorka-recover PRAGMA key
+    FD2 (Slice 5b): PRAGMA busy_timeout in db::init_db and
+                    db::open_file_for_tests
+  The pattern: when in doubt, query_row and discard the row.
+
+P-LL — ANY SPEC REFERENCE TO AN EXISTING TABLE'S COLUMNS MUST
+       BE VERIFIED AGAINST PRAGMA table_info BEFORE THE SPEC
+       IS FROZEN.
+  FD1 is the evidence: the frozen Slice 5 spec §5.2 named
+  communications(organization_id, send_attempt_id), and
+  communications has no organization_id. The reconnaissance
+  step did not catch this because the reconnaissance was
+  scoped to the tables the spec named as new, not the tables
+  the spec altered with indexes.
+  Rule: for any ALTER or CREATE INDEX on an existing table,
+  list the table's current columns before freezing the spec.
+
+P-LL is additive to the existing reconnaissance practice; it
+narrows the scope to "tables the spec touches but does not
+create".
+
+================================================================
+L.6 — OPEN ITEMS
+================================================================
+
+New this session:
+  - None functional. Slice 5b is closed.
+  - Three unused-import warnings in slice5_send_safety.rs
+    (lines 17, 25). Cosmetic; may fold into a later cleanup
+    commit.
+
+Carried from Appendix K §K.6, unchanged:
+  - Deletion semantics UI: not yet built. Slice 5c.
+  - Phase 5b.0 reconnaissance: COMPLETE. Closed by this
+    appendix.
+
+Carried from Appendix E §E.8 / F.7 / G.8 / H.7 / I.7 / K.7:
+  - O1 ghost-row fix (deferred by founder).
+  - O2 Communication Tools credential health.
+  - STEP 1.5 — More known providers.
+  - STEP 1.6 — Data-source display surface.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - REGISTRATION / ONBOARDING BLOCK.
+  - ACCEPTANCE — end-to-end.
+
+================================================================
+L.7 — QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0. F15 CLOSED.
+  SLICE 1 through SLICE 4.
+  SLICE 5 copilot spec FROZEN 2026-10-13.
+  SLICE 5a — recommendation persistence. CLOSED 2026-10-13.
+  SLICE 5b — send safety and orchestration. CLOSED 2026-10-14.
+    Cloud green at 449/449 (3 ignored).
+
+IN FLIGHT
+  None.
+
+NEXT — IN ORDER
+
+  1. SLICE 5c — Copilot UI.
+     Files: agent-dashboard TSX/CSS only. No Rust, no
+     migration. Components: CopilotPanel, CopilotFlagList,
+     CopilotPage. DebtorProfilePage mounts CopilotPanel.
+     Sidebar gains one entry; App.tsx gains one route.
+     Wires the six commands from 5b:
+       analyze_debtor
+       list_recommendations_for_debtor
+       decide_recommendation
+       send_recommendation
+       list_copilot_providers
+       confirm_uncertain_attempt
+     STOP gate: cloud trip includes both npm run build
+     commands; live end-to-end test from Analyze -> Send ->
+     SEND_UNCERTAIN simulation -> Confirm delivered.
+     Own mini spec before code.
+
+  2. SLICE 6 — Integrated security and regression tests.
+
+  Then the carried items from Appendix E §E.8 / F.7 / G.8 /
+  H.7 / I.7 / K.7 / L.6.
+
+================================================================
+L.8 — WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  It does not amend Part II beyond the §L.3 FD3 note.
+  It does not reopen CONNECTOR-EVENT-ORDER-SPEC Part I.
+  It does not decide any remaining O1/O2 question.
+  It does not start Slice 5c. Slice 5c needs its own mini
+  spec before code.
+  It does not add any new event type, wire format, or sync
+  surface.
+
+================================================================
+END OF APPENDIX L
+================================================================
