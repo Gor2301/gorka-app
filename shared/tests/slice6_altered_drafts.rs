@@ -5,12 +5,12 @@
 // Authority: PART III - SLICE 6 MINI SPEC v1.0, Section 5 rows
 // 6.1-6.5, Section 8, Section 24.2.
 //
-// The orchestration must:
-//   1. Append disclosure to the raw draft -> final_body.
-//   2. Validate the final body.
-//   3. Block on Mismatch or Unverifiable.
-//   4. Never reach begin_send or the provider when blocked.
-//   5. Send the exact body that was validated.
+// Fixture ordering note. The freshness snapshot is captured at
+// insert_pending time and recomputed at begin_send time. Any debt
+// the test wants counted in the snapshot must therefore be seeded
+// BEFORE the recommendation is inserted. Seeding a debt after the
+// recommendation invalidates the hash and begin_send returns
+// RecommendationExpired. That is correct production behavior.
 
 use std::cell::RefCell;
 
@@ -44,7 +44,7 @@ fn now() -> DateTime<Utc> {
 }
 
 // -----------------------------------------------------------------
-// Mock adapter (records every SendRequest; always succeeds)
+// Mock adapter
 // -----------------------------------------------------------------
 
 struct MockDeliveryAdapter {
@@ -195,8 +195,9 @@ fn read_snapshot_final_body(conn: &Connection) -> Option<String> {
 #[test]
 fn mismatch_blocks_before_begin_send() {
     let mut conn = open_in_memory_for_tests().expect("open");
-    let rec_id = accepted_recommendation(&mut conn);
+    seed_debtor(&conn);
     seed_debt(&conn, "debt-6d-1", 500.00, "UNPAID");
+    let rec_id = accepted_recommendation(&mut conn);
     seed_local_connector(&conn);
 
     // Draft says $999.99. Debt is $500.00. Mismatch.
@@ -209,7 +210,8 @@ fn mismatch_blocks_before_begin_send() {
         now(),
         &adapter,
     )
-    .err().expect("mismatch must block");
+    .err()
+    .expect("mismatch must block");
     assert!(
         err.contains("unresolved mismatch"),
         "unexpected err: {}",
@@ -223,8 +225,8 @@ fn mismatch_blocks_before_begin_send() {
 #[test]
 fn unverifiable_blocks_before_begin_send() {
     let mut conn = open_in_memory_for_tests().expect("open");
+    // No debts: $500.00 is unverifiable.
     let rec_id = accepted_recommendation(&mut conn);
-    // No debts seeded: $500.00 is unverifiable.
     seed_local_connector(&conn);
 
     let adapter = MockDeliveryAdapter::new();
@@ -236,7 +238,8 @@ fn unverifiable_blocks_before_begin_send() {
         now(),
         &adapter,
     )
-    .err().expect("unverifiable must block");
+    .err()
+    .expect("unverifiable must block");
     assert!(err.contains("unverifiable"), "unexpected err: {}", err);
     assert_eq!(adapter.call_count(), 0);
     assert_eq!(count_rows(&conn, "send_attempts"), 0);
@@ -246,8 +249,9 @@ fn unverifiable_blocks_before_begin_send() {
 #[test]
 fn verified_proceeds() {
     let mut conn = open_in_memory_for_tests().expect("open");
-    let rec_id = accepted_recommendation(&mut conn);
+    seed_debtor(&conn);
     seed_debt(&conn, "debt-6d-2", 500.00, "UNPAID");
+    let rec_id = accepted_recommendation(&mut conn);
     seed_local_connector(&conn);
 
     let adapter = MockDeliveryAdapter::new();
@@ -267,8 +271,9 @@ fn verified_proceeds() {
 #[test]
 fn frozen_order_validated_equals_sent() {
     let mut conn = open_in_memory_for_tests().expect("open");
-    let rec_id = accepted_recommendation(&mut conn);
+    seed_debtor(&conn);
     seed_debt(&conn, "debt-6d-3", 500.00, "UNPAID");
+    let rec_id = accepted_recommendation(&mut conn);
     seed_local_connector(&conn);
 
     let adapter = MockDeliveryAdapter::new();
@@ -305,8 +310,9 @@ fn frozen_order_validated_equals_sent() {
 #[test]
 fn rejected_leaves_zero_rows() {
     let mut conn = open_in_memory_for_tests().expect("open");
-    let rec_id = accepted_recommendation(&mut conn);
+    seed_debtor(&conn);
     seed_debt(&conn, "debt-6d-4", 500.00, "UNPAID");
+    let rec_id = accepted_recommendation(&mut conn);
     seed_local_connector(&conn);
 
     let adapter = MockDeliveryAdapter::new();
@@ -318,7 +324,8 @@ fn rejected_leaves_zero_rows() {
         now(),
         &adapter,
     )
-    .err().expect("mismatch must block");
+    .err()
+    .expect("mismatch must block");
 
     assert_eq!(count_rows(&conn, "send_attempts"), 0);
     assert_eq!(count_rows(&conn, "send_reservations"), 0);
