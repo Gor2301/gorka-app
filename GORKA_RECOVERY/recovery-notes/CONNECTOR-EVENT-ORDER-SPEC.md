@@ -4827,3 +4827,43 @@ orchestration via execute_send_with_adapter.
 ================================================================
 END OF AMENDMENT - SECTION 24
 ================================================================
+
+================================================================
+SLICE 6 CLOSE - SPEC STATUS
+(added 2026-10-15)
+================================================================
+
+Slice 6 is CLOSED. Status of Part III:
+
+  Section 3.1  Validation order       - applied, verified
+  Section 3.2  Extraction             - applied (5b48a00)
+  Section 3.4  Baseline               - 449 / 3 / 0
+  Section 5    Gap matrix             - all rows resolved
+  Section 16   G1-G7 gates            - all passed
+  Section 17   Cloud verification     - passed, EXIT=0
+  Section 24   Adapter injection seam - applied (06f4c4b)
+
+One defect found in the frozen spec itself, recorded here
+and in RESUME-HERE Appendix O.4:
+
+  Section 5 row 5.2 is over-specified. Malformed snapshot
+  bytes on finalize_failure do not produce SnapshotInvalid.
+  finalize_failure does not parse the snapshot (Slice 5
+  spec Section 7.7). The test was corrected to assert the
+  actual contract; the row 5.2 text stands as historical
+  and is superseded by Appendix O.4.
+
+  Revised row 5.2 text:
+    "Malformed bytes on finalize_success -> SnapshotInvalid,
+     rollback. Malformed bytes on finalize_failure -> no
+     error; the failure path does not parse the snapshot,
+     clears it, sets CONFIRMED_FAILURE, releases the
+     reservation with reason RELEASED, writes no
+     communication."
+
+Final workspace test count after Slice 6:
+  493 passed, 3 ignored, 0 failed.
+
+================================================================
+END OF SLICE 6 CLOSE - SPEC STATUS
+================================================================

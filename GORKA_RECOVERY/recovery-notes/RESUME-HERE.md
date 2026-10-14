@@ -5222,3 +5222,334 @@ END OF APPENDIX N
 ================================================================
 '@
 [System.IO.File]::AppendAllText($path, $c, (New-Object System.Text.UTF8Encoding($false)))
+
+================================================================
+APPENDIX O - SLICE 6 CLOSE
+(added v3.8, 2026-10-15)
+================================================================
+
+O.0 - WHY THIS APPENDIX EXISTS
+
+Part III of CONNECTOR-EVENT-ORDER-SPEC froze the Slice 6
+mini spec on 2026-10-14 (commit 4c3b57f). The adapter-seam
+amendment landed the same day (commit 06f4c4b, Part III
+Section 24). This session wrote the nine Slice 6 integration
+test files, ran three cloud trips, classified every failure,
+and closed the slice.
+
+Where this appendix conflicts with M.17 or N.8, this
+appendix wins. Prior appendices are not edited.
+
+================================================================
+O.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 7b7e7ab plus the close-record commit that
+        follows. Pushed. Working tree clean except the two
+        known untracked files (CHAT-HANDOFF-DUMP.txt,
+        make-dump.ps1).
+
+CLOUD:  at 7b7e7ab. Full workspace suite green.
+        EXIT=0. Cloud may be closed.
+
+Slice 6 commits, oldest first (since the 4c3b57f freeze):
+
+  5b48a00  slice 6: extract send orchestration to shared
+           (behavior-preserving)
+  06f4c4b  slice 6: adapter injection seam; Part III
+           Section 24 amendment
+  cd935fe  slice 6: nine integration test files
+  62bd01f  slice 6: fix test compile errors
+  e73bed8  slice 6: fix fixture order in slice6_altered_drafts
+  ff8cd13  slice 6: frozen_order test uses Err outcome so
+           snapshot is retained
+  7b7e7ab  slice 6: fix encode_event_record argument order
+           (sequence, logical_clock)
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -8
+    git status --short
+
+================================================================
+O.2 - WHAT SLICE 6 SHIPPED
+================================================================
+
+Two production changes, both pre-approved, both reviewed by
+diff before acceptance:
+
+  1. shared/src/send_orchestration.rs (5b48a00)
+     Behavior-preserving extraction. The send sequence that
+     lived inline in src-tauri-agent/src/main.rs::send_
+     recommendation (lines 1199-1334) moved to
+     execute_send(). The Tauri command became a thin
+     wrapper that derives trusted identity and delegates.
+     No reordering, no error-string change, no logic change.
+
+  2. execute_send_with_adapter in the same module
+     (06f4c4b)
+     New sibling entry point that accepts an injected
+     &dyn ConnectorAdapter. The production execute_send
+     remains the delegator. The shared path preserves every
+     preflight check, every transaction boundary, and the
+     same ordering. Requested because the frozen Slice 6
+     spec required observing orchestration behavior under
+     success, failure, and error outcomes without a network
+     call.
+
+Nine new integration test files under shared/tests/:
+
+  slice6_altered_drafts.rs      5 tests
+  slice6_concurrency.rs         3 tests
+  slice6_crash_recovery.rs      4 tests
+  slice6_credential_leak.rs     7 tests
+  slice6_malformed.rs           5 tests
+  slice6_offline_stale.rs       6 tests
+  slice6_opt_out_sync.rs        4 tests
+  slice6_provider_failures.rs   7 tests
+  slice6_uncertain.rs           3 tests
+
+Total new tests: 44.
+
+One spec amendment applied during the slice: Part III
+Section 24 (adapter injection seam, commit 06f4c4b).
+
+One spec amendment recorded in this appendix, not in Part
+III itself: Section 5 row 5.2 is over-specified. See O.4.
+
+================================================================
+O.3 - VERIFICATION
+================================================================
+
+CLOUD at 7b7e7ab:
+
+  cargo build --workspace   PASS. Known benign warnings
+                            only.
+  cargo test --workspace
+     --no-fail-fast          493 passed, 3 ignored, 0 failed.
+                            EXIT=0.
+  npm run build (root)      PASS.
+  cd agent-dashboard
+  npm run build             PASS.
+
+Baseline reference (Part III Section 3.4) was 449 passed,
+3 ignored, 0 failed. Slice 6 adds 44 tests. Workspace moved
+449 -> 493.
+
+The three ignored tests are unchanged from baseline:
+  slice3c_manual.rs     2 ignored (manual TLS / proxy)
+  slice5_send_safety.rs 1 ignored (5s lock contention)
+
+================================================================
+O.4 - SPEC DEFECT RECORDED
+================================================================
+
+Part III Section 5 row 5.2 reads, as frozen:
+
+  "Malformed bytes -> SnapshotInvalid, rollback. Malformed
+   on finalize_failure -> SnapshotInvalid, no partial
+   writes."
+
+That row is over-specified. The frozen Slice 5 spec
+Section 7.7 states that finalize_failure does NOT parse
+the snapshot: it sets state='CONFIRMED_FAILURE',
+payload_snapshot=NULL, releases the reservation with
+reason='RELEASED', and never reads the bytes. Only
+finalize_success and confirm_delivered parse the
+snapshot, because they need the body to write the
+communication row.
+
+Observed behavior matches the frozen Slice 5 contract.
+The test was written to the incorrect row, not to the
+implementation.
+
+Amendment to Part III Section 5 row 5.2:
+
+  "Malformed bytes on finalize_success -> SnapshotInvalid,
+   rollback (attempt stays IN_PROGRESS, no communication).
+   Malformed bytes on finalize_failure -> no error; the
+   failure path does not parse the snapshot. It clears the
+   bytes, sets CONFIRMED_FAILURE, releases the reservation
+   with reason RELEASED, and writes no communication."
+
+The rewritten test in slice6_malformed.rs is
+finalize_failure_clears_snapshot_without_parsing. It
+asserts the intended contract, not a weakened one.
+
+================================================================
+O.5 - EXCLUDED CATEGORIES - EVIDENCE CITATIONS
+================================================================
+
+Part III Section 14 said categories 7 (expiration), 9
+(embedded identifiers), and 10 (base-URL attacks) receive
+no new file. The close record must cite the existing test
+names and the assertions those tests make, per the
+reviewer's requirement.
+
+Category 7 - Expiration
+  Covered by slice5_recommendation_store.rs:
+    check_freshness_passes_on_unchanged_state
+    check_freshness_expires_on_amount_change
+    check_freshness_boundary_just_before_72h
+    check_freshness_boundary_exactly_72h
+    check_freshness_boundary_just_after_72h
+    check_freshness_on_already_expired_row
+  Covered by slice5_send_safety.rs:
+    begin_send_phase_1_marks_expired_and_returns_error
+    begin_send_phase_1_72_hour_boundary_is_strict
+  Assertion: the freshness snapshot is recomputed at
+  begin_send; a mismatch or an expired window marks the
+  recommendation EXPIRED in a separate committed
+  transaction and returns Err before the reservation is
+  written.
+
+Category 9 - Embedded identifiers
+  Covered by slice3a_boundary.rs:
+    email_shaped_string_in_user_message_blocks
+    phone_shaped_string_in_system_prompt_blocks
+    currency_amount_string_blocks
+    invoice_shaped_token_blocks
+  Assertion: the boundary validator scans systemPrompt
+  and userMessage for email-shaped, phone-shaped,
+  currency-amount, and invoice-shaped tokens. Any match
+  returns BoundaryBlock. The request never reaches an
+  adapter.
+
+Category 10 - Base-URL attacks
+  Covered by slice3c_base_url.rs (33 tests):
+    rejects_http_scheme
+    rejects_ipv4_literal
+    rejects_ipv6_literal
+    rejects_embedded_credentials
+    loopback_v4_rejected_at_resolution
+    loopback_v6_rejected_at_resolution
+    private_v4_rejected
+    cgnat_rejected
+    link_local_rejected
+    multicast_rejected
+    reserved_rejected
+    dns_rebinding_second_call_fails
+    iana_ipv4_table_all_prohibited
+    iana_ipv6_table_all_prohibited
+    ipv4_mapped_ipv6_recurses
+    redirect_301_not_followed
+    redirect_cross_origin_not_attempted
+    adapter_send_calls_validate_resolution
+    adapter_send_fails_when_resolution_prohibited
+    adapter_send_fails_on_empty_resolution
+    pinned_provider_with_failing_resolver_returns_transport_error
+  Covered by slice3c_manual.rs (2 ignored manual):
+    manual_3c_m1_tls_chain_rejection_on_pinned_address
+    manual_3c_m2_proxy_env_bypassed_by_pinned_client
+  Assertion: static validation rejects HTTP, IP
+  literals, embedded credentials, and malformed URLs.
+  Resolution-time validation rejects the full IANA
+  prohibited tables for v4 and v6, recurses on IPv4-
+  mapped IPv6, and rejects DNS rebinding. Redirects are
+  not followed, and the pinned client does not respect
+  HTTP_PROXY / HTTPS_PROXY environment variables.
+
+No new tests were needed for 7, 9, 10. The existing files
+substantiate the frozen requirements.
+
+================================================================
+O.6 - PROCESS FINDINGS
+================================================================
+
+PF-1. BATCH TRIPS NEED A DIAGNOSTIC COMMAND.
+  The first Slice 6 cloud trip died at the first failing
+  test binary, hiding the state of six others. The
+  reviewer's --no-fail-fast run gave the complete per-
+  binary picture in one trip. Record this as the default
+  for multi-file batches going forward.
+
+PF-2. --no-fail-fast AND A SAVED LOG.
+  cargo test --workspace --no-fail-fast > log 2>&1,
+  then findstr the log for "Running tests", "test result:",
+  "FAILED", "error[". This pattern replaces ad-hoc tail
+  reading.
+
+PF-3. TEST FIXTURE ARGUMENT ORDER IS A SILENT BUG SOURCE.
+  Nine test files were written against encode_event_record
+  without a local compiler. Two test files passed
+  (sequence, logical_clock) in the wrong order. The
+  signature was correct; the calls were wrong. Only the
+  existing baseline test entity_updated_with_newer_clock_
+  wins showed the correct usage. Rule: when a fixture
+  calls a multi-argument encoder, cross-check the argument
+  order against an existing passing call in the same test
+  tree before writing.
+
+PF-4. LOCAL cargo check WOULD HAVE PREVENTED THREE ROUNDS
+  OF CHURN.
+  Round 1 was three compile errors. Round 2 was two
+  fixture-order bugs and one finalize-path assumption.
+  Round 3 was the argument-order bug. A local cargo check
+  on main (WSL2 or GitHub Actions) eliminates Rounds 1
+  and 3 entirely and most of Round 2, at 30 seconds per
+  iteration instead of a cloud trip. This is a separate
+  engineering task per the reviewer and is not part of
+  Slice 6.
+
+================================================================
+O.7 - OPEN ITEMS
+================================================================
+
+New this session:
+  - PF-4: local cargo check / GitHub Actions. Separate
+    engineering task.
+
+Carried from Appendix N Section N.6, unchanged:
+  - OI-3: strategy::analyze silently discards AI-path
+    failures.
+  - OI-4: fallback_outcome produces an empty draft.
+  - OI-6: decided_at renders full RFC 3339 with
+    microseconds.
+  - Three unused-import warnings in slice5_send_safety.rs.
+  - O1 ghost-row fix (deferred by founder).
+  - O2 Communication Tools credential health.
+  - STEP 1.5 - More known providers.
+  - STEP 1.6 - Data-source display surface.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - REGISTRATION / ONBOARDING BLOCK.
+  - ACCEPTANCE - end-to-end.
+
+================================================================
+O.8 - QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0. F15 CLOSED.
+  SLICE 1 through SLICE 4. See Appendices F-I.
+  SLICE 5a, 5b, 5c. See Appendices K, L, N.
+  SLICE 6 - Integrated security and regression tests.
+    CLOSED 2026-10-15. Cloud green at 493 passed,
+    3 ignored, 0 failed. EXIT=0.
+
+IN FLIGHT
+  None.
+
+NEXT - IN ORDER
+
+  1. ACCEPTANCE - end-to-end.  The next planned slice
+     per Part II Section II.16 and Appendix N.7.
+
+  Then the carried items from O.7.
+
+================================================================
+O.9 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I or Part II.
+  Does not edit prior appendices.
+  Does not start the acceptance slice.
+  Does not decide any O1/O2 question.
+  Does not bundle the local-toolchain work into Slice 6.
+
+================================================================
+END OF APPENDIX O
+================================================================
