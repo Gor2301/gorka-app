@@ -4370,3 +4370,294 @@ L.8 — WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX L
 ================================================================
+
+
+================================================================
+APPENDIX M - SLICE 5c IN PROGRESS
+(added v3.6, 2026-10-14)
+================================================================
+
+M.0 - WHY THIS APPENDIX EXISTS
+
+The chat was running long. Code for Slice 5c is complete
+through 5c.7 and cloud-verified. The live end-to-end test
+(5c.8) is blocked on a dependency gap and has not run. This
+appendix records the state so a fresh chat can resume
+without re-deriving context. It is a working appendix, not a
+close appendix. Slice 5c is NOT closed.
+
+Where this appendix conflicts with Appendix L, this
+appendix wins.
+
+================================================================
+M.1 - MACHINE STATE
+================================================================
+
+MAIN:   HEAD f7fdf22. Pushed.
+        Clean tree except the two known untracked files
+        (CHAT-HANDOFF-DUMP.txt, make-dump.ps1).
+
+CLOUD:  at f7fdf22. Cargo build PASS. Cargo test
+        449/449 (3 ignored). Client npm run build PASS.
+        Agent npm run build PASS. Cloud currently closed.
+
+Commits this slice, oldest first:
+
+  44e0940  slice 5c: append mini spec v1.0 frozen to
+           connector-event-order-spec
+  35242b2  slice 5c.1: copilot types and service wrappers in
+           local.db.ts
+  f7fdf22  slice 5c: copilot panel, flag list, page, and
+           validate_draft_for_copilot command
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -5
+    git status --short
+
+================================================================
+M.2 - SLICE 5c MINI SPEC v1.0 IS FROZEN
+================================================================
+
+Full text is in CONNECTOR-EVENT-ORDER-SPEC.md starting at
+line 3740 ("SLICE 5c - MINI SPEC v1.0 (FROZEN)") and ending at
+line 4188 ("END OF SLICE 5c MINI SPEC v1.0").
+
+Frozen 2026-10-14. Reviewer verdict: GO. Three founder
+decisions locked in section 13 of the spec.
+
+================================================================
+M.3 - WHAT SHIPPED SO FAR
+================================================================
+
+5c.1 - local.db.ts:
+  - Six new interfaces: RecommendationView,
+    SendRecommendationInput, SendRecommendationResult,
+    ConfirmResult, CopilotProviderRow, ClaimFlagView.
+  - Seven new service methods inside `localDB`:
+    analyzeDebtor, listRecommendationsForDebtor,
+    decideRecommendation, sendRecommendation,
+    listCopilotProviders, confirmUncertainAttempt,
+    validateDraftForCopilot.
+
+5c.2 - CopilotFlagList:
+  - agent-dashboard/src/components/CopilotFlagList.tsx
+  - agent-dashboard/src/components/CopilotFlagList.css
+  - Renders ClaimFlagView[]. Green/red/amber per
+    verification kind. "mayBeStale" prop for the error case.
+
+5c.3 - CopilotPanel:
+  - agent-dashboard/src/components/CopilotPanel.tsx
+  - agent-dashboard/src/components/CopilotPanel.css
+  - Full state machine: collapsed, not-enabled, pre-run,
+    loading, PENDING, ACCEPTED, SENT, EXPIRED, SEND_UNCERTAIN,
+    REJECTED-with-uncertain-attempt.
+  - Live flag validation with 300ms debounce and request-id
+    stale-response guard.
+  - Regenerate counter (cap 3 per session).
+  - Owns its own SendMessageModal instance in copilot mode.
+
+5c.4 - SendMessageModal:
+  - mode: 'direct' | 'copilot' prop (default 'direct').
+  - prefill prop for copilot mode.
+  - handleSend branches: direct -> sendConnectorMessage;
+    copilot -> sendRecommendation.
+  - deps array includes prefill.
+  - Existing CommunicationCard direct-send path unchanged.
+
+5c.5 - DebtorProfilePage:
+  - Imports and mounts CopilotPanel right after the
+    CommunicationCard Card.
+  - Passes onSendComplete={handleCommunicationSaved}.
+
+5c.6 - CopilotPage + wiring:
+  - agent-dashboard/src/pages/CopilotPage.tsx + .css
+  - Sidebar.tsx: /copilot entry enabled (disabled removed).
+  - App.tsx: /copilot route points at CopilotPage.
+  - Sections: Providers table, How it works, What to expect,
+    Disclosure.
+
+5c.7 - Rust command:
+  - src-tauri-agent/src/main.rs:
+    - ClaimFlagView struct (manual mapping, no serde derives
+      added to Slice 4 enums).
+    - claim_type_str and claim_source_str helpers.
+    - validate_draft_for_copilot #[command].
+    - Registered in generate_handler!.
+  - Read-only. No state transitions. No provider call.
+  - send_recommendation remains the authoritative gate.
+
+================================================================
+M.4 - CLOUD TRIP RESULTS (5c.8 compile gate - PASSED)
+================================================================
+
+CLOUD at f7fdf22:
+
+  cargo build --workspace         PASS
+  cargo test --workspace          449 passed, 3 ignored,
+                                  0 failed
+  npm run build (root, Client)    PASS, 18.97s
+  cd agent-dashboard
+  npm run build (Agent)           PASS, 3.44s
+                                  dist/assets/index-*.js
+                                  628.15 kB / 183.53 kB gzip
+
+Warnings, all benign and pre-existing:
+  - gorka-recover linker_messages
+  - auth.rs::is_unlocked is never used
+  - Vite __dirname configLoader warning
+  - bundle size > 500 kB
+
+No 5c defects caught on this trip. This is the first cloud
+trip for any of 5c's TypeScript; the fact that both builds
+passed clean is encouraging.
+
+================================================================
+M.5 - 5c.8 LIVE END-TO-END TEST - NOT RUN - BLOCKED
+================================================================
+
+The compile gate is green. The live test per Mini Spec
+section 9.2 has NOT run. It is blocked on a dependency gap.
+
+BLOCKER
+
+The live test requires at least one AI provider to be
+enabled on the Agent device. No such path exists today:
+
+  - gemini-ai mvpStatus = 'COMING_SOON' in the seed.
+  - gemini-ai has no credentialSchema in the seed.
+  - The Client Connectors UI only enables LIVE connectors
+    that have a credentialSchema.
+  - Therefore list_copilot_providers() returns [] on the
+    Agent, and the panel lands in the "Copilot is not
+    enabled" state. Nothing else in the test list can run.
+
+This is a Slice 5 gap, not a 5c defect. Part II section
+II.6.4 already commits gemini-ai to the MVP; the seed
+disagreeing is an omission.
+
+OPTIONS CONSIDERED
+
+A. Hand-inject a gemini-ai row into the Agent local DB.
+   Requires a real Gemini API key. Fastest path. Does not
+   exercise the real enable path.
+
+B. Flip gemini-ai to LIVE + add credentialSchema in the
+   seed. Enable through the existing Client BYOP flow.
+   Exercises the real Client -> sync -> Agent path.
+   Small seed edit + one DB push + re-enable + sync.
+   RECOMMENDED.
+
+C. Partial live test only: panel mounts, not-enabled state,
+   /copilot status page renders. Skip everything requiring
+   a provider. Close 5c as code-verified with documented
+   live-test limitation.
+
+D. Defer the live test entirely. Close 5c code-verified
+   only, reopen later.
+
+DECISION PENDING - founder to pick A, B, C, or D next
+session. Recommendation on record: B.
+
+================================================================
+M.6 - PROCESS NOTES FOR THE 5c SESSION
+================================================================
+
+P-MM - CLOUD TRIPS ARE DEFERRED TO SLICE END.
+  In 5c the founder chose to write 5c.1 through 5c.7 on main
+  with no intermediate cloud trips, then one trip at 5c.8.
+  Accepted risk: TypeScript errors accumulate across files
+  with no local check. This session hit no such errors; both
+  builds passed on the single trip. The pattern is available
+  for future frontend-only slices if the founder prefers
+  fewer trips. It is not mandatory.
+
+P-NN - WHEN ADDING A DEPENDENCY TO A COMPONENT'S useEffect,
+       UPDATE THE DEPS ARRAY.
+  SendMessageModal's useEffect gained prefill references
+  and the deps array was updated to [debtorId,
+  presetConnectorCode, prefill]. Without it the linter may
+  error or the effect may not re-run when the prefill
+  changes. Caught by inspection before the cloud trip, not
+  by the compiler.
+
+P-OO - PANEL OWNS ITS OWN MODAL INSTANCE.
+  Both CommunicationCard and CopilotPanel mount their own
+  SendMessageModal. Two instances, only one active at a
+  time, no shared state. Lifting the modal to the page was
+  considered and rejected as a larger refactor for no
+  benefit. This matches the existing CommunicationCard
+  pattern.
+
+P-KK and P-LL from Appendix L remain in effect.
+
+================================================================
+M.7 - OPEN ITEMS
+================================================================
+
+New this session:
+  - 5c.8 live test blocked, decision pending (M.5).
+  - Appendix M is working, not final. Amend in place when
+    the live test runs, or add Appendix N with the results.
+    The Appendix-M-edit-in-place exception is granted here
+    because M is current, not historical - same rule that
+    applied to Appendix C in v2.7.
+
+Carried from Appendix L section L.6:
+  - Three unused-import warnings in slice5_send_safety.rs.
+    Cosmetic.
+  - O1 ghost-row fix (deferred by founder).
+  - O2 Communication Tools credential health.
+  - STEP 1.5 - More known providers.
+  - STEP 1.6 - Data-source display surface.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - REGISTRATION / ONBOARDING BLOCK.
+  - ACCEPTANCE - end-to-end.
+
+================================================================
+M.8 - QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0.
+  SLICE 1 through SLICE 4.
+  SLICE 5 copilot spec FROZEN 2026-10-13.
+  SLICE 5a, 5b - CLOSED.
+  SLICE 5c mini spec FROZEN 2026-10-14 (commit 44e0940).
+  SLICE 5c code complete through 5c.7, cloud-verified
+  (commit f7fdf22).
+
+IN FLIGHT
+  SLICE 5c - live end-to-end test (5c.8), blocked on the
+  AI-provider enablement decision in M.5.
+
+NEXT - IN ORDER
+
+  1. Founder picks A, B, C, or D for M.5.
+  2. Run the live end-to-end test per Mini Spec section 9.2.
+  3. Amend Appendix M (or add Appendix N) with the result.
+  4. SLICE 5c close.
+
+  Then SLICE 6 - Integrated security and regression tests.
+
+  Then the carried items.
+
+================================================================
+M.9 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I or Part II.
+  Does not reopen any frozen spec.
+  Does not close Slice 5c.
+  Does not decide the M.5 options.
+  Does not amend the Slice 5c Mini Spec. That document is
+  frozen; any correction would be recorded here or in a
+  follow-up appendix.
+
+================================================================
+END OF APPENDIX M
+================================================================
