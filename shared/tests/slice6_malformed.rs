@@ -181,7 +181,19 @@ fn malformed_bytes_finalize_success_rolls_back() {
 }
 
 #[test]
-fn malformed_bytes_finalize_failure_rolls_back() {
+fn finalize_failure_clears_snapshot_without_parsing() {
+    // Slice 5 spec Section 7.7: the failure path does not parse the
+    // snapshot. It sets state=CONFIRMED_FAILURE, snapshot=NULL,
+    // releases the reservation with reason=RELEASED, and never
+    // reads the bytes. Malformed bytes are therefore not an error;
+    // they are simply cleared. Only finalize_success and
+    // confirm_delivered parse the snapshot (they need its content
+    // to write the communication row).
+    //
+    // Section 5 row 5.2 as originally written ("malformed on
+    // finalize_failure -> SnapshotInvalid") was over-specified.
+    // This test asserts the frozen Slice 5 behavior; the row is
+    // amended in the close appendix.
     let mut conn = open_in_memory_for_tests().expect("open");
     let rec_id = accepted_recommendation(&mut conn);
     seed_local_connector(&conn);
@@ -189,17 +201,19 @@ fn malformed_bytes_finalize_failure_rolls_back() {
     let junk: Vec<u8> = vec![0x00, 0x01, 0x02];
     let (attempt_id, reservation_id) = begin_ok(&mut conn, &rec_id, &junk);
 
-    let err = finalize_failure(&mut conn, ORG, &attempt_id, now())
-        .err().expect("malformed snapshot must reject");
-    assert!(matches!(err, SafetyError::SnapshotInvalid));
+    finalize_failure(&mut conn, ORG, &attempt_id, now())
+        .expect("finalize_failure must succeed; it does not parse the snapshot");
 
-    // Rollback: attempt still IN_PROGRESS, snapshot retained,
-    // reservation still held, no communication written.
-    assert_eq!(attempt_state(&conn, &attempt_id), "IN_PROGRESS");
-    assert_eq!(attempt_snapshot_len(&conn, &attempt_id), 3);
+    // Attempt is CONFIRMED_FAILURE, snapshot cleared.
+    assert_eq!(attempt_state(&conn, &attempt_id), "CONFIRMED_FAILURE");
+    assert_eq!(attempt_snapshot_len(&conn, &attempt_id), 0);
+
+    // Reservation released with RELEASED.
     let (released_at, reason) = reservation_state(&conn, &reservation_id);
-    assert!(released_at.is_none(), "reservation must stay held");
-    assert!(reason.is_none());
+    assert!(released_at.is_some(), "reservation must be released");
+    assert_eq!(reason.as_deref(), Some("RELEASED"));
+
+    // No communication written.
     assert_eq!(comm_count(&conn), 0);
 }
 
