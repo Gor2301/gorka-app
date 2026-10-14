@@ -5220,8 +5220,7 @@ N.8 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX N
 ================================================================
-'@
-[System.IO.File]::AppendAllText($path, $c, (New-Object System.Text.UTF8Encoding($false)))
+
 
 ================================================================
 APPENDIX O - SLICE 6 CLOSE
