@@ -4661,3 +4661,283 @@ M.9 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX M
 ================================================================
+
+================================================================
+M.10 - LIVE TEST RUN - 5c.8
+================================================================
+
+Ran 2026-10-14 on cloud with the founder driving the Client
+and Agent windows. Summary of what was actually observed:
+
+PASSED:
+  - Copilot panel mounts on debtor profile. Collapsed header
+    shows "AI drafts a message for {name}. Nothing is sent
+    without your approval."
+  - Expand -> Pre-run state, "Analyze debtor" button.
+  - Analyze -> PENDING with amber "Fallback - AI unavailable"
+    badge, Channel/Priority/Tone/Timing grid, DRAFT section,
+    "No claims detected.", Accept and Review / Reject /
+    Regenerate buttons, "Expires 10/17/2026, 7:52:52 AM".
+  - Edit mode: Subject and Body inputs, Cancel / Save edit.
+  - Accept and Review -> composer opens prefilled.
+  - Composer body prefilled from panel edit. Disclosure
+    preview rendered ("This message is from GORKA Agent.").
+  - Send via Resend Email: email received by the founder with
+    subject "Payment reminder".
+  - Panel transitioned to SENT.
+  - Communication row written on the Agent, rendered in the
+    debtor's Communications card.
+  - /copilot status page renders: Providers table, How it
+    works, What to expect, Disclosure.
+  - Sidebar /copilot entry enabled.
+  - AI provider enable path: BYOP section on the Client,
+    declaration, schema modal, save, CONNECTED, sync reached
+    the Agent, /copilot Providers table showed
+    gemini-ai / TIER2 / gemini-2.5-flash.
+
+FAILED / CAUGHT:
+  - First live email had only the disclosure line. Body
+    missing. FD6.
+  - First composer default was mocean-sms despite the
+    recommendation's channel=Email. FD5.
+  - Panel SENT state read "Sent via gemini-ai at ..." -
+    the AI connector, not the delivery connector. FD8.
+  - Panel SENT state had no Analyze button. User cannot start
+    a new analysis after a send. FD9.
+
+================================================================
+M.11 - DEFECTS CAUGHT IN SLICE 5c
+================================================================
+
+FD4 - gemini-ai credentialSchema omitted model.
+  The seed's credentialSchema for gemini-ai had
+  configuration: []. The BYOP modal collected only the API
+  key, leaving configuration.model empty. build_selected_
+  adapter fails when constructing GeminiAiAdapter because the
+  adapter requires a non-empty model.
+  Caught by observing /copilot Providers table showed "â€”"
+  for the model. Any user enabling gemini-ai before this fix
+  would have had a silently-broken Copilot.
+  FIXED in commit 768d18a. Added a model field to the
+  credentialSchema with default 'gemini-2.5-flash'.
+
+FD5 - Copilot composer ignored the recommendation's channel.
+  SendMessageModal filtered enabled connectors only by suffix
+  (-sms/-email/-voice) but did not restrict to the channel the
+  recommendation was for. It defaulted to the first enabled
+  connector, which was mocean-sms. The recipient field
+  rendered "Phone" and the Subject field was hidden.
+  FIXED in commit 247d76a. SendMessageModal gains an optional
+  channelFilter prop ('email' | 'sms' | 'voice'). CopilotPanel
+  passes channelFilter={channelFilterFor(rec.channel)}.
+
+FD6 - Accept and Review lost the user's edited draft body.
+  CopilotPanel.handleAccept called refresh() before
+  setComposer. refresh() unconditionally writes the DB's
+  draft_body (empty for a fallback recommendation) into the
+  draftBody state. React batching meant setComposer read the
+  overwritten value. The composer opened with an empty body.
+  FIXED in commit 247d76a. handleAccept no longer calls
+  refresh(); it transitions the recommendation locally with
+  setRec({ ...rec, status: 'ACCEPTED' }) and opens the
+  composer with the values already in state.
+
+FD7 - Duplicate FLAG_DEBOUNCE_MS constant.
+  The FD5 script inserted a second declaration of
+  FLAG_DEBOUNCE_MS near the top of CopilotPanel.tsx. The
+  original declaration lower in the file remained.
+  Caught by Vite HMR overlay at next file save.
+  FIXED in commit 7f61d12. Removed the second occurrence.
+
+FD8 - Panel SENT state displayed the AI connector.
+  "Sent via gemini-ai at ..." showed ai_connector_code,
+  not the delivery connector. Spec Section 5 of the Slice 5c
+  Mini Spec: "No component reads ai_connector_code for
+  display as sent via."
+  ROOT CAUSE: RecommendationView does not carry the delivery
+  connector code. The panel had nothing else to show.
+  STATUS: PENDING FIX. See M.12 for the exact edit.
+
+FD9 - Panel SENT state offered no way to analyze again.
+  After a successful send, the panel is a dead end. The
+  spec's state machine lists Analyze only for Pre-run and
+  EXPIRED. In practice the user must navigate away and back
+  to trigger a new analysis, which the panel does not do.
+  STATUS: PENDING FIX. See M.12 for the exact edit.
+
+================================================================
+M.12 - PENDING FIXES (FD8, FD9) - EXACT EDITS
+================================================================
+
+Both fixes are one commit. Three files touched.
+
+RUST - src-tauri-agent/src/main.rs
+
+  1. RecommendationView struct gains one field:
+       delivery_connector_code: Option<String>,
+
+  2. view_from_row signature gains a third parameter:
+       delivery_connector_code: Option<String>,
+
+  3. view_from_row return block sets the field.
+
+  4. analyze_debtor call site becomes:
+       Ok(view_from_row(row, None, None))
+
+  5. list_recommendations_for_debtor: after fetching the
+     uncertain attempt id, also fetch:
+       SELECT connector_code FROM send_attempts
+        WHERE organization_id = ?1 AND recommendation_id = ?2
+          AND state = 'CONFIRMED_SUCCESS'
+        ORDER BY finalized_at DESC LIMIT 1
+     Pass it as the third argument to view_from_row.
+
+TS - agent-dashboard/src/services/local.db.ts
+
+  RecommendationView interface gains:
+    delivery_connector_code: string | null;
+
+PANEL - agent-dashboard/src/components/CopilotPanel.tsx
+
+  In the SENT case of renderRecommendation:
+    - Replace {r.ai_connector_code} with
+      {r.delivery_connector_code ?? 'an unknown connector'}
+    - Add a button row with an "Analyze debtor" Button that
+      calls handleAnalyze.
+
+The exact PowerShell scripts were composed but NOT run in this
+session. Reproduce them fresh in the next session, or hand-write
+the edits against the on-disk text. Do not trust memory of the
+exact anchor text; read the region first (P-T, P-Z).
+
+================================================================
+M.13 - SEED CHANGES THIS SESSION
+================================================================
+
+Two commits to prisma/seed-connectors.ts:
+
+  bb2c740  gemini-ai mvpStatus COMING_SOON -> LIVE
+
+  768d18a  gemini-ai credentialSchema gains a model field:
+             configuration: [
+               { name: 'model', label: 'Model', type: 'text',
+                 required: true,
+                 default: 'gemini-2.5-flash' },
+             ]
+
+Both are on origin/main. A fresh cloud trip does not need to
+re-seed for FD8/FD9 (they do not touch the seed). If the
+cloud DB is reset, re-seed with npx tsx prisma/seed-connectors.ts.
+
+================================================================
+M.14 - OPEN ITEMS
+================================================================
+
+New this session:
+
+  OI-3 - strategy::analyze silently discards AI-path failures.
+    The panel shows "Fallback - AI unavailable" with no
+    diagnostic. Debugging why the AI path failed requires
+    instrumenting strategy.rs or the adapter. Candidate for a
+    future logging slice. Not a 5c defect.
+
+  OI-4 - fallback_outcome produces an empty draft.
+    Slice 4's deterministic fallback returns priority / tone /
+    timing but no subject or body. The panel shows an empty
+    draft the user must edit. Candidate for a fallback-draft
+    slice. Not a 5c defect.
+
+  OI-5 - SENT state exposes no path to start a new analysis
+    until FD9 ships. Same defect as FD9, listed here for
+    visibility in the open-items list.
+
+Carried from M.7 (unchanged):
+
+  - Three unused-import warnings in slice5_send_safety.rs.
+  - O1 ghost-row fix (deferred by founder).
+  - O2 Communication Tools credential health.
+  - STEP 1.5 - More known providers.
+  - STEP 1.6 - Data-source display surface.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - REGISTRATION / ONBOARDING BLOCK.
+  - ACCEPTANCE - end-to-end.
+
+================================================================
+M.15 - IMMEDIATE NEXT ACTIONS
+================================================================
+
+  1. Apply the FD8 + FD9 fixes per M.12.
+  2. Commit and push.
+  3. Cloud trip:
+       cd /d C:\gorka-app
+       git pull
+       set TMP=C:\cargo-tmp
+       set TEMP=C:\cargo-tmp
+       call pilot-creds.bat
+       cargo build --workspace
+       cargo test --workspace
+       npm run build
+       cd agent-dashboard
+       npm run build
+       cd ..
+  4. Restart the Agent Tauri window (P-F).
+  5. Live retest, focused on the two things not yet proven:
+       - Composer defaults to resend-email, Subject field
+         visible, body preserved (FD5, FD6 retest).
+       - Sent email contains the full body + disclosure
+         (FD6 retest).
+       - After send, panel shows "Sent via resend-email at
+         ..." (FD8 retest).
+       - After send, panel offers "Analyze debtor" (FD9
+         retest).
+  6. Once all four pass, Slice 5c is closed.
+
+Do NOT reopen anything else in 5c. FD8 and FD9 are the last two.
+
+================================================================
+M.16 - QUEUE
+================================================================
+
+DONE
+  CONNECTOR-EVENT-ORDER-SPEC v1.0.
+  SLICE 1 through SLICE 4.
+  SLICE 5 copilot spec FROZEN 2026-10-13.
+  SLICE 5a, 5b - CLOSED.
+  SLICE 5c mini spec FROZEN 2026-10-14 (commit 44e0940).
+  SLICE 5c code complete through 5c.7, cloud-verified
+  (commit f7fdf22).
+  SLICE 5c live test - PARTIALLY PASSED. See M.10.
+
+IN FLIGHT
+  SLICE 5c - two pending fixes (FD8, FD9) and the focused
+  retest in M.15.
+
+NEXT - IN ORDER
+
+  1. Apply FD8 + FD9. Commit. Cloud. Restart. Retest.
+  2. Slice 5c close (Appendix M amended in place, or a new
+     Appendix N - founder's choice).
+  3. SLICE 6 - Integrated security and regression tests.
+  4. Carried items.
+
+================================================================
+M.17 - APPENDIX M STATUS
+================================================================
+
+Appendix M is a WORKING appendix, not a close appendix.
+Slice 5c is NOT closed. Amend M in place when FD8 and FD9
+land and the focused retest passes - the same exception that
+was granted to Appendix C in v2.7 applies here because M is
+current, not historical.
+
+When 5c closes: either replace this appendix with a compact
+close record, or append a new Appendix N. Either is valid.
+The convention from P-JJ is: one appendix per session, do not
+edit prior appendices. M.17 records the exception.
+
+================================================================
+END OF APPENDIX M (CONTINUED)
+================================================================
