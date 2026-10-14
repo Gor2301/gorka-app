@@ -4707,3 +4707,123 @@ its test results have been examined.
 ================================================================
 END OF PART III - SLICE 6 MINI SPEC v1.0
 ================================================================
+
+================================================================
+24. ADAPTER INJECTION SEAM (amendment 2026-10-14)
+================================================================
+
+24.0 Why this amendment exists
+
+Section 3.2's extraction made the send sequence testable
+from shared/tests/. It did not make the adapter injectable.
+As extracted, execute_send constructs its adapter internally
+via build_default_registry() and calls adapter.send() on the
+production adapter. Slice 6 test rows 4.1-4.5, 6.1-6.3,
+8.1-8.7, and 11.1-11.4 require observing the orchestration's
+response to specific adapter outcomes (Err, Ok(false),
+Ok(true)) and to specific credential states, without making
+network calls.
+
+Discovered during Slice 6 test drafting, before any test was
+written. STOP gate G5 in Section 16 was invoked. The reviewer
+approved a narrowly scoped production change (Option B).
+
+24.1 Approved change
+
+Add a second public function in shared/src/send_orchestration.rs:
+
+  pub fn execute_send_with_adapter(
+      conn: &mut Connection,
+      org_id: &str,
+      user_id: &str,
+      input: SendRecommendationInput,
+      now: DateTime<Utc>,
+      adapter: &dyn ConnectorAdapter,
+  ) -> Result<SendRecommendationResult, SendError>;
+
+execute_send(...) is unchanged as the production entry point.
+Its body becomes a delegation:
+
+  1. Load credential via read_local_connector_credential.
+  2. Build ConnectorCredential.
+  3. Build adapter via build_default_registry().factory(...).
+  4. Call execute_send_with_adapter(..., adapter.as_ref()).
+
+execute_send_with_adapter(...) owns the full orchestration.
+Its body is the current body of execute_send, with two
+changes:
+
+  - the credential is still loaded (connector-enabled
+    precondition preserved, and 'from' still extracted from
+    configuration);
+  - the adapter is not constructed; the injected
+    &dyn ConnectorAdapter is used in place of the constructed
+    one.
+
+24.2 Contract
+
+Behavior-preserving with respect to execute_send. The
+following remain identical between the pre-change and
+post-change execute_send paths:
+
+  - Order of operations (recommendation load, disclosure
+    append, validate_draft, check_opt_out,
+    channel_for_connector_code, check_contact_limit,
+    credential load, snapshot construction, begin_send,
+    adapter.send, finalize_*).
+  - Every error string.
+  - Every transaction boundary.
+  - The use of the loaded credential for the 'from' field.
+  - The connector-enabled check via
+    read_local_connector_credential returning Some.
+
+The injected adapter MUST NOT bypass any precondition. Tests
+that call execute_send_with_adapter still seed a real
+local_connectors row, still require the connector to be
+ENABLED, still pass through opt-out and contact-limit checks.
+
+24.3 Test usage
+
+Tests in slice6_provider_failures.rs, slice6_uncertain.rs,
+slice6_altered_drafts.rs, and slice6_credential_leak.rs call
+execute_send_with_adapter with a deterministic FakeAdapter
+that:
+
+  - implements ConnectorAdapter;
+  - records the number of send() calls (for no-auto-retry
+    assertions);
+  - records the last SendRequest (for validated-equals-sent
+    assertions);
+  - returns a configurable outcome: Ok(success=true),
+    Ok(success=false), or Err(ConnectorError).
+
+The FakeAdapter makes no network calls.
+
+24.4 Boundary between orchestration and adapter
+
+Orchestration-level credential tests (slice6_credential_leak.rs)
+prove that the credential does not reach the local persisted
+surfaces (snapshot, communications, audit_log, error strings).
+They do not prove what a real adapter sends over HTTP. That
+boundary is covered by the adapter-level credential-leak
+regression tests in slice3b_gemini.rs and slice3b_openai.rs,
+which remain unchanged.
+
+24.5 Commit and review
+
+The change is a follow-up commit, not an amendment to the
+extraction commit 5b48a00. Reviewed by diff against the
+extraction commit. Reviewer inspects: signature change,
+delegation body, preservation of every order and error
+string. The extraction commit is not touched.
+
+24.6 Spec acceptance criteria - unchanged
+
+Section 5 rows 4.x, 6.x, 8.x, 11.x retain their acceptance
+criteria. Option A (primitive-only coverage) is explicitly
+rejected as a downgrade. Tests must exercise the full
+orchestration via execute_send_with_adapter.
+
+================================================================
+END OF AMENDMENT - SECTION 24
+================================================================

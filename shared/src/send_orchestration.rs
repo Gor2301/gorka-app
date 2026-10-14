@@ -1,20 +1,33 @@
 // shared/src/send_orchestration.rs
 //
-// Slice 6 extraction. The send sequence that previously lived in
-// src-tauri-agent/src/main.rs::send_recommendation is moved here
-// verbatim, with only the crate-boundary substitutions required
-// by the move (gorka_shared:: -> crate::). Behavior-preserving
-// extraction per Part III Section 3.2 of CONNECTOR-EVENT-ORDER-SPEC.
+// Slice 6. The send sequence that previously lived in
+// src-tauri-agent/src/main.rs::send_recommendation is orchestrated
+// here. Two entry points:
 //
-// Trusted identity (org_id, user_id) is passed in by the caller.
-// The Tauri wrapper derives both from the trusted source; this
-// function never reads identity from the frontend.
+//   execute_send              production. Loads the credential,
+//                             builds the adapter via the default
+//                             registry, delegates to
+//                             execute_send_with_adapter.
+//
+//   execute_send_with_adapter shared execution path. Runs the full
+//                             orchestration with an injected
+//                             adapter. Used by tests to exercise
+//                             provider outcomes without network
+//                             calls.
+//
+// Both paths share ordering, error strings, transaction boundaries,
+// and preconditions. The injected adapter does not bypass connector
+// validation, credential loading, opt-out enforcement, contact
+// limits, fact validation, or reservation logic.
+// See CONNECTOR-EVENT-ORDER-SPEC Part III Sections 3.2 and 24.
 
 use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 
-/// Error type for execute_send. Alias for String to preserve the
-/// pre-extraction error-message format byte-for-byte.
+use crate::connectors::ConnectorAdapter;
+
+/// Error type for the send orchestration. Alias for String to
+/// preserve the pre-extraction error-message format byte-for-byte.
 pub type SendError = String;
 
 #[derive(serde::Deserialize)]
@@ -34,12 +47,48 @@ pub struct SendRecommendationResult {
     pub failure_reason: Option<String>,
 }
 
+/// Production entry point.
 pub fn execute_send(
     conn: &mut Connection,
     org_id: &str,
     user_id: &str,
     input: SendRecommendationInput,
     now: DateTime<Utc>,
+) -> Result<SendRecommendationResult, SendError> {
+    let secret = crate::connectors::local_record::read_local_connector_credential(
+        conn,
+        org_id,
+        &input.connector_code,
+    )
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| {
+        format!(
+            "connector {} is not enabled on this device",
+            input.connector_code
+        )
+    })?;
+
+    let cred = crate::connectors::ConnectorCredential {
+        value: secret.credential_value.clone(),
+        configuration: secret.configuration.clone(),
+    };
+    let registry = crate::connectors::build_default_registry();
+    let factory = registry
+        .factory(&input.connector_code)
+        .ok_or_else(|| format!("No adapter registered for {}", input.connector_code))?;
+    let adapter = factory(cred).map_err(|e| format!("{:?}", e))?;
+
+    execute_send_with_adapter(conn, org_id, user_id, input, now, adapter.as_ref())
+}
+
+/// Full orchestration with an injected adapter.
+pub fn execute_send_with_adapter(
+    conn: &mut Connection,
+    org_id: &str,
+    user_id: &str,
+    input: SendRecommendationInput,
+    now: DateTime<Utc>,
+    adapter: &dyn ConnectorAdapter,
 ) -> Result<SendRecommendationResult, SendError> {
     let rec = crate::recommendation_store::get(conn, org_id, &input.recommendation_id)
         .map_err(|e| format!("{:?}", e))?;
@@ -86,13 +135,22 @@ pub fn execute_send(
     crate::send_safety::check_contact_limit(conn, org_id, &rec.debtor_id, channel, now)
         .map_err(|e| format!("{:?}", e))?;
 
+    // Credential load preserved on this path: proves the connector
+    // is ENABLED on this device and extracts `from` from the
+    // configuration. Even when the adapter is injected by a test,
+    // this check is not bypassed.
     let secret = crate::connectors::local_record::read_local_connector_credential(
         conn,
         org_id,
         &input.connector_code,
     )
     .map_err(|e| e.to_string())?
-    .ok_or_else(|| format!("connector {} is not enabled on this device", input.connector_code))?;
+    .ok_or_else(|| {
+        format!(
+            "connector {} is not enabled on this device",
+            input.connector_code
+        )
+    })?;
 
     let from = secret
         .configuration
@@ -100,16 +158,6 @@ pub fn execute_send(
         .and_then(|v| v.as_str())
         .ok_or_else(|| "Connector configuration has no 'from' field".to_string())?
         .to_string();
-
-    let cred = crate::connectors::ConnectorCredential {
-        value: secret.credential_value.clone(),
-        configuration: secret.configuration.clone(),
-    };
-    let registry = crate::connectors::build_default_registry();
-    let factory = registry
-        .factory(&input.connector_code)
-        .ok_or_else(|| format!("No adapter registered for {}", input.connector_code))?;
-    let adapter = factory(cred).map_err(|e| format!("{:?}", e))?;
 
     let snapshot = crate::send_safety::SendAttemptSnapshot {
         to: input.to.clone(),
@@ -146,9 +194,14 @@ pub fn execute_send(
     let attempt_id = attempt.id.clone();
     match send_result {
         Ok(result) if result.success => {
-            let comm_id =
-                crate::send_safety::finalize_success(conn, org_id, &attempt_id, user_id, now)
-                    .map_err(|e| format!("{:?}", e))?;
+            let comm_id = crate::send_safety::finalize_success(
+                conn,
+                org_id,
+                &attempt_id,
+                user_id,
+                now,
+            )
+            .map_err(|e| format!("{:?}", e))?;
             Ok(SendRecommendationResult {
                 communication_id: Some(comm_id),
                 attempt_id,
