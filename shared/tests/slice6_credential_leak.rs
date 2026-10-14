@@ -159,7 +159,7 @@ fn ai_outcome() -> StrategyOutcome {
         draft_body: "Please pay.".to_string(),
         rationale: Some("test rationale".to_string()),
         risk_flags: Vec::new(),
-        prompt_version: "slice4-v1".to_string(),
+        prompt_version: "slice4-v1",
     }
 }
 
@@ -318,7 +318,7 @@ fn sentinel_absent_from_blocked_send_audit() {
         now(),
         &adapter,
     )
-    .expect_err("opt-out must block");
+    .err().expect("opt-out must block");
     assert!(!err.contains(SENTINEL), "sentinel in Err: {}", err);
     assert!(!audit_log_contains_sentinel(&conn, Some("SEND_BLOCKED")));
     assert_eq!(adapter.call_count(), 0);
@@ -363,7 +363,7 @@ fn sentinel_absent_from_err_strings() {
     let mut input = send_input(&rec_id);
     input.connector_code = "not-a-connector".to_string();
     let err = execute_send_with_adapter(&mut conn, ORG, USER, input, now(), &adapter)
-        .expect_err("unknown connector must Err");
+        .err().expect("unknown connector must Err");
     assert!(!err.contains(SENTINEL), "sentinel in Err: {}", err);
 }
 

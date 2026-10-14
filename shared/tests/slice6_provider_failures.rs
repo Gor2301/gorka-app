@@ -149,7 +149,7 @@ fn ai_outcome() -> StrategyOutcome {
         draft_body: "Please pay.".to_string(),
         rationale: Some("test rationale".to_string()),
         risk_flags: Vec::new(),
-        prompt_version: "slice4-v1".to_string(),
+        prompt_version: "slice4-v1",
     }
 }
 
@@ -387,7 +387,7 @@ fn second_send_blocked_while_uncertain() {
         now(),
         &second_adapter,
     )
-    .expect_err("second send must be blocked while uncertain");
+    .err().expect("second send must be blocked while uncertain");
 
     assert!(
         err.contains("RecommendationNotAccepted"),

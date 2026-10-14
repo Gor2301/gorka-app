@@ -19,7 +19,7 @@ use gorka_shared::sync::{
     build_sync_message, encode_debtor_created_payload, encode_entity_updated_payload,
     encode_event_record,
 };
-use gorka_shared::sync_events::{ENTITY_DEBTOR, EVENT_ENTITY_UPDATED};
+use gorka_shared::sync_events::ENTITY_DEBTOR;
 use gorka_shared::sync_handshake::AckOutcome;
 use gorka_shared::sync_pipeline::process_sync_message;
 use rusqlite::params;

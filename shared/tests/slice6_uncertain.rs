@@ -112,7 +112,7 @@ fn ai_outcome() -> StrategyOutcome {
         draft_body: "Please pay.".to_string(),
         rationale: Some("test rationale".to_string()),
         risk_flags: Vec::new(),
-        prompt_version: "slice4-v1".to_string(),
+        prompt_version: "slice4-v1",
     }
 }
 

@@ -83,7 +83,7 @@ fn ai_outcome() -> StrategyOutcome {
         draft_body: "Please pay.".to_string(),
         rationale: Some("test rationale".to_string()),
         risk_flags: Vec::new(),
-        prompt_version: "slice4-v1".to_string(),
+        prompt_version: "slice4-v1",
     }
 }
 
@@ -170,7 +170,7 @@ fn malformed_bytes_finalize_success_rolls_back() {
     let (attempt_id, _res) = begin_ok(&mut conn, &rec_id, &junk);
 
     let err = finalize_success(&mut conn, ORG, &attempt_id, USER, now())
-        .expect_err("malformed snapshot must reject");
+        .err().expect("malformed snapshot must reject");
     assert!(matches!(err, SafetyError::SnapshotInvalid));
 
     // Rollback: attempt still IN_PROGRESS, snapshot bytes retained,
@@ -190,7 +190,7 @@ fn malformed_bytes_finalize_failure_rolls_back() {
     let (attempt_id, reservation_id) = begin_ok(&mut conn, &rec_id, &junk);
 
     let err = finalize_failure(&mut conn, ORG, &attempt_id, now())
-        .expect_err("malformed snapshot must reject");
+        .err().expect("malformed snapshot must reject");
     assert!(matches!(err, SafetyError::SnapshotInvalid));
 
     // Rollback: attempt still IN_PROGRESS, snapshot retained,
@@ -221,7 +221,7 @@ fn null_snapshot_finalize_success_returns_missing() {
     .expect("null snapshot");
 
     let err = finalize_success(&mut conn, ORG, &attempt_id, USER, now())
-        .expect_err("null snapshot must reject");
+        .err().expect("null snapshot must reject");
     assert!(matches!(err, SafetyError::SnapshotMissing));
 
     // Rollback: attempt still IN_PROGRESS, no communication written.
@@ -249,7 +249,7 @@ fn missing_field_finalize_success_returns_invalid() {
     let (attempt_id, _res) = begin_ok(&mut conn, &rec_id, &bytes);
 
     let err = finalize_success(&mut conn, ORG, &attempt_id, USER, now())
-        .expect_err("missing field must reject");
+        .err().expect("missing field must reject");
     assert!(matches!(err, SafetyError::SnapshotInvalid));
 
     // Rollback: attempt still IN_PROGRESS, no communication written.
@@ -286,7 +286,7 @@ fn cross_record_mismatch_rolls_back() {
     let (attempt_id, reservation_id) = begin_ok(&mut conn, &rec_id, &bytes);
 
     let err = finalize_success(&mut conn, ORG, &attempt_id, USER, now())
-        .expect_err("mismatched snapshot must reject");
+        .err().expect("mismatched snapshot must reject");
     assert!(matches!(err, SafetyError::SnapshotInvalid));
 
     // Rollback: attempt still IN_PROGRESS, snapshot retained,

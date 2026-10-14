@@ -142,7 +142,7 @@ fn ai_outcome() -> StrategyOutcome {
         draft_body: "Please pay.".to_string(),
         rationale: Some("test rationale".to_string()),
         risk_flags: Vec::new(),
-        prompt_version: "slice4-v1".to_string(),
+        prompt_version: "slice4-v1",
     }
 }
 
@@ -209,7 +209,7 @@ fn mismatch_blocks_before_begin_send() {
         now(),
         &adapter,
     )
-    .expect_err("mismatch must block");
+    .err().expect("mismatch must block");
     assert!(
         err.contains("unresolved mismatch"),
         "unexpected err: {}",
@@ -236,7 +236,7 @@ fn unverifiable_blocks_before_begin_send() {
         now(),
         &adapter,
     )
-    .expect_err("unverifiable must block");
+    .err().expect("unverifiable must block");
     assert!(err.contains("unverifiable"), "unexpected err: {}", err);
     assert_eq!(adapter.call_count(), 0);
     assert_eq!(count_rows(&conn, "send_attempts"), 0);
@@ -318,7 +318,7 @@ fn rejected_leaves_zero_rows() {
         now(),
         &adapter,
     )
-    .expect_err("mismatch must block");
+    .err().expect("mismatch must block");
 
     assert_eq!(count_rows(&conn, "send_attempts"), 0);
     assert_eq!(count_rows(&conn, "send_reservations"), 0);

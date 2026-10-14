@@ -134,7 +134,7 @@ fn ai_outcome() -> StrategyOutcome {
         draft_body: "Please pay.".to_string(),
         rationale: Some("test rationale".to_string()),
         risk_flags: Vec::new(),
-        prompt_version: "slice4-v1".to_string(),
+        prompt_version: "slice4-v1",
     }
 }
 
@@ -251,7 +251,7 @@ fn second_begin_send_refuses() {
         now(),
         &adapter2,
     )
-    .expect_err("second orchestrated send must refuse");
+    .err().expect("second orchestrated send must refuse");
     assert!(
         err.contains("RecommendationNotAccepted")
             || err.contains("RecommendationExpired"),
@@ -310,7 +310,7 @@ fn second_rec_contact_limit_blocked() {
         now(),
         &adapter2,
     )
-    .expect_err("contact limit must block second send");
+    .err().expect("contact limit must block second send");
     assert!(
         err.contains("ContactLimitExceeded"),
         "unexpected err: {}",

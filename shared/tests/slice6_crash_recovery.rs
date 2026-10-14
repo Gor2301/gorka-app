@@ -88,7 +88,7 @@ fn ai_outcome() -> StrategyOutcome {
         draft_body: "Please pay.".to_string(),
         rationale: Some("test rationale".to_string()),
         risk_flags: Vec::new(),
-        prompt_version: "slice4-v1".to_string(),
+        prompt_version: "slice4-v1",
     }
 }
 
@@ -210,7 +210,7 @@ fn missing_recommendation_rollback() {
     assert_eq!(exists, 0);
 
     // Recovery must return InconsistentFinalizedState and roll back.
-    let err = recover_at_startup(&mut conn, now()).expect_err("must reject");
+    let err = recover_at_startup(&mut conn, now()).err().expect("must reject");
     assert!(
         matches!(err, SafetyError::InconsistentFinalizedState { .. }),
         "unexpected err: {:?}",
