@@ -4187,3 +4187,523 @@ All six reviewer requirements captured:
 
 END OF SLICE 5c MINI SPEC v1.0
 ================================================================
+
+================================================================
+PART III - SLICE 6 MINI SPEC v1.0 (FROZEN)
+================================================================
+
+Title:  Integrated Security and Regression Tests
+Status: FROZEN 2026-10-14
+Authority: Part II Section II.16
+Depends on: Slices 1 through 5c closed (RESUME-HERE Appendix N)
+Does not reopen: any frozen surface
+Reviewer verdict: GO. Both conditions from the prior review
+  addressed by Sections 3.2, 3.4, and 17.
+
+================================================================
+1. GOAL
+================================================================
+
+Close the Copilot block with cross-component integration
+tests. Prove privacy, sync, concurrency, and send-safety
+guarantees hold when the shipped pieces operate together.
+No new features. One approved production extraction. Defect
+fixes only for demonstrated defects.
+
+================================================================
+2. SCOPE
+================================================================
+
+2.1 In scope
+
+  - Nine new integration-test files under shared/tests/.
+  - One approved production extraction (Section 3.2).
+  - Defect-driven fixes, each its own commit, each with
+    evidence.
+  - One close appendix in RESUME-HERE.md.
+
+2.2 Out of scope
+
+  - Any feature, event type, wire format, migration, or UI
+    change.
+  - Any change to send_connector_message.
+  - Broad refactors. Only the extraction in Section 3.2.
+  - Revision of frozen Slice 5 requirements.
+  - Carried items from RESUME-HERE Appendix N.6.
+
+================================================================
+3. FROZEN CORRECTIONS
+================================================================
+
+3.1 Validation order - source-confirmed
+
+send_recommendation (src-tauri-agent/src/main.rs 1188-1335),
+verified against source:
+
+  1199  load recommendation
+  1202  read disclosure_text
+  1205  final_body = append_disclosure_idempotent(raw, disclosure)
+  1209  validate_draft(subject, final_body, draft_id=0)
+  1218  block on Mismatch or Unverifiable
+  1236  check_opt_out
+  1239  channel_for_connector_code
+  1241  check_contact_limit
+  1244  read_local_connector_credential
+  1252  build from
+  1259  build ConnectorCredential
+  1267  build adapter
+  1269  build SendAttemptSnapshot
+  1280  snapshot.to_json()
+  1282  begin_send
+  1299  adapter.send
+  1302  match send_result
+  1303    Ok(success)     -> finalize_success
+  1314    Ok(!success)    -> finalize_failure
+  1324    Err(_)          -> finalize_uncertain
+  1335  return SendRecommendationResult
+
+Slice 6 tests assert this order. A rejected draft leaves
+zero rows in send_attempts and send_reservations.
+
+3.2 Orchestration boundary - APPROVED EXTRACTION
+
+Fact B, confirmed. The send sequence is owned by
+send_recommendation (1188-1335). No shared orchestrator
+exists.
+
+Fix: new file shared/src/send_orchestration.rs with
+
+  pub fn execute_send(
+      conn: &mut Connection,
+      org_id: &str,
+      user_id: &str,
+      input: SendRecommendationInput,
+      now: DateTime<Utc>,
+  ) -> Result<SendRecommendationResult, SendError>;
+
+Move the body of send_recommendation (from line 1199 to line
+1334) into execute_send. Move SendRecommendationInput and
+SendRecommendationResult from src-tauri-agent/src/main.rs to
+the shared crate. The Tauri command becomes a thin wrapper
+that derives org_id and user_id from the trusted source and
+delegates to execute_send.
+
+Behavior-preserving extraction. The executable logic,
+statement ordering, error behavior, transaction boundaries,
+and function-level control flow remain unchanged. Only the
+minimum module-boundary changes are permitted: use statements,
+pub / pub(crate) visibility required by the new module
+boundary, type-path updates resulting from the move, and the
+Tauri wrapper delegating to execute_send. Any additional
+change - reordering, refactoring, altered error strings, added
+logging, changed function signatures beyond the move - is a
+defect in the extraction and STOPs the extraction commit
+pending approval.
+
+Trusted identity. Org and user identity derivation remain in
+the Tauri wrapper. get_trusted_organization_id(&app) and
+crate::auth::get_user_id(app.clone()) are not moved. The
+frontend never supplies either.
+
+Credential hygiene in error strings. No credential-bearing
+data is introduced into error strings or logs by the move.
+Error strings are copied unchanged.
+
+Approval status: approved as the smallest necessary testable
+boundary. Any additional production change requires separate
+approval.
+
+Commit order: extraction is commit 1 of the slice, before any
+test file.
+
+3.3 Confirmed-only gap rule
+
+Section 5 lists confirmed gaps only, each with a source cite.
+Suspected gaps pending read are not acted on.
+
+3.4 Pre-extraction baseline
+
+Baseline recorded at HEAD 1ece566 (main, origin/main), the
+commit at which this spec is frozen. This is the checkpoint
+the extraction commit is measured against.
+
+  HEAD commit hash         1ece566
+  Workspace build          PASS (Finished, known benign warnings only)
+  Workspace test           449 passed, 3 ignored, 0 failed
+  Known warnings (benign)  gorka-recover linker PDB note
+                           auth.rs::is_unlocked is never used
+                           Vite __dirname configLoader warning
+                           bundle size > 500 kB (frontend only)
+  New npm build state      Client PASS, Agent PASS, at HEAD 99fb39b
+                           (unchanged since; 1ece566 touched docs only)
+
+Post-extraction expectation:
+
+  cargo build --workspace  PASS, warnings unchanged
+  cargo test --workspace   449 passed, 3 ignored, 0 failed, unchanged
+
+If the post-extraction result differs from the baseline - any
+new warning, any test count change, any failure - STOP.
+Reconcile before proceeding. Do not adjust the expected count
+to match the observed result. The baseline is a fact; the
+expected count is derived from it.
+
+Final workspace test after all new tests are added:
+
+  cargo test --workspace  449 + N new tests, 0 failed
+                          N determined by the test inventory as
+                          implemented, not by the estimate in
+                          Section 7.
+
+All new test files are included in the workspace test command.
+No test is run in isolation for the acceptance gate. Individual
+test binaries may be run during development, but the acceptance
+check is always cargo test --workspace.
+
+================================================================
+4. SLICE 6.0 - SOURCE VERIFICATION STATUS
+================================================================
+
+Complete. The following were read against source:
+
+  - send_recommendation body (1188-1335)
+  - send_safety.rs public and private surface, including
+    begin_send (455-580) and recover_at_startup (582-697)
+  - insert_communication_in_tx (communications.rs 70-165)
+  - apply_entity_updated and reconcile_field /
+    history_records write sites (sync_pipeline.rs 513-539,
+    1000-1080)
+  - check_opt_out and append_disclosure_idempotent
+    (compliance.rs 165-224, 365-380)
+  - SendAttemptSnapshot struct (send_safety.rs 144-154)
+  - Cat 11 and Cat 12 test bodies (slice5_send_safety.rs
+    604-960)
+
+Cats 7, 9, 10 citations verified by name against the test
+inventory. Assertions to be recorded in the close appendix.
+
+================================================================
+5. CONFIRMED GAP MATRIX
+================================================================
+
+| # | Req (II.16) | Existing test | Assertion as read | Gap | New test |
+|---|---|---|---|---|---|
+| 1.1 | Offline opt-out propagation | none | - | confirmed | slice6_offline_stale::client_opt_out_reaches_agent_and_blocks |
+| 1.2 | Unrelated key preserved through sync blob | none | - | confirmed | slice6_offline_stale::unrelated_key_survives_entity_updated |
+| 1.3 | Two-replica loser in history_records | none | - | confirmed | slice6_offline_stale::protocol_order_loser_recorded_in_history |
+| 1.4 | Empty-blob round-trip | none | - | confirmed | slice6_offline_stale::empty_blob_round_trip |
+| 1.5 | Clear-flag unblocks | partial (slice1_compliance::toggle_true_then_false_round_trip) | toggle round-trip only; no sync | partial | slice6_offline_stale::clear_opt_out_after_sync_unblocks |
+| 2.1 | Multi-key blob through ENTITY_UPDATED | none | - | confirmed | slice6_opt_out_sync::multi_key_blob_preserved |
+| 2.2 | Re-apply idempotent | none | - | confirmed | slice6_opt_out_sync::reapply_is_idempotent |
+| 2.3 | Cross-org scoping | none | - | confirmed | slice6_opt_out_sync::cross_org_scoped |
+| 2.4 | Per-channel independence | partial (slice1_compliance::opt_out_email_flag_does_not_block_sms) | local only | partial | slice6_opt_out_sync::per_channel_independence_through_sync |
+| 3.1 | Two sequential begin_send same rec | none | - | confirmed | slice6_concurrency::second_begin_send_refuses |
+| 3.2 | Two recs same debtor at limit | none | - | confirmed | slice6_concurrency::second_rec_contact_limit_blocked |
+| 3.3 | Racing insert_pending deterministic | none | - | confirmed | slice6_concurrency::racing_insert_one_pending_one_superseded |
+| 3.4 | Boundary n vs n+1 | partial (slice5_send_safety::contact_limit_at_limit_returns_error) | unit-level only | covered | - |
+| 3.5 | Held vs released counting | covered (slice5_send_safety::contact_limit_converted_counts, _released_does_not_count) | - | - | - |
+| 3.6 | busy_timeout lock path | covered (#[ignore] test exists) | - | - | - |
+| 4.1 | Err -> finalize_uncertain chain | none | - | confirmed | slice6_provider_failures::err_chain_to_finalize_uncertain |
+| 4.2 | Ok(false) -> finalize_failure chain | none | - | confirmed | slice6_provider_failures::failure_chain |
+| 4.3 | Ok(true) -> finalize_success chain | none | - | confirmed | slice6_provider_failures::success_chain |
+| 4.4 | No auto-retry after uncertain | none | - | confirmed | slice6_provider_failures::no_auto_retry |
+| 4.5 | Second attempt blocked until resolved | none | - | confirmed | slice6_provider_failures::second_attempt_blocked |
+| 5.1 | Malformed bytes -> SnapshotInvalid, rollback | none | - | confirmed | slice6_malformed::malformed_bytes_finalize_success_rolls_back |
+| 5.2 | Malformed on finalize_failure | none | - | confirmed | slice6_malformed::malformed_bytes_finalize_failure_rolls_back |
+| 5.3 | NULL snapshot -> SnapshotMissing | none | - | confirmed | slice6_malformed::null_snapshot_returns_missing |
+| 5.4 | Missing field -> SnapshotInvalid | none | - | confirmed | slice6_malformed::missing_field_invalid |
+| 5.5 | Cross-record mismatch (existing) | covered (3 tests) | error only | partial | slice6_malformed::cross_record_asserts_db_state |
+| 6.1 | Altered draft blocks before begin_send | partial (slice4_fact_validation) | detect only | partial | slice6_altered_drafts::mismatch_blocks_before_begin_send |
+| 6.2 | Unverifiable blocks | partial | detect only | partial | slice6_altered_drafts::unverifiable_blocks |
+| 6.3 | Verified proceeds | partial | detect only | partial | slice6_altered_drafts::verified_proceeds |
+| 6.4 | validated_equals_sent | none | - | confirmed | slice6_altered_drafts::frozen_order_validated_equals_sent |
+| 6.5 | Rejected draft leaves 0 rows | none | - | confirmed | slice6_altered_drafts::rejected_leaves_zero_rows |
+| 8.1 | Sentinel absent from payload_snapshot | none | - | confirmed | slice6_credential_leak::sentinel_absent_from_snapshot |
+| 8.2 | Sentinel absent from communications | none | - | confirmed | slice6_credential_leak::sentinel_absent_from_comm |
+| 8.3 | Sentinel absent from audit_log (block) | none | - | confirmed | slice6_credential_leak::sentinel_absent_from_blocked_audit |
+| 8.4 | Sentinel absent from audit_log (success) | none | - | confirmed | slice6_credential_leak::sentinel_absent_from_insert_comm_audit |
+| 8.5 | Sentinel absent from Err strings | none | - | confirmed | slice6_credential_leak::sentinel_absent_from_err |
+| 8.6 | Sentinel absent from read-model | none | - | confirmed | slice6_credential_leak::sentinel_absent_from_list_outputs |
+| 8.7 | Positive control | none | - | confirmed | slice6_credential_leak::sentinel_present_in_credential_store |
+| 11.1 | Full chain: begin -> Err -> uncertain -> confirm_delivered | partial (2 unit tests) | no chain | partial | slice6_uncertain::full_chain_to_confirm_delivered |
+| 11.2 | Comm body equals snapshot body | none | - | confirmed | slice6_uncertain::comm_body_equals_snapshot |
+| 11.3 | Superseded confirm_delivered keeps REJECTED | none | - | confirmed | slice6_uncertain::superseded_confirm_delivered |
+| 11.4 | Superseded confirm_not_delivered keeps REJECTED | none | - | confirmed | slice6_uncertain::superseded_confirm_not_delivered |
+| 11.5 | read_snapshot Some -> None | partial (read_snapshot_only_on_uncertain) | Some -> refuses | covered | - |
+| 11.6 | Idempotent confirm x 2 | partial (finalize_uncertain_is_idempotent) | - | - | - |
+| 11.7 | confirm_delivered on IN_PROGRESS -> AttemptNotConfirmable | partial (via read_snapshot_only_on_uncertain) | - | - | - |
+| 12.1 | Multi-org scan | none | - | confirmed | slice6_crash_recovery::multi_org_scan |
+| 12.2 | Missing recommendation rollback | none | - | confirmed | slice6_crash_recovery::missing_recommendation_rollback |
+| 12.3 | Superseded recommendation untouched | none | - | confirmed | slice6_crash_recovery::superseded_recommendation_untouched |
+| 12.4 | Snapshot retained post-recovery | none | - | confirmed | slice6_crash_recovery::snapshot_retained_post_recovery |
+| 12.5 | Idempotent second call | covered (recover_at_startup_is_idempotent) | - | - | - |
+| 12.6 | Confirm after recovery writes comm from snapshot | none | - | confirmed | slice6_crash_recovery::confirm_after_recovery_uses_snapshot |
+
+Confirmed gaps: 38. Partial: 9. Covered: 10.
+
+================================================================
+6. TEST FILE LAYOUT
+================================================================
+
+Nine files, no tenth. Orchestration tests live inside
+slice6_altered_drafts.rs and slice6_provider_failures.rs,
+calling execute_send directly.
+
+  1. slice6_offline_stale.rs       Cat 1
+  2. slice6_opt_out_sync.rs        Cat 2
+  3. slice6_concurrency.rs         Cat 3
+  4. slice6_provider_failures.rs   Cat 4
+  5. slice6_malformed.rs           Cat 5
+  6. slice6_altered_drafts.rs      Cat 6
+  7. slice6_credential_leak.rs     Cat 8 (priority, first)
+  8. slice6_uncertain.rs           Cat 11
+  9. slice6_crash_recovery.rs      Cat 12
+
+================================================================
+7. TEST INVENTORY
+================================================================
+
+Per Section 5. Total new: approximately 47 tests. Counts are
+estimates; acceptance is by covered behavior. The final
+implemented count N is recorded in the close appendix.
+
+================================================================
+8. FROZEN VALIDATION-ORDER INVARIANT
+================================================================
+
+  - No test asserts validate_draft before
+    append_disclosure_idempotent.
+  - frozen_order_validated_equals_sent is present in
+    slice6_altered_drafts.rs.
+  - A rejected draft leaves zero rows in send_attempts and
+    send_reservations.
+
+================================================================
+9. ORCHESTRATION CONTRACT
+================================================================
+
+Section 3.2. Behavior-preserving extraction. No reordering.
+Tests call execute_send. The Tauri command delegates. The
+reviewer inspects the complete diff before accepting the
+extraction commit.
+
+================================================================
+10. CREDENTIAL-LEAKAGE ASSERTIONS
+================================================================
+
+Sentinel-based. Absence asserted at every prohibited surface
+(Section 5 rows 8.1 through 8.7). A positive control asserts
+the sentinel is present in the credential store before the
+call. Acceptance is absence from prohibited persisted
+content, not merely one field.
+
+================================================================
+11. CONCURRENCY ASSERTIONS
+================================================================
+
+Transactional outcomes, not return values. begin_send uses
+TransactionBehavior::Immediate (send_safety.rs line 469).
+Where determinism is not achievable in-process, the test
+asserts the sequential-order outcome and the limitation is
+recorded in the close appendix.
+
+================================================================
+12. UNCERTAIN-OUTCOME LIFECYCLE
+================================================================
+
+Full sequences and both superseded paths (Section 5 rows 11.1
+through 11.4).
+
+================================================================
+13. MALFORMED-SNAPSHOT ROLLBACK ASSERTIONS
+================================================================
+
+Error and resulting database state (Section 5 rows 5.1
+through 5.5). Assertion of the returned error alone is
+insufficient.
+
+================================================================
+14. EVIDENCE-BASED EXCLUSIONS
+================================================================
+
+Cats 7, 9, 10 receive no new file. The close appendix cites
+the existing test name and the assertion read from source for
+each requirement. If any requirement is not substantiated on
+the final read, a new test is added despite the exclusion.
+
+================================================================
+15. DEFECT POLICY
+================================================================
+
+  - A test that fails against existing production code is a
+    Slice 6 defect (FD6-NN).
+  - Reproduce. Document: failing assertion, database state,
+    git commit hash. Classify: bug / spec gap / test bug.
+  - STOP. Request approval before fixing.
+  - Each fix is its own commit, paired with the failing test
+    that exposed it.
+  - No silent scope expansion. No bundled cleanup. No
+    unrelated refactoring.
+
+================================================================
+16. STOP GATES
+================================================================
+
+  G1  Slice 6.0 complete. DONE.
+  G2  Spec frozen. Part III appended. Pushed. Before any code.
+  G3  Extraction commit pushed, reviewed by diff against the
+      Section 3.2 permitted-changes list.
+  G4  Tests implemented in priority order:
+        credential-leak
+        altered drafts
+        provider failures
+        uncertain
+        malformed
+        concurrency
+        crash recovery
+        offline/stale
+        opt-out sync
+        exclusions
+  G5  On test failure against production: STOP. Request
+      approval before fixing.
+  G6  Cloud verification (Section 17).
+  G7  Close appendix.
+
+================================================================
+17. CLOUD VERIFICATION PLAN
+================================================================
+
+Cloud is the only cargo/npm-build machine (process rule P-G).
+
+After the extraction commit only:
+
+    cd /d C:\gorka-app
+    git pull
+    set TMP=C:\cargo-tmp
+    set TEMP=C:\cargo-tmp
+    call pilot-creds.bat
+    cargo build --workspace
+    cargo test --workspace
+
+Baseline reference Section 3.4. Post-extraction expected
+result matches the baseline exactly: 449 passed, 3 ignored,
+0 failed. Any deviation STOPs the extraction.
+
+Both npm builds are re-run because the extraction touches
+Rust only; the frontend should be unchanged, but both builds
+are part of the standard cloud trip (process rule P2).
+
+    npm run build
+    cd agent-dashboard
+    npm run build
+    cd ..
+
+After the tests, with no further production change:
+
+Same commands. Expected result: 449 + N new tests, 0 failed,
+where N is the implemented count from the final test inventory.
+The approximately 47 estimate in Section 7 is planning
+guidance, not the acceptance criterion. Acceptance is by
+behavior per Section 5.
+
+If a defect fix was made:
+
+Same commands, plus a focused live test of the changed
+behavior. For a credential-leak fix: run a real send with the
+sentinel credential, then read-only query the local DB and
+audit log; assert zero matches. Not merely a successful send.
+
+================================================================
+18. WHAT THIS SPEC DOES NOT DO
+================================================================
+
+  - No new feature.
+  - No new event type, wire format, migration, or UI change.
+  - No OS-level multi-process concurrency test.
+  - No literal subprocess crash test.
+  - Does not reopen any frozen slice.
+  - Does not revise Slice 5 requirements to fit the test plan.
+  - Does not test what cannot be tested in-process.
+
+================================================================
+19. FOUNDER DECISIONS LOCKED
+================================================================
+
+  Q1  Tests first. One approved extraction. No speculative
+      production changes.
+  Q2  In-process replicas exercising the real sync-processing
+      path. No OS-level multi-process simulation.
+  Q3  Synthetic crash-state recovery via recover_at_startup.
+      Accurate terminology: crash-state recovery semantics,
+      not a literal process crash.
+  Q4  Nine test files. No tenth.
+  Q5  Cloud trip as the primary gate. Focused live test only
+      if a defect fix was made.
+  Q7  Append Part III to CONNECTOR-EVENT-ORDER-SPEC.md.
+  Q8  Fact B confirmed. Extraction per Section 3.2.
+
+================================================================
+20. OPEN ITEMS CARRIED
+================================================================
+
+  OI-3  strategy::analyze silently discards AI-path failures.
+  OI-4  fallback_outcome produces an empty draft.
+  OI-6  decided_at renders full RFC 3339 with microseconds.
+  Three unused-import warnings in slice5_send_safety.rs.
+  O1    Ghost rows on the Agent (deferred by founder).
+  O2    Communication Tools credential health.
+  STEP 1.5  More known providers.
+  STEP 1.6  Data-source display surface.
+  CONNECTOR_CREDENTIAL_REPLACED.
+  TWILIO SMS BYOP SEND VERIFICATION.
+  B7 CREDENTIAL-TRANSIT REVIEW.
+  CANCEL-NEGATIVE FOR TIER 1.
+  REGISTRATION / ONBOARDING BLOCK.
+  ACCEPTANCE - end-to-end.
+
+================================================================
+21. REVIEWER PRECONDITIONS - STATUS
+================================================================
+
+  1. Confirmed gaps against source. DONE (Sections 4, 5).
+  2. Corrected disclosure/validation ordering. DONE (Section 3.1).
+  3. Integration tests exercise real orchestration. DONE
+     (Section 3.2). Extraction approved.
+
+Conditions A and B from the prior review:
+
+  A. Behavior-preserving extraction defined. DONE (Section 3.2).
+  B. Pre-extraction baseline recorded. DONE (Section 3.4).
+
+================================================================
+22. REVISION HISTORY
+================================================================
+
+  v0.9  2026-10-14. DRAFT.
+  v1.0  2026-10-14. Orchestration Fact B confirmed against
+        source. Extraction proposed. Validation order
+        source-confirmed. Snapshot surface source-confirmed.
+        Gap matrix populated from source reads. Cat 3, 5,
+        11, 12 gaps confirmed. Cat 4, 6 gaps confirmed.
+        Sections 3.2 and 17 revised per reviewer Conditions
+        A and B. Section 3.4 baseline added.
+
+================================================================
+23. FREEZE CONDITIONS
+================================================================
+
+All met. Freeze accepted on the conditions:
+
+  1. This Part III appended to CONNECTOR-EVENT-ORDER-SPEC.md.
+  2. Committed and pushed.
+  3. Extraction commit landed and reviewed by diff.
+  4. Extraction-stage build and test compared against the
+     Section 3.4 baseline.
+  5. Tests added in the Section 16 G4 order.
+
+The extraction itself remains unverified until its diff and
+its test results have been examined.
+
+================================================================
+END OF PART III - SLICE 6 MINI SPEC v1.0
+================================================================
