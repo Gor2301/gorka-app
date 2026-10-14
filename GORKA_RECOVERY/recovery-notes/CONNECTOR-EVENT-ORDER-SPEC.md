@@ -3734,3 +3734,456 @@ v1.0 — FROZEN 2026-10-13 — Fifth review corrections: mark_rejected is PENDIN
 End of frozen specification.
 
 
+
+
+================================================================
+SLICE 5c - MINI SPEC v1.0 (FROZEN)
+================================================================
+
+Title: Copilot UI
+Status: FROZEN 2026-10-14
+Authority: Frozen Slice 5 spec Â§11 and Â§12; Part II Â§II.12.
+Depends on: Slice 5b closed (six commands shipped and verified).
+Does not reopen: Part I, Part II, Slice 5a, Slice 5b, any frozen surface.
+
+
+1. GOAL
+
+After Slice 5c, the Agent can:
+
+- See a Copilot panel on the debtor profile page.
+- Trigger an analysis, see a persisted recommendation, edit the
+  draft, see advisory fact-validation flags, accept or reject.
+- Send the accepted draft through a delivery connector via
+  send_recommendation.
+- Confirm or deny delivery when the send result is SEND_UNCERTAIN.
+- See a status page under /copilot in the sidebar.
+
+One new Rust command. No migration. No new sync events. No changes
+to the six commands that shipped in 5b.
+
+
+2. SCOPE
+
+2.1 In scope
+
+- New components: CopilotPanel.tsx, CopilotFlagList.tsx,
+  CopilotPage.tsx (each with .css).
+- Edits: DebtorProfilePage.tsx, SendMessageModal.tsx,
+  Sidebar.tsx, App.tsx, local.db.ts.
+- One new Tauri command: validate_draft_for_copilot. Registered
+  in generate_handler!.
+- Client-side regeneration counter (per debtor, per session).
+
+2.2 Out of scope
+
+- Any migration.
+- Any change to the six commands that shipped in 5b.
+- Claim resolution persistence. claim_resolution remains
+  in-memory; 5c does not call it.
+- Replacing SendMessageModal for the direct send path.
+- Any AI-side change.
+- Any change to send_connector_message.
+
+
+3. PRE-FREEZE RECONNAISSANCE (RESOLVED 2026-10-14)
+
+3.1 Claim flag display - Option A approved
+
+One new command. Thin Tauri boundary over the existing Slice 4
+validator. No parallel detection.
+
+3.2 ClaimFlagView - resolved contract
+
+Reconnaissance findings: ClaimType, ClaimSource, Verification,
+ClaimFlag, and FactValidationError derive only Debug, Clone/Copy,
+PartialEq/Eq. No serde derives anywhere. No Display impl on
+FactValidationError.
+
+Decision: manual mapping in main.rs. No derives added to Slice 4's
+frozen enums.
+
+    #[derive(serde::Serialize)]
+    struct ClaimFlagView {
+        claim_type: &'static str,        // "DollarAmount" | "CalendarDate" | "InvoiceRef"
+                                         // | "PriorPromisePayment" | "LegalOrCreditConsequence"
+        source: &'static str,            // "Subject" | "Body"
+        span_start: usize,
+        span_end: usize,
+        matched_text: String,
+        verification_kind: &'static str, // "Verified" | "Mismatch" | "Unverifiable"
+        db_value: Option<String>,        // Some(...) for Verified/Mismatch; None for Unverifiable
+        draft_id: u64,
+    }
+
+3.3 Command contract
+
+    #[tauri::command]
+    fn validate_draft_for_copilot(
+        debtor_id: String,
+        subject: Option<String>,
+        body: String,
+        app: tauri::AppHandle,
+        state: tauri::State<AppState>,
+    ) -> Result<Vec<ClaimFlagView>, String>;
+
+- Org scoping from get_trusted_organization_id(&app). Never from
+  the frontend.
+- Calls fact_validation::validate_draft and nothing else.
+- No tx.execute of any kind. Read-only query path.
+- draft_id = 0. Inert - no freshness guarantee is claimed.
+- Ok(vec![]) means "no flags detected." Err(String) means "the
+  command failed." These must be distinguishable in the UI.
+- Errors map via format!("{:?}", e).
+
+3.4 Validation vs authorization boundary
+
+Three invariants:
+
+1. No state transition. The command cannot accept, reject,
+   expire, or send. Read-only.
+2. Not a green light. send_recommendation re-validates the exact
+   final body after disclosure append. A clean panel result may
+   still fail at send.
+3. No pre-blocking. Accept remains available with flags present.
+   The composer surfaces send_recommendation's error inline.
+
+send_recommendation remains the authoritative enforcement boundary.
+
+
+4. FILES
+
+4.1 New (agent-dashboard)
+
+- src/components/CopilotPanel.tsx + CopilotPanel.css
+- src/components/CopilotFlagList.tsx + CopilotFlagList.css
+- src/pages/CopilotPage.tsx + CopilotPage.css
+
+4.2 Edited (agent-dashboard)
+
+- src/services/local.db.ts - new TS interfaces and wrapper
+  functions.
+- src/pages/DebtorProfilePage.tsx - mount <CopilotPanel ...>
+  after CommunicationCard.
+- src/components/SendMessageModal.tsx - add mode and prefill
+  props.
+- src/components/Sidebar.tsx - one nav item between Communication
+  Tools and Settings.
+- src/App.tsx - one route /copilot.
+
+4.3 Edited (Rust)
+
+- src-tauri-agent/src/main.rs - one new #[command], one
+  registration.
+
+4.4 Not touched
+
+- shared/src/send_safety.rs, shared/src/copilot.rs,
+  shared/src/recommendation_store.rs, all sync modules, all
+  adapters, shared/src/fact_validation.rs,
+  shared/src/claim_resolution.rs.
+- send_connector_message.
+
+
+5. TYPESCRIPT TYPES
+
+    export interface RecommendationView {
+      id: string;
+      organization_id: string;
+      debtor_id: string;
+      ai_connector_code: string;
+      created_by: string;
+      source: "AI" | "FALLBACK";
+      channel: "Email" | "Sms" | "Voice";
+      priority: "Low" | "Normal" | "High";
+      tone: "Friendly" | "Firm" | "Urgent" | "FinalNotice";
+      timing: "Within24Hours" | "Within3Days" | "Within7Days";
+      draft_subject: string | null;
+      draft_body: string;
+      rationale: string | null;
+      risk_flags: string[];
+      prompt_version: string;
+      status: "PENDING" | "ACCEPTED" | "REJECTED" | "SENT"
+            | "EXPIRED" | "SEND_UNCERTAIN";
+      created_at: string;
+      decided_at: string | null;
+      superseded_by: string | null;
+      snapshot_hash: string;
+      uncertain_attempt_id: string | null;
+    }
+
+    export interface SendRecommendationInput {
+      recommendation_id: string;
+      connector_code: string;
+      to: string;
+      subject: string | null;
+      draft_body: string;
+    }
+
+    export interface SendRecommendationResult {
+      communication_id: string | null;
+      attempt_id: string;
+      uncertain: boolean;
+      failure_reason: string | null;
+    }
+
+    export interface ConfirmResult {
+      communication_id: string | null;
+      attempt_id: string;
+    }
+
+    export interface CopilotProviderRow {
+      connector_code: string;
+      tier: string;
+      model: string | null;
+    }
+
+    export interface ClaimFlagView {
+      claim_type: "DollarAmount" | "CalendarDate" | "InvoiceRef"
+                | "PriorPromisePayment" | "LegalOrCreditConsequence";
+      source: "Subject" | "Body";
+      span_start: number;
+      span_end: number;
+      matched_text: string;
+      verification_kind: "Verified" | "Mismatch" | "Unverifiable";
+      db_value: string | null;
+      draft_id: number;
+    }
+
+Note on enum serialization: channel, priority, tone, timing arrive
+as Rust unit variant names - PascalCase strings - because 5b's
+RecommendationView uses the default serde representation. 5c.0
+confirmed this against shared/src/recommendation.rs which derives
+serde::Serialize. If live JSON shows a different shape, update
+this section before wiring the UI.
+
+
+6. COPILOTPANEL STATE MACHINE
+
+State            | Trigger                                | Content
+-----------------+----------------------------------------+--------
+Collapsed        | Default                                | Header "Copilot" + chevron. Subtitle: "AI drafts a message for {name}. Nothing is sent without your approval."
+Not enabled      | list_copilot_providers() returns []    | "Copilot is not enabled. Ask your administrator." No Analyze button.
+Pre-run          | Providers present, no recommendation   | "Analyze debtor" button. Footnote: "Recommendations expire 72 hours after creation."
+Loading          | Analyze clicked                        | Spinner + "Analyzing...". Button disabled.
+PENDING          | status="PENDING"                       | Source badge (AI blue / Fallback amber). Channel/Priority/Tone/Timing. Rationale (AI only) prefixed "AI explanation - unverified:". Subject + Body, Edit button. CopilotFlagList. Actions: "Accept and Review", "Reject". Footer: "Expires {created_at + 72h}". Regenerate button (up to 3 per session).
+ACCEPTED         | status="ACCEPTED"                      | "Accepted. Edit and send from the composer, or let it expire." Draft and flags shown. "Open composer" button.
+SENT             | status="SENT"                          | "Sent via {connector_code} at {decided_at}." Read-only.
+EXPIRED          | status="EXPIRED"                       | Grey message. "Analyze debtor" available again.
+SEND_UNCERTAIN   | status="SEND_UNCERTAIN" or             | Amber block: "The provider did not confirm delivery. The message may or may not have been sent." Buttons: "Confirm delivered" / "Confirm not delivered".
+                 | uncertain_attempt_id present           |
+REJECTED with    | status="REJECTED" and                  | Amber sub-card: "Unresolved send attempt from {attempted_at}." with confirm/deny buttons.
+uncertain attempt| uncertain_attempt_id present           |
+
+6.1 Live flag updates on draft edit
+
+- Debounce: 300 ms after the last keystroke. No call while typing.
+- Stale-response guard: each call carries a monotonic request_id
+  (useRef<number>). A response is applied only if request_id ===
+  latest_request_id.
+- Cancel on unmount: useEffect cleanup increments
+  latest_request_id.
+- Empty vs error: Ok([]) shows "No claims detected." below the
+  draft. Err(message) shows a red inline block "Could not validate
+  draft: {message}." Previous flags remain visible with a visible
+  "may be stale" indicator.
+
+6.2 Regeneration
+
+In PENDING state, a "Regenerate" button. Calls analyze_debtor
+again; the prior recommendation is superseded by insert_pending
+automatically. Counter is a useState keyed by debtor_id, cap 3,
+client-side only, reset on panel unmount.
+
+6.3 Loading and error states
+
+Every command wrapped in try/catch. Errors render a red inline
+block with the error string. No silent failures.
+
+
+7. SENDMESSAGEMODAL INTEGRATION
+
+Two new props:
+
+    mode?: "direct" | "copilot";       // default "direct"
+    prefill?: {
+      recommendation_id?: string;
+      subject?: string | null;
+      body?: string;
+      to?: string;
+      connector_code?: string;
+    };
+
+Behavior:
+
+- mode="direct" - unchanged. Calls sendConnectorMessage.
+- mode="copilot" - on send, calls sendRecommendation({
+  recommendation_id, connector_code, to, subject, draft_body }).
+    - { uncertain: false, communication_id } - success toast,
+      close, panel refreshes.
+    - { uncertain: true } - close modal, panel shows
+      SEND_UNCERTAIN. Attempt ID from result retained.
+    - Err(...) - inline error, no panel change.
+- Prefill populates connector, to, subject, body. User can edit.
+- Disclosure preview: composer calls get_disclosure_text and
+  appends client-side FOR PREVIEW ONLY. Rust backend remains
+  authoritative and appends the disclosure itself inside
+  send_recommendation. The frontend never sends the appended
+  body. No double-append.
+- Connector picker: reuse SendMessageModal's existing picker,
+  filtered to enabled connectors matching the recommendation's
+  channel.
+
+
+8. COPILOTPAGE
+
+Route /copilot, sidebar entry between Communication Tools and
+Settings.
+
+Sections, no actions:
+
+- Header. "Copilot".
+- Providers. Renders list_copilot_providers(). Table: connector
+  code, tier, model. If empty: "No AI provider is enabled for
+  this organization on this device."
+- How it works. Static text summarizing the allowlist from Part
+  II Â§II.3. Source of truth is that document.
+- What to expect. Bullet list: 72-hour expiration; fallback
+  labeling; rationale is unverified; fact-validation flag types
+  block at send.
+- Disclosure. Reads get_disclosure_text(). If non-empty,
+  read-only block. If empty: "No disclosure text configured."
+
+
+9. TEST INVENTORY
+
+9.1 Executable - cloud trip
+
+Both npm run build commands must pass:
+
+- Root (C:\gorka-app) - Client.
+- C:\gorka-app\agent-dashboard - Agent.
+
+This is the type-check gate. No new frontend test file in 5c.
+
+9.2 Live end-to-end (cloud trip)
+
+1. Open debtor with no recommendation. Panel Pre-run.
+2. Click Analyze. Loading -> PENDING.
+3. Verify draft and flags render.
+4. Edit draft, click Accept and Review. Composer opens prefilled.
+5. Choose enabled email connector and send.
+6. Case A: success - panel shows SENT with delivery connector code.
+7. Case B: uncertain - SEND_UNCERTAIN, click "Confirm delivered".
+   Panel SENT.
+8. Case C: uncertain - SEND_UNCERTAIN, click "Confirm not
+   delivered". Panel returns to ACCEPTED.
+9. Reject path: fresh recommendation, click Reject. Panel
+   REJECTED.
+10. Regenerate path: click Regenerate 3 times. Fourth disabled.
+11. Not-enabled path: disable AI connector on Client, sync, open
+    panel. Shows not-enabled message.
+12. Status page: navigate /copilot. All sections render.
+12a. Edit draft, type currency token not in debts. Within ~1s,
+     new flag appears. No send.
+12b. Type fast 2 seconds. One validation call fires on final
+     value.
+12c. Force validation error. Panel shows red error block.
+     Previous flags remain. Panel recovers.
+12d. Accept with Mismatch flag. Composer opens. Send fails
+     inline with the flag's matched_text.
+
+9.3 Code-inspection checks
+
+- validate_draft_for_copilot calls
+  fact_validation::validate_draft and nothing else. No parallel
+  detection.
+- validate_draft_for_copilot performs no tx.execute of any kind.
+- send_recommendation still calls validate_draft against the
+  final body after disclosure append.
+- SendMessageModal in direct mode calls only sendConnectorMessage.
+- In copilot mode, calls only sendRecommendation. No path calls
+  both.
+- No component reads ai_connector_code for display as "sent via".
+- The panel never calls mark_sent or mark_send_uncertain
+  directly.
+- useEffect cleanup cancels in-flight promise handlers on
+  unmount.
+- Accept button is never conditionally disabled on flag presence.
+
+
+10. IMPLEMENTATION SEQUENCE
+
+1. 5c.0 - Reconnaissance. COMPLETE 2026-10-14.
+2. 5c.1 - TS types and service wrappers in local.db.ts. No UI.
+3. 5c.2 - CopilotFlagList.tsx.
+4. 5c.3 - CopilotPanel.tsx + .css.
+5. 5c.4 - SendMessageModal.tsx prefill + mode.
+6. 5c.5 - DebtorProfilePage.tsx mount.
+7. 5c.6 - CopilotPage.tsx + Sidebar.tsx + App.tsx.
+8. 5c.7 - Rust command validate_draft_for_copilot.
+9. 5c.8 - Cloud trip: both npm run build passes; live
+   end-to-end test.
+10. 5c.9 - Appendix M. Written after the cloud trip passes.
+
+No phase-level STOP gate. The gate is the cloud trip: both builds
+pass AND live end-to-end test passes.
+
+
+11. WHAT THIS SPEC DOES NOT DO
+
+- Does not change the six commands that shipped in 5b.
+- Does not implement claim resolution.
+- Does not add a design system. Reuses existing primitives.
+- Does not add frontend unit tests. Slice 5c is verified by build
+  plus live test.
+- Does not sync Copilot state across devices.
+- Does not reopen Part I or Part II.
+
+
+12. WHAT 5c DOES NOT DO WITH FLAGS
+
+- Does not implement claim resolution. resolve_claim is not
+  called.
+- Does not persist resolution records.
+- Does not track a draft_id version. Every flag call uses
+  draft_id = 0.
+- Does not add a "Resolve" button. Flags are informational in 5c.
+- Does not disable Accept on flags.
+- Does not block the composer's send button on flags.
+  send_recommendation is the block.
+
+If any of these turns out to be needed for the panel to be
+useful, that is a separate slice with its own spec.
+
+
+13. FOUNDER DECISIONS (LOCKED 2026-10-14)
+
+1. Composer connector picker - CONFIRMED. Reuse
+   SendMessageModal's existing picker, filtered to connectors
+   matching the recommendation's channel. No parallel picker.
+2. Disclosure preview - CONFIRMED. Client-side append via
+   get_disclosure_text for preview parity. Rust backend remains
+   authoritative and must not double-append.
+3. Accept with claim flags - CONFIRMED. Accept remains available
+   when flags are present. The panel informs; the send path
+   validates and blocks.
+
+
+14. REVIEWER VERDICT
+
+GO - Slice 5c Mini Spec v1.0. Frozen 2026-10-14.
+
+All six reviewer requirements captured:
+
+1. Reuse existing validator; no parallel detection - Â§3.1, Â§9.3.
+2. Exact flag-view schema from source - Â§3.2, Â§3.3.
+3. No state-changing side effects - Â§3.4, Â§9.3.
+4. Live updates with debounce and stale-response protection -
+   Â§6.1.
+5. Send-time validation authoritative - Â§3.4, Â§12.
+6. Distinguish validation errors from valid empty result - Â§6.1.
+
+
+END OF SLICE 5c MINI SPEC v1.0
+================================================================
