@@ -20,6 +20,7 @@ import dashboardRoutes from './routes/dashboard.routes';
 import metricsRoutes from './routes/metrics.routes';
 import syncRoutes from './routes/sync.routes';
 import activityRoutes from './routes/activity.routes';
+import usersRoutes from './routes/users';
 
 dotenv.config();
 
@@ -88,6 +89,7 @@ app.use('/api/connector-usage', authenticateToken, connectorUsageRoutes);
 app.use('/api/billing', authenticateToken, billingRoutes);
 app.use('/api/licenses', authenticateToken, licensesRoutes);
 app.use('/api/sync', authenticateToken, syncRoutes);
+app.use('/api/users', authenticateToken, usersRoutes);
 
 // ─── Health Check ──────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
