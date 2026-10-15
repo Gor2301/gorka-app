@@ -7206,3 +7206,408 @@ S.10 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX S
 ================================================================
+
+
+================================================================
+APPENDIX T - SLICE 8.6.5 AND SLICE 8.7 CLOSE
+(added v3.13, 2026-10-16)
+================================================================
+
+T.0 - WHY THIS APPENDIX EXISTS
+
+Appendix S closed Slice 8.2 and 8.3. This session
+continued through three more slices:
+
+  - Slice 8.6.5: consolidate PLATFORM_OWNER -> OWNER
+  - Part V: freeze the 8.7 mini spec
+  - Slice 8.7: Owner Dashboard authentication
+
+All three are code-complete and cloud-verified
+(functional curl tests included). Slice 8.5 remains
+open and is unblocked.
+
+Prior appendices are not edited.
+
+================================================================
+T.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 9a704d0 plus the Appendix T commit that
+        follows. Pushed to origin/main.
+
+CLOUD:  at 9a704d0. Cargo build PASS, cargo test
+        497 passed / 3 ignored / 0 failed. Root npm
+        build PASS. OD npm build PASS. Backend started
+        clean. Functional curl tests pass.
+
+Commits this session (since Appendix S):
+
+  52b6851  slice 8.6.5: consolidate PLATFORM_OWNER to
+           OWNER in support routes
+  3e3d313  CONNECTOR-EVENT-ORDER-SPEC: Part V, Slice
+           8.7 mini spec v1.0 frozen
+  9a704d0  slice 8.7: Owner Dashboard authentication;
+           separate JWT secret, OD gate, seed-owner
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -6
+    git status --short
+
+================================================================
+T.2 - SLICE 8.6.5 - ROLE CONSOLIDATION
+================================================================
+
+One file, one mechanical change:
+
+  src/backend/routes/support.routes.ts
+    Four occurrences of 'PLATFORM_OWNER' -> 'OWNER'.
+    Pre-existing 'OWNER' checks in the same file now
+    match the newly-consolidated role name.
+
+Codebase is now free of 'PLATFORM_OWNER'. Verify:
+
+  findstr /S /C:"PLATFORM_OWNER" src\backend\*.ts \
+    src\backend\**\*.ts owner-dashboard\*.tsx \
+    owner-dashboard\**\*.tsx
+  Expected: zero hits.
+
+Role taxonomy (locked 2026-10-16):
+
+  OWNER          platform owner. One person. Only role
+                 with OD access.
+  CLIENT         client-side org admin.
+  AGENT          client-side debt-collection agent.
+  SUPPORT        reserved (funded phase, support spec
+                 Shape B).
+  SUPPORT_AGENT  reserved capability. Not a role.
+
+================================================================
+T.3 - PART V FROZEN
+================================================================
+
+Part V of CONNECTOR-EVENT-ORDER-SPEC.md is frozen as
+of commit 3e3d313. It defines Slice 8.7: Owner
+Dashboard authentication with a separate JWT secret.
+
+Full text in the spec file. Not duplicated here.
+
+================================================================
+T.4 - SLICE 8.7 - WHAT SHIPPED
+================================================================
+
+Backend:
+
+  src/backend/middleware/auth.ts
+    New export: authenticateTokenOD.
+    Reads Authorization header or gorka_od_session
+    cookie. Verifies against JWT_SECRET_OD. Requires
+    payload.od === true. Returns 500 if JWT_SECRET_OD
+    is unset (config error, not auth failure).
+
+  src/backend/middleware/requireRole.ts
+    New file. Curried middleware factory. Accepts one
+    or more permitted roles. 401 if no req.user, 403
+    if role not in the list.
+
+  src/backend/routes/auth.ts
+    Import now: { authenticateToken, authenticateTokenOD }.
+    Login handler: isOD = req.headers['x-od'] === '1'.
+      If isOD and role !== 'OWNER': 403.
+      Signing secret: isOD ? JWT_SECRET_OD : JWT_SECRET.
+      Payload: adds od: true when isOD.
+      Expiry: isOD ? 1d : 7d.
+      Cookie: isOD ? gorka_od_session : gorka_session.
+    New route: GET /me-od
+      authenticateTokenOD, inline role === 'OWNER' gate.
+      Returns { id, email, name, role, isActive,
+      lastLogin }. No organization block; OD is
+      platform-wide.
+
+Prisma:
+
+  prisma/seed-owner.ts (new)
+    CLI bootstrap. argv <email> <password>. Creates or
+    promotes User with role='OWNER', isActive=true,
+    password hashed at bcrypt cost 12.
+    Idempotent on email. Documented in
+    RECOVERY-RULES.md.
+
+Owner Dashboard:
+
+  index.tsx
+    ProtectedRoute now calls /auth/me-od with X-OD: 1.
+    Requires body.data.role === 'OWNER'. Clears
+    localStorage.gorka_token on any failure.
+    Removed <Route path="/register" ...> and the
+    RegisterPage import.
+
+  pages/LoginPage.tsx
+    Sends X-OD: 1 on login.
+    Replaced window.location.href =
+      data.data.redirectUrl || '/' with '/' directly.
+    Uses import.meta.env.VITE_API_URL with
+    http://api.gorka.localhost:3000/api fallback.
+
+  services/api.ts
+    fetchAPI adds X-OD: 1 to every request header.
+
+Docs:
+
+  GORKA_RECOVERY/recovery-notes/RECOVERY-RULES.md
+    New section: Owner Dashboard Authentication.
+    Role taxonomy, JWT_SECRET_OD env var, bootstrap
+    procedure, "no public registration" rule.
+
+================================================================
+T.5 - VERIFICATION (FUNCTIONAL)
+================================================================
+
+CLOUD at 9a704d0:
+
+  cargo build --workspace       PASS. Warnings
+                                unchanged.
+  cargo test --workspace        497 passed, 3 ignored,
+                                0 failed.
+  npm run build (root)          PASS, built in 4.74s.
+  npm run build (owner-dashboard) PASS, built in 16.88s.
+  npx tsx src/backend/index.ts  Backend started clean.
+
+FUNCTIONAL CURL TESTS:
+
+  Test 1 - OD login.
+    POST /api/auth/login with X-OD: 1, OWNER user.
+    Result: HTTP 200.
+    Decoded JWT payload contains:
+      role: 'OWNER'
+      od: true
+      exp - iat = 86400 (1 day)
+    PASS.
+
+  Test 2 - /me-od with OD token.
+    GET /api/auth/me-od with Bearer <OD token>.
+    Result: HTTP 200. Response:
+      { success: true, data: { id, email, name,
+        role: 'OWNER', isActive: true, lastLogin } }
+    PASS.
+
+  Test 3 - /me-od with shared-secret token.
+    Login WITHOUT X-OD. Resulting token signed with
+    shared JWT_SECRET. Sent to /me-od.
+    Result: HTTP 401, { success: false, error:
+    'Invalid or expired token' }.
+    PASS. This is the proof the split secret works:
+    a valid, correctly-formatted, unexpired JWT from
+    the shared-secret surface was rejected by the OD
+    endpoint.
+
+Not tested in this session:
+
+  - Browser end-to-end: navigate to OD login page,
+    log in, land on dashboard. Cloud is CLI-only;
+    browser test belongs to the next live session.
+  - Non-OD negative case (login as AGENT or CLIENT
+    with X-OD: 1 should return 403). Covered by code
+    inspection; not exercised via curl.
+
+================================================================
+T.6 - DEVIATIONS FROM PART V
+================================================================
+
+D1. Step 5 (rewire /api/admin in index.ts) is
+    deferred to Slice 8.5. admin.ts does not exist
+    yet. When it lands, it mounts with
+    authenticateTokenOD + requireRole('OWNER') from
+    the start. index.ts is untouched in 8.7.
+
+D2. redirectUrl remains in login response body.
+    Deferred to Slice 8.1 per C6. OD frontend no
+    longer depends on it.
+
+D3. No API for logging out OD sessions. Inherited
+    from the shared /api/auth/logout which clears
+    gorka_session only. Follow-up; not in 8.7
+    scope.
+
+================================================================
+T.7 - FINDINGS THIS SESSION
+================================================================
+
+FG-S5  OD package.json build script is
+       "build": "vite build", not
+       "tsc --noEmit && vite build".
+       TypeScript is not type-checked by the OD
+       build. Client and Agent already use the tsc
+       step. This is a real gap in the OD toolchain,
+       not a defect introduced in 8.7.
+       New open item OI-9.
+
+FG-S6  OD tsconfig.json has no include restriction.
+       Running npx tsc --noEmit from
+       owner-dashboard/ globs the entire repository,
+       surfacing 36 errors from src/frontend/ and
+       src/renderer/ — legacy pre-Tauri code, not
+       owned by the OD.
+       New open item OI-10.
+
+FG-S7  Curl command templates with angle-bracket
+       placeholders (<PASTE_TOKEN_HERE>) were pasted
+       literally in one test invocation. The shell
+       treated the string as a literal argument.
+       Test 3's first run was invalid; the second
+       run (with the real token pasted) is the one
+       recorded in T.5.
+       New process rule P-WW.
+
+FG-S8  test@example.com was promoted from its prior
+       role to OWNER by the seed script. If any
+       earlier test or fixture expects that email to
+       be CLIENT, it may now fail. Worth a scan at
+       the next full test run.
+
+================================================================
+T.8 - PROCESS AMENDMENTS
+================================================================
+
+P-VV  SECRETS ARE NEVER PASTED INTO CHAT.
+      Format verification uses a placeholder
+      (<VALUE>) so the real value stays out of the
+      log. Third occurrence this session
+      (ghp_... remote URL, JWT_SECRET_OD). The rule
+      exists in Appendix D.5; the habit is not
+      locked in.
+
+P-WW  ANGLE-BRACKET PLACEHOLDERS IN COMMAND
+      TEMPLATES ARE A TRAP.
+      <X> in a Windows cmd line is not a
+      placeholder — it is redirection syntax.
+      Either the founder substitutes the actual
+      value before running, or the template uses
+      a different notation (e.g. __TOKEN__).
+      Default to __DOUBLE_UNDERSCORE__ markers in
+      future command templates.
+
+P-XX  ONE APPENDIX PER SESSION (restated, P-JJ,
+      P-M, P-V, P-Y, P-DD, P-QQ, P-UU). This
+      appendix is new.
+
+P-YY  CLOUD TRIP IS REQUIRED WHEN RUST, BACKEND TS,
+      OR OD TS CHANGES.
+      String-only edits to documentation, CSS, or
+      comment-only changes defer to the next
+      natural cloud trip.
+      This is a refinement of P-G. It was applied
+      earlier in this session: Slice 8.6.5's one-
+      line role rename was pushed without a cloud
+      trip and confirmed via the next natural trip.
+
+================================================================
+T.9 - OPEN ITEMS
+================================================================
+
+New this session:
+
+  - OI-9: OD build script lacks tsc --noEmit.
+  - OI-10: OD tsconfig lacks include restriction.
+  - OI-11: SUPER_ADMIN in
+    src/backend/middleware/tenant.ts is legacy from
+    the old supervisor-dashboard. One hit, plus a
+    comment and an error string. Not touched.
+    Candidate for removal in a cleanup slice.
+  - logout endpoint does not clear gorka_od_session.
+    OD session persists after logout until the token
+    expires.
+  - Browser end-to-end OD test not yet run.
+  - Non-OD negative case (AGENT/CLIENT with X-OD: 1)
+    not exercised via curl.
+
+Carried from Appendix S / R / O.7 / P.4:
+
+  - Slice 8.5 - Owner Dashboard orgs page.
+  - Slice 8.1 - Website fixes + download page.
+  - Slice 8.6 - Deploy.
+  - Support-OD auth reconciliation spec (support
+    endpoints currently use shared JWT; OD uses OD
+    JWT; OD's future Support page cannot call
+    support endpoints as-is).
+  - OD Data Bridge spec (the OD's existing data
+    calls target endpoints that do not exist).
+  - OI-7: Copilot fallback connector filter.
+  - OI-8: DeepSeek connector row.
+  - OI-3: full logging design.
+  - O1 ghost-row fix (deferred by founder).
+  - O2 Communication Tools credential health.
+  - STEP 1.5, STEP 1.6.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - ACCEPTANCE - end-to-end.
+  - PF-4: local cargo check / GitHub Actions.
+
+================================================================
+T.10 - QUEUE
+================================================================
+
+DONE
+  Slices 1-7. Appendices F-P.
+  8.2, 8.3. Appendix S.
+  8.4. Appendix S (verification only).
+  8.6.5. This appendix.
+  8.7. This appendix.
+
+IN FLIGHT
+  None.
+
+NEXT - IN ORDER
+
+  1. SLICE 8.5 - Owner Dashboard organizations
+     page.
+     Backend: src/backend/routes/admin.ts with
+       GET /api/admin/organizations.
+       Mount with authenticateTokenOD +
+       requireRole('OWNER').
+     Frontend: owner-dashboard/pages/
+       OrganizationsPage.tsx.
+     Agent counts: registered, online (lastSeenAt
+       > 5 min), offline.
+     Query shape: 5 groupBy queries stitched in
+       JS. No N+1.
+
+  2. SLICE 8.1 - Website fixes + download page.
+     Backend: registerSchema password optional;
+       POST /resend-verification; delete
+       redirectUrl from /login and
+       /complete-registration.
+     Website: fix resend call; add inline email
+       validation; add /download page;
+       route to /download after step 3 and login.
+     Owner Dashboard: LoginPage drop redirectUrl
+       dependency (DONE in 8.7).
+
+  3. SLICE 8.6 - Deployment.
+     www.gorka.click, api.gorka.click.
+     JWT_SECRET_OD in production env.
+     VITE_API_URL baked into both Tauri binaries.
+     Icons, app names.
+     Owner Dashboard at owner.gorka.click.
+     Live acceptance per Part IV.7.
+
+  Then the carried items.
+
+================================================================
+T.11 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I, II, III, IV, or V.
+  Does not edit prior appendices.
+  Does not start Slice 8.5 or 8.1.
+  Does not decide the Support-OD auth
+  reconciliation.
+  Does not claim the OD browser flow has been
+  visually tested; only the CLI tests are proven.
+
+================================================================
+END OF APPENDIX T
+================================================================
