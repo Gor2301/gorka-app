@@ -5339,3 +5339,317 @@ IV.11 - WHAT THIS PART DOES NOT DO
 ================================================================
 END OF PART IV - SLICE 8 MINI SPEC v1.0
 ================================================================
+
+
+================================================================
+PART V - SLICE 8.7 MINI SPEC v1.0 (FROZEN)
+================================================================
+
+Title: Owner Dashboard Authentication
+Status: FROZEN 2026-10-16
+Authority: Part IV.5.5, corrected. Founder
+  direction, 2026-10-16 session.
+Depends on: Slices 1-7 closed; 8.2, 8.3, 8.4
+  closed; 8.6.5 closed (PLATFORM_OWNER consolidated
+  to OWNER).
+Does not reopen: Part I, II, III, IV except for the
+  corrections in V.4.
+
+================================================================
+V.1 - GOAL
+================================================================
+
+Only an OWNER can reach OD pages or OD backend
+endpoints. Client and Agent tokens cannot be used
+against the OD even if a role check is missing on
+some endpoint, because OD tokens are signed with a
+separate key.
+
+================================================================
+V.2 - SCOPE
+================================================================
+
+V.2.1 In scope
+
+  - New env var JWT_SECRET_OD.
+  - New middleware authenticateTokenOD.
+  - New middleware requireRole.
+  - Login branch: X-OD: 1 header triggers OD role
+    gate and OD-signed token.
+  - New endpoint GET /api/auth/me-od.
+  - New bootstrap script prisma/seed-owner.ts.
+  - Frontend gate in owner-dashboard/index.tsx
+    ProtectedRoute.
+  - Removal of the public /register route from OD.
+  - services/api.ts sends X-OD: 1 on every request.
+  - LoginPage.tsx sends X-OD: 1 on login.
+  - Corrected role taxonomy (V.4).
+
+V.2.2 Out of scope
+
+  - Any OD data endpoint. The OD Data Bridge spec
+    is separate.
+  - SUPPORT and SUPPORT_AGENT behavior. Both are
+    reserved names from GORKA-SUPPORT-SPEC v1.0.1.
+  - Support <-> OD auth reconciliation. Follow-up
+    spec.
+  - Refresh tokens, revocation, MFA.
+  - Password reset.
+  - Anything in Client or Agent.
+
+================================================================
+V.3 - DECISIONS LOCKED
+================================================================
+
+D1. Role taxonomy (consolidated 2026-10-16).
+    OWNER          - platform owner. One person.
+                     Only role with OD access.
+    CLIENT         - client-side org admin.
+    AGENT          - client-side debt-collection
+                     agent. Never reaches OD.
+    SUPPORT        - reserved. Funded phase.
+                     GORKA-SUPPORT-SPEC v1.0.1 Shape B.
+    SUPPORT_AGENT  - reserved capability.
+                     GORKA-SUPPORT-SPEC v1.0.1.
+                     Not a role.
+
+    PLATFORM_OWNER is retired. Slice 8.6.5 removed
+    its last occurrence.
+
+D2. OD gate is OWNER only.
+    Part IV.5.5 wrote "OWNER || PLATFORM_OWNER".
+    Both now collapse to OWNER. No client-side role
+    reaches the OD.
+
+D3. Separate JWT secret.
+    JWT_SECRET signs Client and Agent tokens.
+    JWT_SECRET_OD signs OD tokens.
+    authenticateToken verifies against JWT_SECRET.
+    authenticateTokenOD verifies against
+    JWT_SECRET_OD.
+    Tokens are cryptographically incompatible.
+
+D4. Login selection by header.
+    POST /api/auth/login with X-OD: 1 issues an
+    OD-signed token, after confirming role = OWNER.
+    Without X-OD, existing behavior is unchanged.
+
+D5. OD auth endpoint.
+    GET /api/auth/me-od verifies with JWT_SECRET_OD
+    and requires role = OWNER.
+    Returns the same shape as /api/auth/me.
+
+D6. No public registration for the OD.
+    Remove <Route path="/register" ...> from
+    owner-dashboard/index.tsx.
+
+D7. Bootstrap via CLI.
+    prisma/seed-owner.ts creates or promotes a user
+    to role = OWNER. Run once on cloud, once on
+    production.
+
+D8. Frontend gate.
+    ProtectedRoute reads role from /api/auth/me-od.
+    If role !== 'OWNER', token cleared, redirect
+    /login.
+
+================================================================
+V.4 - CORRECTIONS TO PART IV
+================================================================
+
+Part IV.5.5 reads, as frozen:
+
+  "GET /api/admin/organizations:
+     authenticateToken + inline role check:
+       role === 'OWNER' || role === 'PLATFORM_OWNER'."
+
+Corrected text:
+
+  "GET /api/admin/organizations:
+     authenticateTokenOD + requireRole('OWNER').
+     No client-side role reaches the OD."
+
+Part IV stands otherwise. This section is the
+authoritative correction.
+
+================================================================
+V.5 - FILES
+================================================================
+
+New (backend):
+
+  src/backend/middleware/requireRole.ts
+
+New (prisma):
+
+  prisma/seed-owner.ts
+
+Edited (backend):
+
+  src/backend/middleware/auth.ts
+    - Add authenticateTokenOD.
+    - authenticateToken unchanged.
+  src/backend/routes/auth.ts
+    - Login handler: X-OD branch.
+    - New GET /me-od handler.
+  src/backend/index.ts
+    - OD routes now require authenticateTokenOD and
+      requireRole('OWNER').
+    - Today only /api/admin exists. Other OD routes
+      are placeholders when their endpoints arrive.
+  src/backend/routes/support.routes.ts
+    - No change in 8.7. Support uses shared JWT.
+    - The support-OD auth reconciliation is a
+      follow-up spec.
+
+Edited (Owner Dashboard):
+
+  owner-dashboard/index.tsx
+    - ProtectedRoute: role check via /auth/me-od.
+    - Remove /register route.
+  owner-dashboard/pages/LoginPage.tsx
+    - Send X-OD: 1 header on login.
+  owner-dashboard/services/api.ts
+    - fetchAPI sends X-OD: 1 header.
+
+Docs:
+
+  RECOVERY-RULES.md
+    - Bootstrap procedure.
+    - JWT_SECRET_OD in the secrets list.
+
+================================================================
+V.6 - BEHAVIOR CONTRACT
+================================================================
+
+Backend login (POST /api/auth/login):
+
+  X-OD absent:
+    Existing behavior. Unchanged.
+  X-OD: 1:
+    Verify credentials.
+    If role !== 'OWNER':
+      403 { success: false, error: 'Not authorized
+            for Owner Dashboard' }.
+    Else:
+      Sign token with JWT_SECRET_OD, payload
+      includes { userId, email, role, od: true }.
+      Return { success: true, data: { user, token } }.
+
+Backend auth middleware:
+
+  authenticateToken:
+    Verifies with JWT_SECRET. Sets req.user.
+    Unchanged.
+  authenticateTokenOD:
+    Verifies with JWT_SECRET_OD.
+    Requires payload.od === true.
+    Sets req.user.
+    Rejects otherwise with 401.
+
+Backend /api/auth/me-od:
+
+  authenticateTokenOD + requireRole('OWNER').
+  Returns same shape as /api/auth/me.
+
+Frontend ProtectedRoute:
+
+  On mount:
+    if no localStorage.gorka_token -> /login.
+    else fetch ${API_BASE}/auth/me-od with
+      Authorization: Bearer <token>
+      X-OD: 1.
+    if response not OK or role !== 'OWNER':
+      clear localStorage.gorka_token.
+      redirect /login.
+    else render children.
+
+Frontend fetchAPI (services/api.ts):
+
+  Every request sends X-OD: 1.
+
+Frontend LoginPage:
+
+  POST ${API_BASE}/auth/login with X-OD: 1.
+
+================================================================
+V.7 - BOOTSTRAP PROCEDURE
+================================================================
+
+Once per environment:
+
+  npx tsx prisma/seed-owner.ts <email> <password>
+
+Effects:
+  - If no user with that email: creates one with
+    role=OWNER, isActive=true, no organizationId.
+  - If a user exists: sets role=OWNER, overwrites
+    password, sets isActive=true.
+  - Password must be at least 8 characters.
+
+Documented in RECOVERY-RULES.md.
+
+================================================================
+V.8 - ACCEPTANCE CRITERIA
+================================================================
+
+1. POST /api/auth/login without X-OD: unchanged.
+2. POST /api/auth/login with X-OD: 1 and a CLIENT or
+   AGENT account: 403, no token.
+3. POST /api/auth/login with X-OD: 1 and an OWNER
+   account: 200, token present.
+4. GET /api/auth/me-od with the OWNER OD token:
+   200, role=OWNER.
+5. GET /api/auth/me-od with a CLIENT token: 401.
+6. GET /api/admin/organizations with the OWNER OD
+   token: 200 (endpoint exists after Slice 8.5).
+7. GET /api/admin/organizations with a CLIENT
+   token: 401.
+8. GET /api/auth/me (non-OD) with the OWNER OD
+   token: 403 or 401 - OD token is not valid against
+   shared-JWT endpoints.
+9. Browser: load OD without token -> /login.
+10. Browser: load OD with CLIENT token in
+    localStorage -> token cleared, /login.
+11. Browser: load OD with OWNER OD token -> pages
+    render.
+12. /register removed from OD. Direct navigation
+    redirects to /login.
+
+================================================================
+V.9 - IMPLEMENTATION SEQUENCE
+================================================================
+
+0. Verify requireRole.ts does not already exist.
+   If it does, adapt. Do not overwrite.
+1. backend middleware auth.ts: authenticateTokenOD.
+2. backend auth.ts: /me-od endpoint.
+3. backend auth.ts: /login X-OD branch.
+4. backend middleware: requireRole.ts (if absent).
+5. backend index.ts: rewire OD routes.
+6. prisma/seed-owner.ts.
+7. owner-dashboard/index.tsx: gate + remove
+   /register.
+8. owner-dashboard/pages/LoginPage.tsx: X-OD.
+9. owner-dashboard/services/api.ts: X-OD.
+10. RECOVERY-RULES.md updates.
+11. Cloud trip.
+12. Live: bootstrap OWNER on cloud, log in OD,
+    verify /auth/me-od returns role=OWNER.
+
+================================================================
+V.10 - WHAT THIS PART DOES NOT DO
+================================================================
+
+  Does not build OD data endpoints.
+  Does not implement SUPPORT or SUPPORT_AGENT.
+  Does not reconcile support auth with OD auth.
+  Does not add refresh tokens or revocation.
+  Does not change Client or Agent behavior.
+  Does not reopen Part I, II, III.
+  Does not amend Part IV except for the V.4
+  correction.
+
+================================================================
+END OF PART V - SLICE 8.7 MINI SPEC v1.0
+================================================================
