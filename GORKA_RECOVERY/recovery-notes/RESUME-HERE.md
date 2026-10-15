@@ -5552,3 +5552,224 @@ O.9 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX O
 ================================================================
+
+================================================================
+APPENDIX P - SLICE 7 CLOSE
+(added v3.9, 2026-10-15)
+================================================================
+
+P.0 - WHY THIS APPENDIX EXISTS
+
+Appendix O closed Slice 6. This session ran Slice 7:
+Mocean adapter repair + Copilot polish. Live SMS
+through Mocean sent from the Agent, received on the
+phone. Where this appendix conflicts with O.8's
+queue, this appendix wins.
+
+================================================================
+P.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 0b21c09. Pushed. Clean tree except
+        Cargo.lock drift (known cosmetic, Appendix
+        C.9) and untracked leftover files from an
+        earlier session.
+
+CLOUD:  idle. May be closed.
+
+Slice 7 commits:
+
+  40a674a  slice 7: mocean bearer auth + 202/GET
+           contract; twilio schema fix; copilot
+           timestamp polish
+  0b21c09  slice 7: mocean bearer auth + 202/GET;
+           twilio schema fix; fallback draft content
+           + AI-path logging; timestamp format
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -4
+    git status --short
+
+================================================================
+P.2 - WHAT SLICE 7 SHIPPED
+================================================================
+
+Mocean adapter - full rewrite
+(shared/src/connectors/mocean_sms.rs):
+
+  Confirmed live against rest.moceanapi.com.
+  Five corrections:
+    - Auth: Basic (apiKey:apiSecret) -> Bearer
+      (apiToken).
+    - SMS success status: 200 -> 202. Helper
+      is_success_status accepts both.
+    - Balance endpoint: POST -> GET with query
+      string. Confirmed 202 on GET, 400 on POST.
+    - Credential shape: {apiKey, apiSecret} ->
+      {apiToken}.
+    - Test module: 16 -> 20 tests, net +4.
+
+Twilio schema defect repaired
+(prisma/seed-connectors.ts):
+
+  - twilio-sms credentialSchema was carrying
+    Mocean's schema. Corrected to accountSid +
+    authToken + from as tel.
+  - This defect predated Slice 7.
+
+Copilot timestamp (CopilotPanel.tsx):
+
+  - formatTimestamp helper: dateStyle 'medium',
+    timeStyle 'short'. Removes seconds and
+    microseconds from the SENT line.
+
+Fallback draft content (shared/src/strategy.rs):
+
+  - fallback_outcome now returns subject
+    "Payment reminder" and body "Please contact
+    us about your account." Was empty before.
+  - slice4_strategy assertion updated.
+
+AI-path failure logging (shared/src/strategy.rs):
+
+  - try_ai_path's Err type () -> &'static str.
+    18 sites carry a reason. analyze() logs the
+    reason via eprintln! once.
+
+Unused imports removed
+(shared/tests/slice5_send_safety.rs):
+  AttemptState, OTHER_DEBTOR.
+
+================================================================
+P.3 - VERIFICATION
+================================================================
+
+CLOUD at 0b21c09:
+
+  cargo test --workspace
+     --no-fail-fast     497 passed, 3 ignored,
+                        0 failed. EXIT=0.
+  npm run build (root)  PASS.
+  npm run build (agent) PASS.
+
+Workspace moved 493 -> 497. The +4 is the net
+change in the mocean_sms test module.
+
+LIVE TEST: real SMS through the app.
+  - Client BYOP enable with apiToken schema.
+  - Sync reached the Agent.
+  - Agent Send SMS via mocean-sms.
+  - SMS received on a real phone.
+  - Disclosure line appended.
+  - Communications row: type SMS, direction
+    OUTBOUND, body correct.
+
+================================================================
+P.4 - OPEN ITEMS
+================================================================
+
+New this session:
+
+  OI-7 - Copilot composer restricts to email
+    connectors. Part II Section II.8 locks the
+    MVP to Channel::Email on both AI and fallback
+    paths. Effect: when the agent accepts a
+    fallback recommendation and only SMS
+    connectors are enabled, the composer dropdown
+    has no options. Dead end.
+
+    Options:
+      A - Accept as documented MVP limitation.
+      B - Widen the filter for fallback
+          recommendations only; AI path keeps
+          the Email filter. Small frontend change
+          in CopilotPanel.tsx.
+
+    Founder decision pending. Recommendation: B.
+    Requires a spec note that the fallback path
+    is channel-agnostic.
+
+  OI-8 - DeepSeek connector row.
+    Add deepseek-ai as a visible catalog choice,
+    ready to use when the admin supplies an API
+    key. No live key today; row exists and stays
+    dormant until enabled.
+
+    Work:
+      - connectors/mod.rs: register
+        "deepseek-ai" -> openai_compatible::factory.
+      - copilot.rs: add "deepseek-ai" to
+        AI_PROVIDER_CODES.
+      - seed-connectors.ts: new catalog row with
+        credentialSchema collecting apiKey,
+        base_url (default https://api.deepseek.com),
+        model (default deepseek-flash).
+      - No new adapter. OpenAI-compatible is
+        production-ready.
+
+    Priority order (founder chose A this session):
+      ["gemini-ai", "deepseek-ai", "openai-compatible"]
+
+    Note: dormant row until a key is supplied.
+    Same caveat as custom-api (Appendix F).
+
+Closed this session:
+  - OI-4 (fallback content).
+  - OI-6 (timestamp format). Verified by
+    type-check; live verification deferred.
+  - Part of OI-3: reason strings + eprintln in
+    strategy.rs. Full logging design (where
+    Agent logs go, structured vs plain) remains
+    open.
+
+Carried from Appendix O Section O.7, unchanged:
+  - OI-3 (full logging design)
+  - O1 ghost-row fix (deferred by founder)
+  - O2 Communication Tools credential health
+  - STEP 1.5 - More known providers
+  - STEP 1.6 - Data-source display surface
+  - CONNECTOR_CREDENTIAL_REPLACED
+  - TWILIO SMS BYOP SEND VERIFICATION
+  - B7 CREDENTIAL-TRANSIT REVIEW
+  - CANCEL-NEGATIVE FOR TIER 1
+  - REGISTRATION / ONBOARDING BLOCK
+  - ACCEPTANCE - end-to-end
+  - PF-4: local cargo check / GitHub Actions
+
+================================================================
+P.5 - QUEUE
+================================================================
+
+DONE
+  Slice 1 through Slice 6. See Appendices F-O.
+  SLICE 7 - Mocean adapter repair + Copilot polish.
+    CLOSED 2026-10-15. Cloud green at 497 passed,
+    3 ignored, 0 failed. Live Mocean SMS confirmed.
+
+IN FLIGHT
+  None.
+
+NEXT - IN ORDER
+
+  1. OI-7 decision and implementation (Copilot
+     fallback connector filter).
+  2. OI-8 (DeepSeek connector row).
+  3. Close records for both.
+
+  Then the carried items.
+
+================================================================
+P.6 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I or Part II.
+  Does not edit prior appendices.
+  Does not decide OI-7.
+  Does not implement OI-8.
+  Does not reopen frozen Slice 5 or Slice 6 specs.
+
+================================================================
+END OF APPENDIX P
+================================================================
