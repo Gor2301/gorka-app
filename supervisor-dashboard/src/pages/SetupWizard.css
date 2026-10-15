@@ -1,0 +1,63 @@
+.setup-wizard-overlay {
+  position: fixed;
+  inset: 0;
+  background: #FAFAFA;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.setup-wizard-steps {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.setup-wizard-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #E3E3E3;
+}
+
+.setup-wizard-step-dot.active {
+  background: #F01428;
+}
+
+.setup-wizard-hint {
+  font-size: 14px;
+  color: #4A4A4A;
+  text-align: center;
+  margin: 8px 0 16px;
+}
+
+.setup-wizard-success {
+  font-size: 14px;
+  color: #1A7F37;
+  background: #E6F4EA;
+  padding: 12px;
+  border-radius: 6px;
+  word-break: break-all;
+  margin: 8px 0 16px;
+}
+
+.setup-wizard-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.setup-wizard-actions > * {
+  flex: 1;
+}
+
+.form-field {
+  margin-bottom: 12px;
+}
+
+.form-field--last {
+  margin-bottom: 0;
+  margin-top: 8px;
+}

@@ -19,6 +19,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     { icon: Users, label: 'Agents', path: '/agents' },
+    { icon: Users, label: 'Users', path: '/users' },
     { icon: Users, label: 'Collections', path: '/collections' },
     { icon: Upload, label: 'Data Upload', path: '/upload' },
     { icon: Calendar, label: 'Calendar', path: '/calendar' },

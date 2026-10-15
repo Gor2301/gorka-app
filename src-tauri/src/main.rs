@@ -82,6 +82,16 @@ fn get_user_email(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[command]
+fn get_setup_completed(app: tauri::AppHandle) -> Result<bool, String> {
+    auth::get_setup_completed(app)
+}
+
+#[command]
+fn set_setup_completed(app: tauri::AppHandle, completed: bool) -> Result<(), String> {
+    auth::set_setup_completed(&app, completed)
+}
+
+#[command]
 fn get_salt(app: tauri::AppHandle) -> Result<Vec<u8>, String> {
     auth::get_salt(&app)
 }
@@ -866,6 +876,8 @@ fn main() {
             get_organization_id,
             get_user_name,
             get_user_email,
+            get_setup_completed,
+            set_setup_completed,
             unlock_database,
             is_database_unlocked,
             enable_sync,

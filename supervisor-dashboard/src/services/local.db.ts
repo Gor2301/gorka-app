@@ -82,6 +82,33 @@ async getSalt(): Promise<string | null> {
   },
 };
 
+// --- Setup / sync wrappers ---
+// Slice 8.2. Two Tauri commands (enable_sync, export_enrollment_package)
+// plus the settings.dat flag that gates the first-run wizard.
+export const setup = {
+  async enableSync(): Promise<void> {
+    await invoke('enable_sync');
+  },
+
+  async exportEnrollmentPackage(passphrase: string, filePath: string): Promise<string> {
+    return await invoke<string>('export_enrollment_package', {
+      passphrase,
+      filePath,
+    });
+  },
+
+  async getSetupCompleted(): Promise<boolean> {
+    try {
+      return await invoke<boolean>('get_setup_completed');
+    } catch {
+      return false;
+    }
+  },
+
+  async setSetupCompleted(completed: boolean): Promise<void> {
+    await invoke('set_setup_completed', { completed });
+  },
+};
 
 // ─── TYPES ────────────────────────────────────────────────────────────
 // Mirror of the Rust Debtor struct in src-tauri/src/main.rs.

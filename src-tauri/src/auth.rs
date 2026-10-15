@@ -158,3 +158,24 @@ pub fn set_listen_port(app: &tauri::AppHandle, port: u16) -> Result<(), String> 
 
     Ok(())
 }
+
+pub fn get_setup_completed(app: tauri::AppHandle) -> Result<bool, String> {
+    let store = StoreBuilder::new(&app, "settings.dat")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(store.get("setup_completed")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false))
+}
+
+pub fn set_setup_completed(app: &tauri::AppHandle, completed: bool) -> Result<(), String> {
+    let store = StoreBuilder::new(app, "settings.dat")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    store.set("setup_completed", Value::Bool(completed));
+    store.save().map_err(|e| e.to_string())?;
+
+    Ok(())
+}

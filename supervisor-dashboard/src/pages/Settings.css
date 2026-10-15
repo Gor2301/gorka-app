@@ -1,0 +1,58 @@
+.settings-page {
+  padding: 32px;
+  max-width: 900px;
+}
+
+.settings-title {
+  font-size: 32px;
+  font-weight: 500;
+  color: #111111;
+  margin: 0 0 24px;
+}
+
+.settings-card {
+  background: #FFFFFF;
+  border: 1px solid #E3E3E3;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.settings-card-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: #111111;
+  margin: 0 0 8px;
+}
+
+.settings-card-description {
+  font-size: 14px;
+  color: #4A4A4A;
+  margin: 0 0 16px;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.settings-success {
+  font-size: 13px;
+  color: #1A7F37;
+  background: #E6F4EA;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  word-break: break-all;
+}
+
+.form-field {
+  margin-bottom: 12px;
+}
+
+.form-field--last {
+  margin-bottom: 0;
+  margin-top: 8px;
+}

@@ -21,7 +21,9 @@ import { GORKAStatus } from './pages/GORKAStatus';
 import Support from './pages/Support';
 import MyRequests from './pages/MyRequests';
 import MyRequestDetail from './pages/MyRequestDetail';
-import { auth } from './services/local.db';
+import UsersPage from './pages/UsersPage';
+import SetupWizard from './pages/SetupWizard';
+import { auth, setup } from './services/local.db';
 
 console.log('🔍 auth in App.tsx:', auth);
 console.log('🔍 auth.getToken:', auth?.getToken);
@@ -30,6 +32,7 @@ console.log('🔍 auth keys:', Object.keys(auth));
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [setupCompleted, setSetupCompleted] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
 
  const checkAuth = async () => {
@@ -43,6 +46,10 @@ function App() {
       const unlocked = await auth.isUnlocked();
       console.log('🔍 [APP] isUnlocked:', unlocked);
       setIsUnlocked(unlocked);
+      if (unlocked) {
+        const completed = await setup.getSetupCompleted();
+        setSetupCompleted(completed);
+      }
     }
   } catch (err) {
     console.error('❌ [APP] Auth check error:', err);
@@ -64,8 +71,14 @@ console.log('🔍 [APP] handleLoginSuccess called');
     await checkAuth();
   };
 
-  const handleUnlockSuccess = () => {
+  const handleUnlockSuccess = async () => {
     setIsUnlocked(true);
+    try {
+      const completed = await setup.getSetupCompleted();
+      setSetupCompleted(completed);
+    } catch {
+      setSetupCompleted(true);
+    }
   };
 
   const handleLogout = async () => {
@@ -89,6 +102,8 @@ console.log('🔍 [APP] handleLoginSuccess called');
         <Login onLoginSuccess={handleLoginSuccess} />
       ) : !isUnlocked ? (
         <UnlockScreen onUnlocked={handleUnlockSuccess} />
+      ) : !setupCompleted ? (
+        <SetupWizard onComplete={() => setSetupCompleted(true)} />
       ) : (
         <Routes>
           <Route path="/" element={<AppShell onLogout={handleLogout}><Dashboard /></AppShell>} />
@@ -106,6 +121,7 @@ console.log('🔍 [APP] handleLoginSuccess called');
           <Route path="/data-flow-audit" element={<AppShell onLogout={handleLogout}><DataFlowAudit /></AppShell>} />
           <Route path="/calendar" element={<AppShell onLogout={handleLogout}><Calendar /></AppShell>} />
           <Route path="/connectors" element={<AppShell onLogout={handleLogout}><Connectors /></AppShell>} />
+          <Route path="/users" element={<AppShell onLogout={handleLogout}><UsersPage /></AppShell>} />
           <Route path="/support" element={<Support />} />
           <Route path="/status" element={<GORKAStatus />} />
           <Route path="/my-requests" element={<MyRequests />} />
