@@ -10,7 +10,6 @@ import AuditPage from './pages/AuditPage';
 import BoundaryProofsPage from './pages/BoundaryProofsPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
 import EditClientPage from './pages/EditClientPage';
 import SupportPage from './pages/SupportPage';
 import SupportTicketDetailPage from './pages/SupportTicketDetailPage';
@@ -18,26 +17,42 @@ import InboxPage from './pages/InboxPage';
 import InboxTicketDetail from './pages/InboxTicketDetail';
 
 // Protected route wrapper
+const API_BASE = import.meta.env.VITE_API_URL || 'http://api.gorka.localhost:3000/api';
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
-const token = localStorage.getItem('gorka_token');
-fetch('http://api.gorka.localhost:3000/api/auth/me', {
-  headers: {
-    'Authorization': `Bearer ${token}`
-  }
-})
-    .then(res => {
-      if (res.ok) {
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(false);
-      }
-    })
-    .catch(() => {
+    const token = localStorage.getItem('gorka_token');
+    if (!token) {
       setIsAuthenticated(false);
-    });
+      return;
+    }
+
+    fetch(`${API_BASE}/auth/me-od`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'X-OD': '1',
+      },
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          localStorage.removeItem('gorka_token');
+          setIsAuthenticated(false);
+          return;
+        }
+        const body = await res.json();
+        if (body?.data?.role === 'OWNER') {
+          setIsAuthenticated(true);
+        } else {
+          localStorage.removeItem('gorka_token');
+          setIsAuthenticated(false);
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('gorka_token');
+        setIsAuthenticated(false);
+      });
   }, []);
 
   if (isAuthenticated === null) {
@@ -97,7 +112,6 @@ const App = () => {
             <SettingsPage />
           </ProtectedRoute>
         } />
-<Route path="/register" element={<RegisterPage />} />
 <Route path="/clients/:id/edit" element={<EditClientPage />} />
 <Route path="/support" element={<SupportPage />} />
 <Route path="/support/:id" element={<SupportTicketDetailPage />} />

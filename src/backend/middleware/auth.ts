@@ -56,3 +56,62 @@ console.log('[AUTH] Full decoded token:', JSON.stringify(decoded, null, 2));
     });
   }
 };
+
+
+export const authenticateTokenOD = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    let token: string | null = null;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+
+    if (!token && req.cookies) {
+      token = req.cookies.gorka_od_session || null;
+    }
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'No token provided',
+      });
+    }
+
+    const odSecret = process.env.JWT_SECRET_OD;
+    if (!odSecret) {
+      console.error('[AUTH-OD] JWT_SECRET_OD is not set');
+      return res.status(500).json({
+        success: false,
+        error: 'Server configuration error',
+      });
+    }
+
+    const decoded = jwt.verify(token, odSecret) as any;
+
+    if (decoded.od !== true) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token',
+      });
+    }
+
+    (req as any).user = {
+      id: decoded.userId,
+      email: decoded.email,
+      role: decoded.role,
+      organizationId: decoded.organizationId ?? null,
+    };
+
+    return next();
+  } catch (error: any) {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid or expired token',
+    });
+  }
+};

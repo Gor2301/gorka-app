@@ -14,10 +14,13 @@ const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://api.gorka.localhost:3000/api/auth/login', {
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://api.gorka.localhost:3000/api';
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-
+        headers: {
+          'Content-Type': 'application/json',
+          'X-OD': '1',
+        },
         body: JSON.stringify({ email, password })
       });
 
@@ -45,9 +48,9 @@ if (data.success && data.data.token) {
      // localStorage.setItem('token', data.data.token);
      // localStorage.setItem('user', JSON.stringify(data.data.user));
 
-      // Redirect to dashboard
-      window.location.href = data.data.redirectUrl || '/';
-    } catch (err: any) {
+      // Redirect to dashboard. The OD does not use the backend's
+      // redirectUrl; Slice 8.1 removes it from the response.
+      window.location.href = '/';    } catch (err: any) {
       setError(err.message || 'Invalid email or password');
     } finally {
       setLoading(false);

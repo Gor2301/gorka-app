@@ -438,6 +438,14 @@ router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, re
     console.log(`🟢 LOGIN CHECKPOINT 2 — PASSWORD PASSED`);
 
     // Update last login
+    const isOD = req.headers['x-od'] === '1';
+    if (isOD && user.role !== 'OWNER') {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized for Owner Dashboard',
+      });
+    }
+
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
@@ -446,16 +454,28 @@ router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, re
     console.log(`🟢 LOGIN CHECKPOINT 3 — LAST LOGIN UPDATED`);
 
     // Create JWT token
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        organizationId: user.organizationId,
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
-    );
+    const secret = isOD ? process.env.JWT_SECRET_OD : process.env.JWT_SECRET;
+    if (!secret) {
+      console.error('[LOGIN] JWT secret not configured for this surface');
+      return res.status(500).json({
+        success: false,
+        error: 'Server configuration error',
+      });
+    }
+
+    const payload: any = {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      organizationId: user.organizationId,
+    };
+    if (isOD) {
+      payload.od = true;
+    }
+
+    const token = jwt.sign(payload, secret, {
+      expiresIn: isOD ? '1d' : '7d',
+    });
 
     console.log(`🟢 LOGIN CHECKPOINT 4 — JWT CREATED`);
 
@@ -466,7 +486,7 @@ router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, re
     console.log(`🟢 LOGIN CHECKPOINT 6 — RETURNING 200`);
 
     return res
-      .cookie('gorka_session', token, cookieOptions)
+      .cookie(isOD ? 'gorka_od_session' : 'gorka_session', token, cookieOptions)
       .status(200)
       .json({
         success: true,
@@ -516,7 +536,7 @@ router.post('/logout', (req: Request, res: Response): any => {
 });
 
 // ─── GET ME ──────────────────────────────────────────────────────────────
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, authenticateTokenOD } from '../middleware/auth';
 
 router.get('/me', authenticateToken, async (req: Request, res: Response): Promise<any> => {
 
@@ -582,6 +602,60 @@ console.log('[ME] User userId:', user?.userId);
     });
   } catch (error) {
     console.error('❌ Get me error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get user data',
+    });
+  }
+});
+
+// ─── GET ME-OD ──────────────────────────────────────────────────────────
+// Owner Dashboard identity check. Verifies the OD-signed token and
+// requires role = OWNER. Never returns organization-scoped data —
+// the OD is platform-wide.
+
+router.get('/me-od', authenticateTokenOD, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authenticated',
+      });
+    }
+
+    if (user.role !== 'OWNER') {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized for Owner Dashboard',
+      });
+    }
+
+    const fullUser = await prisma.user.findUnique({
+      where: { id: user.id },
+    });
+
+    if (!fullUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: fullUser.id,
+        email: fullUser.email,
+        name: fullUser.name,
+        role: fullUser.role,
+        isActive: fullUser.isActive,
+        lastLogin: fullUser.lastLogin,
+      },
+    });
+  } catch (error) {
+    console.error('Get me-od error:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to get user data',

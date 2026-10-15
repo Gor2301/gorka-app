@@ -409,6 +409,67 @@ every future session.\*\*
 \*\*They are what keep GORKA aligned.\*\*
 
 
+================================================================
+OWNER DASHBOARD — AUTHENTICATION (Slice 8.7, 2026-10-16)
+================================================================
+
+The Owner Dashboard is served at owner.gorka.click
+(production) and reads its identity from a separate
+JWT signed with JWT_SECRET_OD. No client or agent
+token can reach OD endpoints.
+
+ROLES
+  OWNER          platform owner. One person.
+                 The only role with OD access.
+  CLIENT         client-side org admin.
+  AGENT          client-side debt-collection agent.
+                 Never reaches OD.
+  SUPPORT        reserved (funded phase).
+  SUPPORT_AGENT  reserved capability. Not a role.
+
+ENVIRONMENT VARIABLES
+  The backend needs JWT_SECRET_OD set alongside
+  JWT_SECRET. In dev, on cloud, and in production.
+
+  In pilot-creds.local.bat (cloud only, gitignored):
+    set "JWT_SECRET_OD=<a different random string from JWT_SECRET>"
+
+  In production, the backend host's env dashboard.
+
+  The two secrets must be different. If they are the
+  same, the OD/Client token separation is void.
+
+BOOTSTRAP PROCEDURE
+  Once per environment (cloud, then production):
+
+    npx tsx prisma/seed-owner.ts <email> <password>
+
+  Effects:
+    - If no user with that email: creates one with
+      role='OWNER', isActive=true, no organizationId.
+    - If a user exists: sets role='OWNER', overwrites
+      the password, sets isActive=true.
+    - Password must be at least 8 characters.
+
+  Run this in a cloud terminal after
+  `call pilot-creds.bat` (which supplies
+  DATABASE_URL). In production, in a terminal that
+  has the production DATABASE_URL.
+
+  Re-run the same command later to reset the OWNER
+  password. It is idempotent on the email address.
+
+NO PUBLIC REGISTRATION FOR THE OD
+  The OD does not expose a /register route. The
+  owner account exists only via the bootstrap script.
+
+WHAT THIS DOES NOT DO
+  Does not add OD data endpoints. The Owner
+  Dashboard's existing data calls target endpoints
+  that do not exist yet — that is expected state,
+  tracked as the separate "OD Data Bridge" spec.
+  Does not reconcile support auth with OD auth.
+  Support endpoints use the shared JWT.
 
 
 

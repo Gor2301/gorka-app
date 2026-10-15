@@ -155,6 +155,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   const token = getToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    'X-OD': '1',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...(options?.headers || {})
   };
