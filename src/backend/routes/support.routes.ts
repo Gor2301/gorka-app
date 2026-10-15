@@ -102,7 +102,7 @@ router.post('/tickets', async (req: Request, res: Response): Promise<any> => {
 
     if (data.isPersonal === true && user && user.role === 'OWNER') {
       isPersonal = true;
-      assignedTo = 'platform_owner';
+      assignedTo = 'owner';
       data.source = 'SUPERADMIN';
     }
 
@@ -290,7 +290,7 @@ router.get('/tickets/personal', async (req: Request, res: Response): Promise<any
 console.log('🔍 /personal - User from req.user:', user);
 console.log('🔍 /personal - User role:', user?.role);
 
-    if (!user || user.role !== 'PLATFORM_OWNER') {
+    if (!user || user.role !== 'OWNER') {
       return res.status(403).json({
         success: false,
         error: 'Forbidden — Only Platform Owner can access all personal tickets'
@@ -327,7 +327,7 @@ console.log('🔍 /unread-count - User from req.user:', user);
 console.log('🔍 /unread-count - User role:', user?.role);
 
 
-    if (!user || user.role !== 'PLATFORM_OWNER') {
+    if (!user || user.role !== 'OWNER') {
       return res.status(403).json({
         success: false,
         error: 'Forbidden — Only Platform Owner can access unread count'
@@ -361,7 +361,7 @@ router.patch('/tickets/:id/read', async (req: Request, res: Response): Promise<a
     const { id } = req.params;
     const user = (req as any).user;
 
-    if (!user || user.role !== 'PLATFORM_OWNER') {
+    if (!user || user.role !== 'OWNER') {
       return res.status(403).json({
         success: false,
         error: 'Forbidden — Only Platform Owner can mark tickets as read'
@@ -478,7 +478,7 @@ router.post('/tickets/:id/reply', async (req: Request, res: Response): Promise<a
     const user = (req as any).user;
 
     if (ticket.isPersonal) {
-      if (user.role === 'PLATFORM_OWNER') {
+      if (user.role === 'OWNER') {
         // ✅ Allowed
       } else if (user.role === 'OWNER' && ticket.openedBy === user.id) {
         // ✅ Allowed
