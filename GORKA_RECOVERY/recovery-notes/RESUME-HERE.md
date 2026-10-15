@@ -6789,3 +6789,420 @@ R.12 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX R
 ================================================================
+
+
+================================================================
+APPENDIX S - SLICE 8.2 CLOSE
+(added v3.12, 2026-10-16)
+================================================================
+
+S.0 - WHY THIS APPENDIX EXISTS
+
+Appendix R closed Slice 8 reconnaissance and froze
+Part IV (Slice 8 mini spec). This session implemented
+Slice 8.3 (backend agent-user endpoints) and Slice 8.2
+(Client Dashboard first-run wizard, Users page,
+Settings, Sidebar, App routing). Both are code-complete
+and build-verified on cloud. Slice 8.3 was live-verified
+via curl (route returns 401 with the middleware's exact
+body). Slice 8.2 passed the TypeScript build gate; the
+wizard has not yet been run live.
+
+Where this appendix conflicts with Appendix R, this
+appendix wins. Prior appendices are not edited.
+
+================================================================
+S.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD f77e10a. Pushed to origin/main. Clean
+        tree except the two known untracked files plus
+        gorka-website/ and three Mocean curl artifacts
+        (balance.txt, balance_get.txt, response.txt).
+
+CLOUD:  at f77e10a. Cargo build PASS, cargo test
+        497 passed / 3 ignored / 0 failed, npm run
+        build (Client) PASS. Cloud may be closed.
+
+Slice 8.3 commit:
+
+  90f70ad  slice 8.3: backend agent-user endpoints;
+           users.ts with invite-agent and list;
+           inline OWNER||CLIENT role gate
+
+Slice 8.2 commits:
+
+  8ae1dc3  slice 8.2: first-run wizard, users page,
+           settings; setup_completed commands; dialog
+           plugin dep
+  f77e10a  slice 8.2 fix: Modal uses open prop, not
+           isOpen
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -4
+    git status --short
+
+================================================================
+S.2 - WHAT SLICE 8.3 SHIPPED
+================================================================
+
+Backend (per Part IV.5.3):
+
+  src/backend/routes/users.ts (new, ~3.5 KB):
+    POST /api/users/invite-agent
+      - Inline role check: OWNER || CLIENT.
+      - Scoped to req.user.organizationId.
+      - Zod body: email, name?, tempPassword.min(8).
+      - Rejects existing email with 400.
+      - Creates User with role='AGENT',
+        bcrypt(tempPassword, 12), isActive=true.
+      - Returns 201 { success: true, data:
+        { id, email, name, role } }.
+      - Never emails the temp password.
+    GET /api/users
+      - Same inline role check.
+      - Scoped to req.user.organizationId.
+      - select excludes passwordHash.
+      - Returns 200 { success: true, data: [...] }.
+
+  src/backend/index.ts:
+    import usersRoutes from './routes/users';  (line 23)
+    app.use('/api/users', authenticateToken, usersRoutes);  (line 92)
+
+Live verification (cloud, curl against
+http://localhost:3000/api/users with no auth):
+
+  {"success":false,"error":"No token provided"}
+  HTTP 401
+
+Confirmed the route is mounted and authenticateToken
+runs. 404 ruled out. Backend did not crash on import.
+
+================================================================
+S.3 - WHAT SLICE 8.2 SHIPPED
+================================================================
+
+Rust (src-tauri/):
+
+  src/auth.rs:
+    pub fn get_setup_completed(app) -> Result<bool, String>
+    pub fn set_setup_completed(app, completed)
+        -> Result<(), String>
+    Both follow the existing is_unlocked / set_unlocked
+    pattern against settings.dat.
+
+  src/main.rs:
+    #[command] fn get_setup_completed(...)
+    #[command] fn set_setup_completed(...)
+    Both registered in generate_handler! after
+    get_user_email.
+
+Client Dashboard (supervisor-dashboard/src/):
+
+  services/local.db.ts:
+    export const setup = {
+      enableSync()
+      exportEnrollmentPackage(passphrase, filePath)
+      getSetupCompleted()
+      setSetupCompleted(completed)
+    }
+
+  services/users.service.ts (new):
+    usersService.listUsers()
+    usersService.inviteAgent({ email, name?, tempPassword })
+
+  pages/SetupWizard.tsx + .css (new):
+    Three steps: welcome -> sync -> export -> done.
+    Step 1 calls setup.enableSync().
+    Step 2 opens a file save dialog via
+      @tauri-apps/plugin-dialog and calls
+      setup.exportEnrollmentPackage().
+    Step 3 calls setup.setSetupCompleted(true) and
+      invokes onComplete().
+    Flag written only on step 3 success.
+
+  pages/UsersPage.tsx + .css (new):
+    Lists org users via usersService.listUsers().
+    "Create Agent" modal calls
+      usersService.inviteAgent().
+    "Permissions - Coming soon" placeholder.
+    Uses the Modal primitive with open / onClose /
+    title props.
+
+  pages/Settings.tsx + .css:
+    Rewritten from the 348-byte stub. Two cards:
+    "Sync & Enrollment" (Enable Sync button) and
+    "Export Enrollment Package" (file picker +
+    passphrase + Export button).
+
+  components/Sidebar.tsx:
+    Added { icon: Users, label: 'Users', path:
+    '/users' } after the Agents entry.
+
+  App.tsx:
+    Imported SetupWizard, UsersPage, and the setup
+    service.
+    Added setupCompleted state (default true -
+    safer default if the flag cannot be read).
+    checkAuth now reads setup.getSetupCompleted()
+    after successful unlock.
+    handleUnlockSuccess is now async and reads the
+    setup_completed flag after setting unlocked.
+    Render gate: !setupCompleted renders
+    <SetupWizard onComplete={...}> before Routes.
+    Route: /users -> <AppShell><UsersPage /></AppShell>.
+
+  package.json:
+    Added @tauri-apps/plugin-dialog ^2.4.0 to
+    dependencies. The Rust-side plugin
+    (tauri-plugin-dialog) was already present in
+    src-tauri/Cargo.toml line 16 and registered in
+    src-tauri/src/main.rs line 841.
+
+Not touched:
+  - Any sync module, any migration, any adapter,
+    any Agent file.
+  - send_connector_message.
+  - The frozen Part I / II / III surfaces.
+
+================================================================
+S.4 - VERIFICATION
+================================================================
+
+SLICE 8.3 (cloud):
+  Backend started via npx tsx src/backend/index.ts.
+  curl http://localhost:3000/api/users
+    -> {"success":false,"error":"No token provided"}
+    -> HTTP 401
+  Confirms: route mounted, middleware active,
+  handler reachable the moment a valid JWT is present.
+
+SLICE 8.2 (cloud):
+  npm install               added
+                            @tauri-apps/plugin-dialog
+  cargo build --workspace   PASS
+  cargo test --workspace    497 passed, 3 ignored,
+                            0 failed. Baseline
+                            unchanged (Slice 8.2
+                            adds no Rust tests).
+  npm run build (Client)    PASS, built in 17.03s.
+
+NOT LIVE-TESTED IN THIS SESSION:
+  The wizard has not been run end to end. The
+  TypeScript build gate passed; the wizard compiles
+  and type-checks. Live demonstration that:
+    - the wizard appears after first unlock,
+    - Enable Sync writes organization_keys,
+    - Export produces a .gorka file,
+  is deferred to Cloud Trip 2 (Part IV.8) which
+  covers 8.4 + 8.5 + 8.1 together.
+
+================================================================
+S.5 - DEVIATIONS FROM PART IV.5.2
+================================================================
+
+D1. Service file split.
+    Part IV.5.2 listed four wrappers in local.db.ts:
+    enableSync, exportEnrollmentPackage, inviteAgent,
+    listUsers.
+    Delivered: enableSync and exportEnrollmentPackage
+    in local.db.ts (Tauri invoke transport), and
+    inviteAgent and listUsers in a new
+    users.service.ts (HTTP transport via
+    api.service.ts, matching the existing
+    connectors.service.ts pattern).
+    Rationale: local.db.ts's purpose is Tauri invoke
+    wrappers. Mixing HTTP transport into it would
+    violate the file's existing role in the codebase.
+    This is a structural correction, not a spec
+    violation.
+
+D2. Modal footer prop unused.
+    Modal.tsx exposes a footer prop for action
+    buttons. UsersPage.tsx places its Cancel/Create
+    buttons inside the modal's children instead.
+    Compiles and renders correctly. Adoption of the
+    footer prop is deferred as cosmetic.
+
+================================================================
+S.6 - FINDINGS THIS SESSION
+================================================================
+
+FG-S1  Modal prop mismatch caught on the first
+       Slice 8.2 cloud trip.
+       UsersPage.tsx used isOpen={showInvite}. The
+       Modal primitive's prop is open, not isOpen.
+       One cloud round trip to fix.
+       Root cause: I guessed the primitive's API
+       from convention instead of reading Modal.tsx.
+       New rule P-SS records the prevention.
+
+FG-S2  Cross-file CSS class leak. Caught by the
+       founder, not by tooling.
+       (a) UsersPage.tsx used className=
+           "setup-wizard-actions" - a class defined
+           only in SetupWizard.css.
+       (b) SetupWizard.tsx used className=
+           "form-field" - a class defined only in
+           UnlockScreen.css.
+       className is a string; TypeScript and the
+       build system cannot detect this class of
+       error. It compiles, ships, and fails
+       silently at runtime: buttons stack instead
+       of sitting in a row, or margin collapses to
+       zero.
+       Fixed by adding page-local .form-field and
+       .users-modal-actions definitions to each
+       page's own stylesheet.
+       New rule P-RR records the prevention.
+
+FG-S3  New build warning: INEFFECTIVE_DYNAMIC_IMPORT
+       on @tauri-apps/api/core. Caused by
+       plugin-dialog's static import of the module
+       while UnlockScreen.tsx dynamically imports
+       it. The bundler cannot split the module into
+       a separate chunk. No runtime impact. Recorded
+       for awareness; no fix required.
+
+FG-S4  `export const setup` findstr matched a dozen
+       lines because findstr splits patterns on
+       spaces and OR's the words. This is the same
+       class as FG18 / P-Y. Use findstr /C:"literal"
+       for substring matches. New rule P-TT records
+       the practice.
+
+================================================================
+S.7 - PROCESS AMENDMENTS
+================================================================
+
+P-RR  A NEW COMPONENT MUST NOT REFERENCE A CSS CLASS
+      DEFINED IN ANOTHER COMPONENT'S STYLESHEET.
+      Each page's CSS file must define every class
+      that page uses. Cross-page class names are
+      permitted only if each page defines the same
+      name locally; no file references another
+      file's stylesheet content. Shared visual
+      primitives go through
+      @/components/primitives, which is the
+      codebase's existing pattern. className is a
+      string; the build system cannot catch this.
+      FG-S2 is the evidence.
+
+P-SS  BEFORE WRITING A CONSUMER OF A UI PRIMITIVE,
+      READ THE PRIMITIVE'S .tsx FOR ITS PROP NAMES.
+      Do not guess from convention. Modal is open,
+      not isOpen. A two-minute read prevents a
+      cloud trip. FG-S1 is the evidence.
+
+P-TT  USE findstr /C:"literal" FOR SUBSTRING
+      MATCHES. Multiple space-separated patterns
+      are OR'd, producing noise. FG-S4 is the
+      evidence, restating P-Y.
+
+P-UU  ONE APPENDIX PER SESSION (restated, P-JJ,
+      P-M, P-V, P-Y, P-DD, P-QQ). This appendix is
+      new. Prior appendices are not edited.
+
+================================================================
+S.8 - OPEN ITEMS
+================================================================
+
+New this session:
+
+  - Slice 8.2 live demonstration deferred to Cloud
+    Trip 2 (Part IV.8). The wizard has not been
+    run end-to-end.
+  - Modal footer prop adoption (cosmetic).
+  - @tauri-apps/api/core dynamic-import warning
+    (benign, noted in FG-S3).
+
+Carried from Appendix R.12 / O.7 / P.4:
+
+  - OI-7: Copilot fallback connector filter.
+  - OI-8: DeepSeek connector row.
+  - OI-3: full logging design.
+  - O1 ghost-row fix (deferred by founder).
+  - O2 Communication Tools credential health.
+  - STEP 1.5, STEP 1.6.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - REGISTRATION / ONBOARDING BLOCK - IN PROGRESS
+    as Slice 8. Remaining: 8.4, 8.5, 8.1, 8.6.
+  - ACCEPTANCE - end-to-end.
+  - PF-4: local cargo check / GitHub Actions.
+
+================================================================
+S.9 - QUEUE
+================================================================
+
+DONE
+  Slice 1 through Slice 7. See Appendices F-P.
+  SLICE 8.3 - Backend agent-user endpoints.
+    CLOSED 2026-10-15. Live-verified via curl.
+  SLICE 8.2 - Client Dashboard first-run wizard,
+    Users page, Settings, Sidebar, App routing.
+    CLOSED 2026-10-16. Build-verified. Live
+    demonstration deferred.
+
+IN FLIGHT
+  None.
+
+NEXT - IN ORDER
+
+  1. SLICE 8.4 - Agent Dashboard verify.
+     Read-only. Confirm:
+       (a) import_enrollment_package is
+           registered in
+           src-tauri-agent/src/main.rs
+           generate_handler!;
+       (b) agent-dashboard/src/pages/EnrollPage.tsx
+           calls invoke('import_enrollment_package',
+           { passphrase, filePath });
+       (c) agent-dashboard/src/App.tsx routes
+           EnrollPage on first run.
+     If all three are already true: zero code
+     changes, document verification, close.
+     If any is false: minimal wire.
+
+  2. SLICE 8.5 - Owner Dashboard.
+     New file src/backend/routes/admin.ts.
+     GET /api/admin/organizations with agent
+     counts (registered / online / offline).
+     Owner Dashboard page (new).
+     May run parallel with 8.4.
+
+  3. SLICE 8.1 - Website fixes + download page.
+     Fix backend registerSchema (password
+     optional), add POST /resend-verification,
+     remove redirectUrl from both backend
+     responses, add /download page, fix login
+     routing. Parallel to 8.4 / 8.5.
+
+  4. SLICE 8.6 - Deployment.
+     DNS + TLS for www.gorka.click and
+     api.gorka.click. VITE_API_URL baked into
+     both Tauri binaries. Q.15 icons, Q.16 app
+     names. Live end-to-end acceptance
+     (Part IV.7).
+
+  Then the carried items from S.8.
+
+================================================================
+S.10 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I, II, or III.
+  Does not amend Part IV.
+  Does not edit Appendix R or any prior appendix.
+  Does not claim Slice 8.2 is live-verified.
+  Does not start Slice 8.4.
+  Does not decide any remaining OI-7 / OI-8
+  question.
+
+================================================================
+END OF APPENDIX S
+================================================================
