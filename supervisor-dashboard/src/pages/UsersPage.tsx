@@ -147,7 +147,7 @@ export default function UsersPage() {
       </div>
 
       <Modal
-        isOpen={showInvite}
+        open={showInvite}
         onClose={handleCloseInvite}
         title="Create Agent User"
       >
