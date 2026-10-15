@@ -4867,3 +4867,475 @@ Final workspace test count after Slice 6:
 ================================================================
 END OF SLICE 6 CLOSE - SPEC STATUS
 ================================================================
+
+
+================================================================
+PART IV - SLICE 8 MINI SPEC v1.0 (FROZEN)
+================================================================
+
+Status: FROZEN 2026-10-15
+Authority: AGENT-APP-SPEC v1.3 Section 4
+Depends on: Slices 1-7 closed. Gate 0 satisfied.
+Companion to: Part I (connector event order), Part II
+  (AI Copilot), Part III (Slice 6 integration tests).
+  Part IV does not reopen any earlier Part.
+
+Cloud baseline note: The recorded cloud result (493
+passed, 3 ignored, 0 failed) was measured at commit
+0b21c09. The commits between 0b21c09 and 7225765 are
+docs-only (RESUME-HERE.md, spec file changes). Zero
+Rust or TypeScript changed. The cloud result is
+therefore valid for the code at the current HEAD.
+
+================================================================
+IV.0 - GATE 0 - RECOVERY INTEGRITY - PASSED
+================================================================
+
+| Item                          | Evidence                 |
+|-------------------------------|--------------------------|
+| Appendices F through Q present| O line 5226, P line 5557,|
+|                               | Q line 5779              |
+| Slice 6 close recorded        | commit 4a92fa0           |
+| Slice 7 close recorded        | commit a174bd9           |
+| Slice 8 reconnaissance        | commit 7225765           |
+| Local HEAD matches origin/main| both at 7225765          |
+| No open blocking defects      | none in N.6, O.7, P.4    |
+| Cloud green at last known HEAD| 493 / 3 / 0 at 0b21c09   |
+
+Gate 0 is satisfied. Slice 8 may proceed.
+
+================================================================
+IV.1 - GOAL
+================================================================
+
+Connect registration, authentication, local database
+setup, enrollment, and organization management into
+one end-to-end flow, without weakening the identity,
+auth, or enrollment models already established.
+
+  Website signup -> email verify -> download
+    -> install Client Dashboard -> login -> unlock
+    -> enable sync -> export enrollment package
+    -> admin creates agent user
+    -> install Agent Dashboard -> login -> unlock
+    -> enroll -> shells work
+
+================================================================
+IV.2 - SCOPE
+================================================================
+
+IV.2.1 In scope
+
+| Surface          | Items                                        |
+|------------------|----------------------------------------------|
+| Backend          | 4 edits to auth.ts + new users.ts + new      |
+|                  | admin.ts                                     |
+| Website          | 5 code changes + 1 new page + i18n strings   |
+| Client Dashboard | 1 wizard + 1 page + Settings/Sidebar/App/    |
+|                  | service edits                                |
+| Agent Dashboard  | verify, wire only if needed                  |
+| Owner Dashboard  | 1 page + 1 service + 1 edit                  |
+| Deployment       | DNS + TLS + env + icons + app names          |
+
+IV.2.2 Out of scope
+
+  Stripe; phone verification; permissions system;
+  sync protocol changes; local schema changes;
+  multi-language beyond en/es; removing the dead
+  Agent table.
+
+================================================================
+IV.3 - DECISIONS - LOCKED WITH EVIDENCE
+================================================================
+
+| #    | Decision            | Value                | Evidence                      |
+|------|---------------------|----------------------|-------------------------------|
+| C1   | Password flow       | Model 2              | Website already built for it  |
+| C2   | enable_sync/export  | Wizard + Settings    | Founder                       |
+| C3   | Owner Dashboard     | All orgs + counts    | Founder                       |
+| C4   | Production API      | api.gorka.click      | Founder                       |
+| C5   | Website location    | gorka-website/       | Founder                       |
+| C6   | redirectUrl         | Remove entirely      | R1: 3 consumers, all with     |
+|      |                     |                      | || '/' fallback; values are   |
+|      |                     |                      | dev hostnames                 |
+| C8   | Slice order         | C - dependency-      | Reviewer + founder            |
+|      |                     | driven               |                               |
+| Q.15 | Icon                | Red G, transparent,  | Founder                       |
+|      |                     | Inter Bold, #DE1D1E  |                               |
+| Q.16 | App names           | GORKA Client / Agent | Founder                       |
+| Q.17 | Email filter        | Corporate only       | Founder                       |
+| Q.18 | Card filter         | Deferred, note only  | Founder                       |
+| Q.20 | User vs Agent       | User row only,       | R3: Agent table zero          |
+|      |                     | role='AGENT'         | consumers. R6: DeviceReg FK   |
+|      |                     |                      | to User. R5: no AGENT role    |
+|      |                     |                      | check exists                  |
+| -    | Permissions         | Placeholder          | Founder                       |
+| -    | Phone verification  | Fields only          | Founder                       |
+| -    | Agent creation      | Client Users page    | Founder                       |
+
+================================================================
+IV.4 - C8 - SLICE ORDER (RESOLVED)
+================================================================
+
+  8.3 -> 8.2 -> 8.4
+  8.3 -> 8.5           (parallel with 8.2/8.4)
+  8.1                  (parallel to all above)
+  8.6                  (after 8.1)
+
+Sequence:
+  1. 8.3  backend endpoint + auth rules
+  2. 8.2  Client wizard + Users page against
+          defined contract
+  3. 8.4  verify Agent enroll
+  4. 8.5  Owner Dashboard (eligible after 8.3,
+          may run parallel with 8.2/8.4)
+  5. 8.1  website (parallel)
+  6. 8.6  deploy (after 8.1)
+
+Each slice STOP-gated. No downstream slice begins
+before its prerequisites are verified.
+
+================================================================
+IV.5 - SLICE DETAIL
+================================================================
+
+IV.5.1 Slice 8.1 - Website + backend registration fixes
+
+Backend (src/backend/routes/auth.ts):
+  1. registerSchema.password becomes optional.
+     Backend generates a random 32-byte placeholder
+     hash. /complete-registration overwrites.
+  2. Add POST /resend-verification. Body { email }.
+     Rate-limited. Regenerates token, resends email.
+     Generic 200 regardless of account existence
+     (anti-enumeration).
+  3. Zod .refine() on registerSchema rejecting the
+     free-provider list (IV.9 Q.17). 400 with the
+     disclosure message.
+  4. C6: delete redirectUrl from /login (line ~481)
+     and /complete-registration (line ~369). token
+     field stays.
+
+Website (gorka-website/):
+  1. Register step 2: fetch target ->
+     /api/auth/resend-verification.
+  2. Register step 1: inline email-domain validation
+     + disclosure message.
+  3. Register step 1: card placeholder note.
+  4. Register step 3 (page.tsx:145): replace
+     router.push(data.data.redirectUrl || '/') ->
+     router.push('/download').
+  5. Login page (login/page.tsx:39): replace
+     router.push(data.data.redirectUrl || '/') ->
+     router.push('/download'). Resolution 1. The
+     website has no CLIENT dashboard; download is
+     the correct destination for a returning
+     registrant.
+  6. New page: app/[locale]/download/page.tsx per
+     Q.19.
+  7. i18n strings.
+
+Owner-dashboard edit (part of 8.1 because C6
+touches it):
+  owner-dashboard/pages/LoginPage.tsx:49: replace
+  window.location.href = data.data.redirectUrl ||
+  '/' -> window.location.href = '/'.
+
+Files touched:
+  src/backend/routes/auth.ts
+  gorka-website/app/[locale]/register/page.tsx
+  gorka-website/app/[locale]/login/page.tsx
+  gorka-website/app/[locale]/verify-email/page.tsx
+    (wording fix)
+  gorka-website/app/[locale]/download/page.tsx (new)
+  gorka-website/messages/en.json
+  gorka-website/messages/es.json (if translating)
+  owner-dashboard/pages/LoginPage.tsx
+
+IV.5.2 Slice 8.2 - Client Dashboard first-run +
+       Settings
+
+First-run wizard (SetupWizard.tsx, new):
+  Triggered after first successful unlock when
+  setup_completed flag absent from settings.dat.
+    Step 1: Enable sync -> invoke('enable_sync').
+    Step 2: Export enrollment package -> file save
+            dialog + passphrase ->
+            invoke('export_enrollment_package', ...).
+    Step 3: Done -> write setup_completed: true,
+            route to shell.
+  Flag written only if all steps succeed. Failure
+  leaves no flag; retry available.
+
+Users page (UsersPage.tsx, new):
+  Sidebar entry between Communication Tools and
+  Settings.
+  Lists org users.
+  "Create agent" modal: email, name (optional),
+  temp password. Calls POST /api/users/invite-agent
+  (Slice 8.3).
+  "Permissions - Coming soon" section.
+
+Settings page (edit):
+  Adds "Sync & Enrollment" card with the two
+  buttons. Re-entry point.
+
+Service layer (local.db.ts):
+  enableSync(), exportEnrollmentPackage(),
+  inviteAgent(), listUsers() wrappers.
+
+Files touched:
+  supervisor-dashboard/src/pages/SetupWizard.tsx
+    (new)
+  supervisor-dashboard/src/pages/SetupWizard.css
+    (new)
+  supervisor-dashboard/src/pages/UsersPage.tsx (new)
+  supervisor-dashboard/src/pages/UsersPage.css (new)
+  supervisor-dashboard/src/pages/SettingsPage.tsx
+  supervisor-dashboard/src/components/Sidebar.tsx
+  supervisor-dashboard/src/App.tsx
+  supervisor-dashboard/src/services/local.db.ts
+
+IV.5.3 Slice 8.3 - Backend agent-user endpoints
+
+New file src/backend/routes/users.ts. Mounted at
+/api/users.
+
+POST /api/users/invite-agent:
+  authenticateToken middleware.
+  Inline role check:
+    role === 'OWNER' || role === 'CLIENT'.
+  Zod body: email, name?, tempPassword.min(8).
+  organizationId = req.user.organizationId. Never
+  from body.
+  Reject if email exists (400).
+  Creates User with role='AGENT',
+  bcrypt(tempPassword, 12), isActive=true.
+  Returns 201 { id, email, name, role }.
+  Does not email the temp password. Admin delivers
+  out of band. Documented in Users page UI text.
+  No forced first-login change in MVP. Recorded as
+  funded-phase.
+
+GET /api/users:
+  Same middleware, same inline role check.
+  Scoped to req.user.organizationId.
+  Returns array without passwordHash.
+
+IV.5.4 Slice 8.4 - Agent Dashboard verify
+
+Read-only verification, then wire only if needed:
+  1. src-tauri-agent/src/main.rs generate_handler!
+     contains import_enrollment_package.
+  2. agent-dashboard/src/pages/EnrollPage.tsx calls
+     invoke('import_enrollment_package', {
+     passphrase, filePath }).
+  3. agent-dashboard/src/App.tsx routes EnrollPage
+     on first run.
+
+If all three true: zero code changes. Document
+verification in the close appendix.
+If any false: minimal wire.
+
+IV.5.5 Slice 8.5 - Owner Dashboard
+
+New file src/backend/routes/admin.ts. Mounted at
+/api/admin.
+
+GET /api/admin/organizations:
+  authenticateToken + inline role check:
+    role === 'OWNER' || role === 'PLATFORM_OWNER'.
+  Returns all organizations with:
+    { id, name, clientType, contactEmail,
+      contactPhone, verificationStatus, createdAt,
+      lastActivity,
+      agentCounts: { registered, online, offline },
+      licenseStatus }
+  agentCounts.registered:
+    COUNT(User WHERE org=org.id AND role='AGENT')
+  agentCounts.online:
+    COUNT(DeviceRegistration WHERE org=org.id AND
+          lastSeenAt > now()-5m AND isAuthorized=true).
+    Zero if DeviceRegistration empty.
+  agentCounts.offline: registered - online.
+  lastActivity: Resolution 2 - MAX(User.lastLogin)
+    across the org's users. MVP simplification.
+    When DeviceRegistration is populated later,
+    becomes MAX(GREATEST(lastLogin, lastSeenAt)).
+  licenseStatus: status of most recent License row
+    for the org, else "NONE". No invented semantics.
+  Never returns debtor data or individual user
+  names.
+
+Owner Dashboard page
+(owner-dashboard/pages/OrganizationsPage.tsx, new):
+  Table: Name, Type, Contact, Created, Agents
+  (reg/on/off), License.
+
+IV.5.6 Slice 8.6 - Deployment
+
+  Deploy website to www.gorka.click.
+  Deploy backend to api.gorka.click.
+  DNS + TLS.
+  gorka-website/.env.production:
+    API_BASE_URL=https://api.gorka.click
+  Both Tauri builds:
+    VITE_API_URL=https://api.gorka.click
+  Rebuild with Q.15 icons and Q.16 names.
+  Verify installed binaries (IV.6 item 8).
+
+================================================================
+IV.6 - PRE-FREEZE VERIFICATION ITEMS
+================================================================
+
+Each must be satisfied (or explicitly deferred with
+reason) at implementation time.
+
+  1. Placeholder password safety. Random placeholder
+     discarded immediately. /complete-registration
+     requires registration session cookie.
+
+  2. Resend rate limiting + anti-enumeration.
+     verifyEmailLimiter reused. Generic 200. No
+     response-time disclosure.
+
+  3. Temp-password handling. No email, admin
+     delivers out of band. Documented in Users page
+     UI.
+
+  4. Organization boundary. Every user-mutation
+     scoped to req.user.organizationId. Never from
+     body.
+
+  5. Missing role enforcement (new). No AGENT or
+     CLIENT check exists today. Endpoints requiring
+     admin-only add inline checks. Founder to
+     decide if a shared requireOwnerOrClient
+     middleware is worth the addition for two
+     endpoints.
+
+  6. Wizard failure semantics. setup_completed
+     never written on partial success. Export only
+     marked successful after invoke returns Ok.
+
+  7. Owner Dashboard field definitions.
+     lastActivity and licenseStatus per IV.5.5.
+
+  8. Production config in installed binaries.
+     Verify VITE_API_URL baked into both .exe files
+     after 8.6.
+
+================================================================
+IV.7 - ACCEPTANCE CRITERIA
+================================================================
+
+Slice 8 is closed when:
+
+   1. Corporate-email registration completes on
+      www.gorka.click without devtools.
+   2. Free-provider email rejected with disclosure.
+   3. Verification email arrives; link works.
+   4. Password set at step 3.
+   5. Routed to /download.
+   6. Both installers download and install on
+      Windows.
+   7. Client Dashboard opens; login + unlock work;
+      wizard appears.
+   8. Enable Sync writes to organization_keys.
+   9. Export produces a package file.
+  10. Admin creates agent user from Users page.
+  11. Agent Dashboard opens; login + unlock work;
+      enroll accepts package + passphrase.
+  12. Both shells run without errors.
+  13. Owner Dashboard lists new org with correct
+      counts.
+  14. redirectUrl absent from all production
+      responses.
+
+================================================================
+IV.8 - CLOUD TRIP PLAN
+================================================================
+
+  Trip 1: after 8.3 + 8.2
+  Trip 2: after 8.4 + 8.5 + 8.1
+  Trip 3: deployment (8.6)
+
+================================================================
+IV.9 - REFERENCE VALUES
+================================================================
+
+Q.17 free-provider list (starter):
+  gmail.com, googlemail.com, yahoo.com,
+  yahoo.co.uk, ymail.com, outlook.com,
+  hotmail.com, live.com, msn.com, aol.com,
+  icloud.com, me.com, mac.com, protonmail.com,
+  proton.me, mail.com, gmx.com, gmx.net,
+  yandex.com, yandex.ru, zoho.com,
+  tutanota.com, tuta.io
+
+Q.18 card placeholder note:
+  "Credit card details will be required at the
+   funded stage. Prepaid and debit cards will not
+   be accepted."
+
+Q.19 download page content:
+  Header: "Download GORKA"
+  Version: v0.1.0
+  System: Windows 10 / 11 (64-bit). macOS,
+    Linux: coming soon.
+  Buttons: Client Dashboard installer, Agent
+    Dashboard installer (.exe).
+  Install steps:
+    1. Run the installer.
+    2. Allow SmartScreen (see note).
+    3. App opens to the Login screen.
+    4. Enter your registered email and password.
+    5. Set your local encryption password
+       (first run only).
+  SmartScreen note:
+    "Windows may show 'Windows protected your PC'.
+     Click More info -> Run anyway. The MVP binary
+     is unsigned; signing comes at production."
+  System requirements:
+    Windows 10+, 4 GB RAM, 500 MB disk.
+  User tip:
+    "To enlarge desktop icon labels: Settings ->
+     Accessibility -> Text size."
+
+Q.20 - Agent table status:
+  Model exists in schema. Zero code consumers.
+  Not written by any code path in Slice 8.
+  Candidate for removal or repurposing in a
+  future slice.
+
+================================================================
+IV.10 - REVISION HISTORY
+================================================================
+
+  v0.1  2026-10-15  Initial draft. C6, C8, Q.20
+                    open.
+  v0.2  2026-10-15  C6 resolved (Option A).
+                    Q.20 resolved (Option A).
+                    New finding: missing role
+                    enforcement. IV.6 added.
+  v1.0  2026-10-15  C8 = C locked. Login routing
+                    resolved. lastActivity =
+                    MAX(User.lastLogin) resolved.
+                    FROZEN.
+
+================================================================
+IV.11 - WHAT THIS PART DOES NOT DO
+================================================================
+
+  Does not reopen Part I, II, or III.
+  Does not add Stripe.
+  Does not add phone verification.
+  Does not add a permission system.
+  Does not remove the dead Agent table.
+  Does not change the sync protocol.
+  Does not change the local schema.
+  Does not begin Agent App Phase 9.6+ work.
+
+================================================================
+END OF PART IV - SLICE 8 MINI SPEC v1.0
+================================================================
