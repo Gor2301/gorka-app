@@ -5773,3 +5773,584 @@ P.6 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX P
 ================================================================
+
+
+================================================================
+APPENDIX Q - SLICE 8 RECONNAISSANCE
+(added v3.10, 2026-10-15)
+================================================================
+
+Q.0 - WHY THIS APPENDIX EXISTS
+
+This session ran the reconnaissance for Slice 8:
+registration and first-run flow. Chat grew long.
+This appendix preserves every finding so a fresh
+chat can implement Slice 8 without re-deriving
+context.
+
+If Appendix P (Slice 7 close) was not saved, this
+appendix can be renumbered or P can be added before
+it without conflict. The content is independent.
+
+Where this appendix conflicts with earlier
+appendices, this appendix wins on Slice 8 matters.
+It does not amend anything else.
+
+================================================================
+Q.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 0b21c09 (plus any Appendix P commit if
+        saved). Working tree contains an untracked
+        new folder: gorka-website/ (restored this
+        session from Backup Sept 3, 2026\gorka-website).
+        Cargo.lock modified (known cosmetic drift,
+        Appendix C.9). Several untracked leftover
+        files from earlier sessions (see Q.11).
+
+CLOUD:  idle. May be closed.
+
+No commits this session. The gorka-website/
+folder is untracked and not yet committed.
+
+================================================================
+Q.2 - THE TASK: SLICE 8
+================================================================
+
+Build the complete registration and first-run
+flow: website signup -> email verify -> download
+-> desktop login -> unlock -> enable sync ->
+export enrollment -> agent onboard.
+
+Current state: the pieces exist, none is connected
+end to end. Six drifts between the website and
+the backend. Three Rust commands with no UI. No
+download page. No agent-user flow. No Owner
+Dashboard view of orgs.
+
+================================================================
+Q.3 - THE FIVE SURFACES
+================================================================
+
+| Surface          | Location                     | State           |
+|------------------|------------------------------|-----------------|
+| Website          | gorka-website/               | Built, not      |
+|                  | (restored this session)      | deployed        |
+| Backend          | src/backend/routes/auth.ts   | Flow built      |
+| Client Dashboard | supervisor-dashboard/ +      | Tauri auth      |
+|                  | src-tauri/                   | works           |
+| Agent Dashboard  | agent-dashboard/ +           | Tauri auth      |
+|                  | src-tauri-agent/             | works           |
+| Owner Dashboard  | owner-dashboard/             | Exists, scope   |
+|                  |                              | not read        |
+
+Not in the flow: gorka-supervisor-web,
+super-admin-web. Both are Vite apps, legacy from
+before the multi-user model. Do not touch.
+
+supervisor-dashboard/ has no package.json. It is
+the source folder for the root Client Dashboard
+app. Confirmed by package name check.
+
+================================================================
+Q.4 - THE WEBSITE REGISTER WIZARD
+================================================================
+
+File: gorka-website/app/[locale]/register/page.tsx
+Length: 434 lines. React 19, Next.js 16 App
+Router, i18n via next-intl.
+
+Three-step wizard driven by internal useState and
+a URL param ( ?step=3 ).
+
+Step 1 (lines 185-336):
+  Collects companyName, clientType (AGENCY /
+  CORPORATE / FREELANCER), registrationNumber,
+  taxId, firstName, lastName, contactEmail,
+  contactPhone, address, website.
+  POSTs to /api/auth/register with the companyData
+  object (lines 71-75).
+  On success: sets organizationId + rawToken,
+  advances to step 2.
+
+Step 2 (lines 338-363):
+  Waiting screen for email verification. Shows
+  "check your email" message. Resend button calls
+  handleResendVerification (line 95).
+  Resend POSTs to /api/auth/register with
+  { ...companyData, resend: true }.
+  DRIFT: /register has no resend branch. Always
+  fails (see Q.7).
+
+Step 3 (lines 365-428):
+  Collects password + termsAccepted checkbox.
+  POSTs to /api/auth/complete-registration.
+  On success: redirects to data.data.redirectUrl
+  (or / if none).
+  Triggered when URL has ?step=3, set by
+  verify-email page after success.
+
+The three API proxies are in
+gorka-website/app/api/auth/:
+  register/route.ts
+  verify-email/route.ts
+  complete-registration/route.ts
+  login/route.ts
+  me/route.ts
+
+Each proxy forwards cookies from backend to
+browser. The pattern works; registration session
+flows correctly between proxy hops.
+
+.env.local (untracked, restore from backup):
+  API_BASE_URL=http://localhost:3000
+
+Other pages present:
+  app/[locale]/page.tsx         (landing)
+  app/[locale]/login/page.tsx
+  app/[locale]/pricing/page.tsx
+  app/[locale]/faq/page.tsx
+  app/[locale]/contact/page.tsx
+  app/[locale]/support/page.tsx
+  app/[locale]/verify-email/page.tsx
+
+No /download page. See Q.7 drift 5.
+
+Framework deps: next 16.3.1, react 19.2.8,
+tailwind 4, shadcn 4, zod 4, next-intl 4,
+resend 6.
+
+================================================================
+Q.5 - THE BACKEND REGISTRATION FLOW
+================================================================
+
+File: src/backend/routes/auth.ts
+
+Endpoints:
+  POST /register         line 67
+  POST /verify-email     line 193
+  POST /complete-registration  line 274
+  POST /login            line 384
+  POST /logout           line 497
+
+registerSchema (lines 37-50):
+  companyName, clientType, registrationNumber?,
+  taxId?, firstName, lastName, primaryContact?,
+  contactEmail, contactPhone (regex
+  ^\+?[1-9]\d{1,14}$), address?, website?,
+  password (min 8).
+  DRIFT: website step 1 does NOT send password.
+  Backend bcrypt.hash(data.password, 12) at
+  line 99 fails with undefined. See Q.7 drift 1.
+
+register behavior:
+  Creates Org with verificationStatus
+  'PENDING_EMAIL', emailVerificationToken (bcrypt
+  of 32-byte hex), emailVerificationExpires (+24h).
+  Creates User with role 'CLIENT', isActive true.
+  Sends Resend email with link to
+  https://www.gorka.click/verify-email?token=...
+  Returns { organizationId, userId }.
+
+verify-email behavior:
+  Finds Org PENDING_EMAIL with unexpired token.
+  bcrypt.compare(token, org.emailVerificationToken).
+  Sets verificationStatus 'ACTIVE', clears token.
+  Issues cookie gorka_registration_session (JWT,
+  1h, purpose 'registration').
+  Returns { organizationId, email, ... }.
+
+complete-registration behavior:
+  Requires cookie gorka_registration_session.
+  Verifies purpose='registration'.
+  Finds Org ACTIVE by session organizationId.
+  bcrypt.hash(new password, 12).
+  UPDATE user SET passwordHash = newHash,
+    isActive = true, WHERE email = org.contactEmail.
+  Clears registration session cookie.
+  Issues gorka_session cookie (JWT, 7d).
+  Returns { user: {...}, redirectUrl }.
+  DRIFT: redirectUrl hardcoded to
+  http://platform.gorka.localhost:3002 (OWNER) or
+  http://client.gorka.localhost:5173 (CLIENT).
+  See Q.7 drift 6.
+
+login behavior:
+  Rate limited (20/15min IP, 5/15min email).
+  Returns { user, token, redirectUrl }.
+  Sets gorka_session cookie.
+  Same redirectUrl hardcode.
+
+Wording bug: verify-email success screen
+(website) says "Redirecting to registration..."
+but actually redirects to /register?step=3.
+
+================================================================
+Q.6 - THE RUST COMMANDS FOR ENROLLMENT
+================================================================
+
+File: src-tauri/src/main.rs
+
+enable_sync        line 208
+  Signature: (app, state) -> Result<(), String>
+  Reads org id from get_trusted_organization_id.
+  Checks organization_keys WHERE id = 1. Errors if
+  present ("Sync is already enabled for this
+  organization").
+  Generates 32-byte key with OsRng.
+  INSERT organization_keys (id=1, organization_id,
+    key_material, created_at).
+  Returns Ok(()).
+  No UI caller today.
+
+export_enrollment_package  line 738
+  Signature: (passphrase, file_path, app, state)
+             -> Result<String, String>
+  Reads organization_keys WHERE id = 1
+    (organization_id, key_material).
+  Errors if absent ("Sync is not enabled...") or
+    if org mismatch or if key not 32 bytes.
+  Fresh 16-byte salt + 24-byte nonce.
+  build_enrollment_package(...) constructs the
+    encrypted package.
+  std::fs::write(file_path, package).
+  Returns Ok(file_path).
+
+import_enrollment_package  line 786
+  (Body not read this session. Agent-side import
+  per AGENT-APP-SPEC 4.4.)
+
+None of the three is called from
+supervisor-dashboard/src/**. R44 returned zero
+hits. No UI, no frontend wrappers.
+
+generate_handler! registration list is at
+src-tauri/src/main.rs line 860. Not read.
+Whether enable_sync and export_enrollment_package
+are registered there is unknown — must verify
+next session.
+
+================================================================
+Q.7 - SIX DRIFTS FOUND
+================================================================
+
+Drift 1 - Website step 1 omits password; backend
+  requires it.
+  Website handleStep1Submit sends companyData
+  only. No password field anywhere in step 1.
+  Backend registerSchema requires password min 8.
+  Result: register flow returns HTTP 400 on every
+  attempt. The flow cannot complete today.
+
+Drift 2 - Resend verification is broken.
+  Website posts { ...companyData, resend: true }
+  to /api/auth/register.
+  Backend /register has no resend branch. Checks
+  for existing org and returns 409 "Organization
+  already registered with this email".
+  Result: resend button always errors.
+  No /resend-verification endpoint exists.
+
+Drift 3 - enable_sync has no UI.
+  Command fully implemented. No caller anywhere.
+
+Drift 4 - export_enrollment_package has no UI.
+  Command fully implemented. No caller.
+
+Drift 5 - No download page.
+  Website has no .exe / .msi links, no /download
+  route. Admin cannot be told where to download
+  the desktop apps.
+
+Drift 6 - redirectUrl hardcoded.
+  auth.ts lines 369-371 and 481-483 point to
+  platform.gorka.localhost:3002 (OWNER) and
+  client.gorka.localhost:5173 (CLIENT).
+  Meaningless in production and in desktop apps.
+
+Also: dead auth path in
+supervisor-dashboard/src/services/auth.service.ts
+(localStorage-based). Zero importers. Leftover
+from pre-Tauri era. Cosmetic cleanup.
+
+================================================================
+Q.8 - OPEN ITEMS
+================================================================
+
+C1 - Password flow: Model 1 vs Model 2.
+
+  Model 1 - password at signup. Website adds a
+    password field to step 1. Backend unchanged.
+    Step 3 loses password input.
+  Model 2 - password after email verification.
+    Backend makes password optional at register,
+    inserts random placeholder hash, lets
+    /complete-registration set the real one.
+    Website unchanged.
+
+  The website already implements Model 2. The
+  backend implements Model 3 (temp password then
+  overwrite). I recommend Model 2 - one backend
+  change, no website rework.
+  FOUNDER DECISION PENDING.
+
+C2 - enable_sync / export_enrollment_package UI
+  placement.
+  Recommendation: first-run wizard on Client
+  Dashboard after first successful unlock, plus
+  a re-entry point in Settings.
+  FOUNDER DECISION PENDING (leaning approve).
+
+C3 - Owner Dashboard granularity.
+  FOUNDER DECISION LOCKED this session:
+    All registered orgs listed with full company
+    info (name, contact, registration date, plan,
+    last activity).
+    Agent counts per org: registered / online /
+    offline.
+    No agent names, no surnames, no debtor data.
+    Location: not decided.
+
+C4 - Production API URL.
+  Recommendation: api.gorka.click.
+  DNS + TLS + backend deploy. Infrastructure,
+  not code.
+  FOUNDER DECISION PENDING.
+
+C5 - Where gorka-website lives.
+  FOUNDER DECISION LOCKED this session:
+    Restored into the repo at gorka-website/
+    (Option A, one repo, one source of truth).
+    Currently untracked.
+
+C6 - redirectUrl in backend.
+  Recommendation: remove from backend responses.
+  Desktop apps do not need it. Website can route
+  to /download on its own.
+  FOUNDER DECISION PENDING.
+
+C7 - Register wizard content.
+  RESOLVED this session. See Q.4.
+
+C8 - Slice structure.
+  PROPOSED this session. See Q.9.
+  FOUNDER DECISION PENDING.
+
+Permissions - agent user permissions.
+  FOUNDER DECISION LOCKED this session:
+    Placeholder only. Renders "Permissions -
+    coming soon" on the Users page. No permission
+    logic in MVP. Funded phase.
+
+Phone verification - registration.
+  FOUNDER DECISION LOCKED this session:
+    Fields in place in the register form. No live
+    SMS verification in MVP. Mark
+    phoneVerified: false or equivalent. Activate
+    at production stage.
+
+================================================================
+Q.9 - PROPOSED SLICE STRUCTURE
+================================================================
+
+Slice 8.1 - Website: fix drifts + add download page
+  - Backend: /register accepts Model 2 (password
+    optional)
+  - Backend: add POST /resend-verification
+  - Website: fix step 2 to call the correct
+    endpoint
+  - Website: add /download page with installer
+    links
+  - Website: drop redirectUrl dependency, route
+    to /download after step 3
+
+Slice 8.2 - Client Dashboard: first-run + Settings
+  - First-run wizard after first successful unlock:
+    "Enable sync" button -> invoke('enable_sync')
+    "Export enrollment package" -> file picker +
+      passphrase -> invoke('export_enrollment_package')
+  - Settings page: re-entry for both
+  - Users page: create agent users (email + temp
+    password + role)
+  - Permissions section: placeholder "coming soon"
+
+Slice 8.3 - Backend: agent user endpoint
+  - POST /api/users/invite-agent - admin-only,
+    creates AGENT user in own org
+  - Called from Client Dashboard Users page
+
+Slice 8.4 - Agent Dashboard: enroll UI
+  - Verify import_enrollment_package is registered
+  - Build enroll screen (file picker + passphrase)
+  - Wire to first-run flow per AGENT-APP-SPEC 4.4
+
+Slice 8.5 - Owner Dashboard: org + agent visibility
+  - Backend: expose GET /api/admin/organizations
+    (metadata only)
+  - Owner Dashboard: table view
+  - Agent counts per org (registered / online /
+    offline)
+
+Slice 8.6 - Deployment
+  - Deploy gorka-website to www.gorka.click
+  - Set API_BASE_URL
+  - DNS + TLS
+
+Recommended order: 8.2 first (unblocks the admin's
+own setup and the two Rust commands). 8.1 second
+(unblocks the website). Then 8.3, 8.4, 8.5, 8.6.
+Or 8.1 first if the website is the visible
+priority. FOUNDER DECISION PENDING.
+
+================================================================
+Q.10 - WHAT REMAINS TO READ
+================================================================
+
+For Slice 8 implementation, the following reads
+are still needed. They are cheap (5-10 minutes)
+and should be done at the start of the next
+session, not now.
+
+1. src-tauri/src/main.rs line 860 - the
+   generate_handler! list. Confirms whether
+   enable_sync and export_enrollment_package are
+   registered in the Client Dashboard binary.
+
+2. agent-dashboard/src/ - does the enroll screen
+   exist? Does it call import_enrollment_package?
+   Read the App.tsx, main entry, and any pages
+   named Enroll, Setup, or FirstRun.
+
+3. src-tauri-agent/src/main.rs - confirm
+   import_enrollment_package is registered in the
+   Agent binary's generate_handler!.
+
+4. prisma/schema.cloud.prisma lines 22-130 - the
+   Organization, User, License models. Full
+   bodies. Needed for the agent-invite endpoint
+   and the Owner Dashboard query.
+
+5. owner-dashboard/src/ - current state. Does
+   anything already list organizations?
+
+6. src-tauri/src/main.rs lines 786-860 - the
+   import_enrollment_package body. Needed for
+   Slice 8.4.
+
+7. gorka-website/messages/en.json - the i18n
+   strings for the register flow. Confirms
+   wording and reveals any hidden steps.
+
+================================================================
+Q.11 - REFERENCE FILE PATHS
+================================================================
+
+Backend:
+  src/backend/routes/auth.ts       (registration)
+  src/backend/middleware/rateLimit.ts  (limiters)
+  src/backend/utils/cookies.ts     (getCookieOptions)
+  prisma/schema.cloud.prisma       (models)
+
+Client Dashboard:
+  supervisor-dashboard/src/        (React source)
+  supervisor-dashboard/src/services/auth.service.ts
+    (dead, localStorage)
+  src-tauri/src/main.rs            (Rust commands)
+  src-tauri/src/auth.rs            (login, settings.dat)
+
+Agent Dashboard:
+  agent-dashboard/src/
+  src-tauri-agent/src/main.rs
+
+Website:
+  gorka-website/                   (restored this session)
+  gorka-website/app/[locale]/register/page.tsx
+  gorka-website/app/[locale]/verify-email/page.tsx
+  gorka-website/app/api/auth/*/route.ts
+  gorka-website/.env.local
+
+Owner Dashboard:
+  owner-dashboard/
+
+Backups (source of the restored website):
+  Backup Sept 3, 2026\gorka-website\
+  Backup Aug 27, 2026\gorka-website\
+
+================================================================
+Q.12 - FOUNDER DECISIONS LOCKED THIS SESSION
+================================================================
+
+1. C1 concept: standard SaaS model. The founder
+   asked for clarification. This appendix gives
+   it in Q.8 C1 (Models 1-4). Final model choice
+   still pending.
+
+2. C3: Owner Dashboard shows all orgs with full
+   company info + agent counts (registered /
+   online / offline). No agent names.
+
+3. C5: gorka-website lives in the repo at
+   gorka-website/. One repo, one source of
+   truth. Restored this session.
+
+4. Permissions: placeholder only. Funded phase.
+
+5. Phone verification: fields in place, no live
+   SMS in MVP. Activate at production stage.
+
+6. Agent user creation: Client Dashboard Users
+   page (C1 option A). Admin creates email +
+   temp password. Agent logs in and changes it.
+
+7. Website used once by the admin. All further
+   interaction between Owner / Client / Agent
+   dashboards. No role-parameterized website
+   signup.
+
+================================================================
+Q.13 - QUEUE
+================================================================
+
+DONE
+  Slice 1 through Slice 7. See Appendices F-P.
+
+IN FLIGHT
+  None. Slice 8 is reconnaissance only.
+
+NEXT - IN ORDER
+
+  1. Complete the reads in Q.10 (7 reads,
+     ~15 minutes).
+  2. Resolve C1, C2, C4, C6, C8 (Q.8).
+  3. Write the Slice 8.1 mini spec (or 8.2 if
+     that is the first slice chosen).
+  4. Freeze and implement.
+
+Carried items from Appendix O.7 / P.4 remain
+unchanged:
+  - Copilot fallback connector filter (OI-7)
+  - DeepSeek connector row (OI-8)
+  - OI-3 full logging design
+  - O1 ghost-row fix
+  - O2 Communication Tools credential health
+  - STEP 1.5, STEP 1.6
+  - CONNECTOR_CREDENTIAL_REPLACED
+  - TWILIO SMS BYOP SEND VERIFICATION
+  - B7 CREDENTIAL-TRANSIT REVIEW
+  - CANCEL-NEGATIVE FOR TIER 1
+  - ACCEPTANCE - end-to-end
+  - PF-4: local cargo check / GitHub Actions
+
+================================================================
+Q.14 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I, II, or III.
+  Does not edit prior appendices.
+  Does not decide C1, C2, C4, C6, C8.
+  Does not commit the restored gorka-website/.
+  Does not start Slice 8.1.
+
+================================================================
+END OF APPENDIX Q
+================================================================
