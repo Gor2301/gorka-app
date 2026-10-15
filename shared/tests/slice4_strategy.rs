@@ -413,8 +413,8 @@ fn strategy_rationale_none_on_fallback_outcome() {
     assert_eq!(outcome.source, StrategySource::Fallback);
     assert!(outcome.rationale.is_none());
     assert!(outcome.risk_flags.is_empty());
-    assert!(outcome.draft_subject.is_none());
-    assert_eq!(outcome.draft_body, "");
+    assert_eq!(outcome.draft_subject.as_deref(), Some("Payment reminder"));
+    assert_eq!(outcome.draft_body, "Please contact us about your account.");
 }
 
 #[test]

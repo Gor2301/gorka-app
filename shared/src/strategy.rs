@@ -11,6 +11,12 @@
 //   - Any failure on the AI path — build_context, boundary block,
 //     adapter error, malformed or oversized answer, schema violation —
 //     returns Ok(StrategyOutcome { source: Fallback, ... }), never Err.
+//   - Each failure site on the AI path carries a short reason string.
+//     analyze() logs it to stderr once. This is a diagnostic aid, not
+//     a contract: the outcome the caller sees is unchanged.
+//   - The fallback draft carries a deterministic subject and body so
+//     the agent has editable content even when the AI path is not
+//     available.
 //
 // Implementation note: §6.5 names `RawOutboundAiRequest` as the value
 // to serialize. That type derives Deserialize only, and ai_request.rs
@@ -36,6 +42,12 @@ pub const MAX_RISK_FLAG_LEN: usize = 100;
 /// Prefix attached to the model's rationale before it leaves analyze.
 /// The em-dash is U+2014. Verbatim from §6.5.
 const RATIONALE_PREFIX: &str = "AI explanation \u{2014} unverified: ";
+
+/// Deterministic fallback draft content. Used when the AI path is
+/// unavailable. Chosen to carry no claim that the Slice 4 fact
+/// validator would need to cross-check.
+const FALLBACK_SUBJECT: &str = "Payment reminder";
+const FALLBACK_BODY: &str = "Please contact us about your account.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StrategySource {
@@ -84,7 +96,10 @@ pub fn analyze(
     // Step 2 — AI path. Any failure falls back.
     match try_ai_path(conn, org_id, debtor_id, reference_time, model, adapter) {
         Ok(outcome) => Ok(outcome),
-        Err(()) => Ok(fallback_outcome(fallback_rec)),
+        Err(reason) => {
+            eprintln!("strategy: AI path unavailable, using fallback: {}", reason);
+            Ok(fallback_outcome(fallback_rec))
+        }
     }
 }
 
@@ -92,16 +107,17 @@ fn fallback_outcome(rec: Recommendation) -> StrategyOutcome {
     StrategyOutcome {
         source: StrategySource::Fallback,
         recommendation: rec,
-        draft_subject: None,
-        draft_body: String::new(),
+        draft_subject: Some(FALLBACK_SUBJECT.to_string()),
+        draft_body: FALLBACK_BODY.to_string(),
         rationale: None,
         risk_flags: Vec::new(),
         prompt_version: prompts::PROMPT_VERSION,
     }
 }
 
-/// Every failure on this path is represented by `Err(())`; the caller
-/// converts it to the fallback outcome. Nothing here may propagate.
+/// Every failure on this path is represented by `Err(reason)`; the
+/// caller converts it to the fallback outcome and logs the reason.
+/// Nothing here may propagate.
 fn try_ai_path(
     conn: &rusqlite::Connection,
     org_id: &str,
@@ -109,8 +125,9 @@ fn try_ai_path(
     reference_time: DateTime<Utc>,
     model: &str,
     adapter: &dyn ConnectorAdapter,
-) -> Result<StrategyOutcome, ()> {
-    let ctx = context::build_context(conn, org_id, debtor_id, reference_time).map_err(|_| ())?;
+) -> Result<StrategyOutcome, &'static str> {
+    let ctx = context::build_context(conn, org_id, debtor_id, reference_time)
+        .map_err(|_| "context build failed")?;
 
     let raw_value = serde_json::json!({
         "system_prompt": prompts::SYSTEM_PROMPT,
@@ -122,8 +139,8 @@ fn try_ai_path(
             "max_output_tokens": 1024,
         },
     });
-    let raw_json = serde_json::to_string(&raw_value).map_err(|_| ())?;
-    let canonical = parse_and_validate(&raw_json).map_err(|_| ())?;
+    let raw_json = serde_json::to_string(&raw_value).map_err(|_| "request serialization failed")?;
+    let canonical = parse_and_validate(&raw_json).map_err(|_| "boundary validation failed")?;
 
     let req = SendRequest {
         to: String::new(),
@@ -131,65 +148,66 @@ fn try_ai_path(
         from: String::new(),
         body: canonical.to_json(),
     };
-    let send_result = adapter.send(&req).map_err(|_| ())?;
+    let send_result = adapter.send(&req).map_err(|_| "adapter call failed")?;
 
     let answer = send_result
         .provider_response
         .as_ref()
         .and_then(|v| v.get("answer"))
         .and_then(|v| v.as_str())
-        .ok_or(())?;
+        .ok_or("missing answer field")?;
     if answer.is_empty() || answer.trim().is_empty() {
-        return Err(());
+        return Err("empty answer");
     }
     if answer.len() > MAX_RESPONSE_BYTES {
-        return Err(());
+        return Err("answer exceeds max bytes");
     }
 
-    let parsed: AiResponse = serde_json::from_str(answer).map_err(|_| ())?;
+    let parsed: AiResponse =
+        serde_json::from_str(answer).map_err(|_| "answer not valid JSON")?;
 
     if parsed.recommendation.channel != "EMAIL" {
-        return Err(());
+        return Err("channel not EMAIL");
     }
     let priority = match parsed.recommendation.priority.as_str() {
         "LOW" => Priority::Low,
         "NORMAL" => Priority::Normal,
         "HIGH" => Priority::High,
-        _ => return Err(()),
+        _ => return Err("unknown priority"),
     };
     let tone = match parsed.recommendation.tone.as_str() {
         "FRIENDLY" => Tone::Friendly,
         "FIRM" => Tone::Firm,
         "URGENT" => Tone::Urgent,
         "FINAL_NOTICE" => Tone::FinalNotice,
-        _ => return Err(()),
+        _ => return Err("unknown tone"),
     };
     let timing = match parsed.recommendation.timing.as_str() {
         "WITHIN_24_HOURS" => Timing::Within24Hours,
         "WITHIN_3_DAYS" => Timing::Within3Days,
         "WITHIN_7_DAYS" => Timing::Within7Days,
-        _ => return Err(()),
+        _ => return Err("unknown timing"),
     };
 
     if parsed.draft.subject.chars().count() > MAX_SUBJECT_LEN {
-        return Err(());
+        return Err("subject too long");
     }
     let body_chars = parsed.draft.body.chars().count();
     if body_chars == 0 || body_chars > MAX_BODY_LEN {
-        return Err(());
+        return Err("body length invalid");
     }
     if parsed.draft.body.trim().is_empty() {
-        return Err(());
+        return Err("body whitespace only");
     }
     if parsed.recommendation.rationale.chars().count() > MAX_RATIONALE_LEN {
-        return Err(());
+        return Err("rationale too long");
     }
     if parsed.risk_flags.len() > MAX_RISK_FLAGS {
-        return Err(());
+        return Err("too many risk flags");
     }
     for flag in &parsed.risk_flags {
         if flag.chars().count() > MAX_RISK_FLAG_LEN {
-            return Err(());
+            return Err("risk flag too long");
         }
     }
 

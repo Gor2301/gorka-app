@@ -595,7 +595,7 @@ function formatTimestamp(s: string | null | undefined): string {
   try {
     const d = new Date(s);
     if (isNaN(d.getTime())) return s;
-    return d.toLocaleString();
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   } catch {
     return s;
   }
