@@ -6354,3 +6354,438 @@ Q.14 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX Q
 ================================================================
+
+
+================================================================
+APPENDIX R - SLICE 8 CONTINUATION AND PART IV FREEZE
+(added v3.11, 2026-10-15)
+================================================================
+
+R.0 - WHY THIS APPENDIX EXISTS
+
+Appendix Q recorded the reconnaissance for Slice
+8. After Q was committed (7225765), the session
+continued: two open decisions were resolved with
+evidence, one new finding surfaced, and the Slice
+8 spec was frozen as Part IV of
+CONNECTOR-EVENT-ORDER-SPEC.md.
+
+This appendix records what happened after Q so a
+fresh chat can start implementation without
+re-reading the conversation.
+
+Where this appendix conflicts with Appendix Q, R
+wins on Slice 8 matters. R does not edit Q.
+
+================================================================
+R.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 7225765 (Appendix Q) plus the
+        Appendix R commit that follows, plus any
+        Part IV commit if it landed this session.
+
+        Working tree contains an untracked folder:
+        gorka-website/ (restored from Backup Sept
+        3, 2026\gorka-website). This folder becomes
+        part of Slice 8.1's first commit. It is
+        NOT committed yet.
+
+        Cargo.lock drift: known cosmetic. Ignore.
+
+        Mocean curl artifacts at repo root (safe to
+        delete): balance.txt, balance_get.txt,
+        response.txt.
+
+CLOUD:  idle. May be closed. Last green run at
+        0b21c09 (493 passed, 3 ignored, 0 failed).
+        Commits 0b21c09..7225765 are docs-only
+        (RESUME-HERE.md, spec files). The cloud
+        result is valid for the code at current
+        HEAD.
+
+================================================================
+R.2 - C6 RESOLVED - redirectUrl REMOVED
+================================================================
+
+Evidence (R1 from this session):
+
+  Select-String 'redirectUrl' across all source
+  folders found exactly five hits:
+
+    src/backend/routes/auth.ts:369   (produces)
+    src/backend/routes/auth.ts:481   (produces)
+    gorka-website/app/[locale]/login/page.tsx:39
+    gorka-website/app/[locale]/register/page.tsx:145
+    owner-dashboard/pages/LoginPage.tsx:49
+
+  Every frontend consumer uses the pattern:
+    router.push(data.data.redirectUrl || '/')
+    window.location.href = data.data.redirectUrl || '/'
+
+  All three already have a safe fallback.
+
+  The values produced:
+    http://platform.gorka.localhost:3002  (OWNER)
+    http://client.gorka.localhost:5173    (CLIENT)
+
+  Both are dev-only hostnames, meaningless in
+  production and in desktop apps.
+
+  Grep for snake_case 'redirect_url': zero hits.
+
+DECISION: C6 = Option A. Remove redirectUrl from
+both backend responses. Frontends route on their
+own.
+
+  - Website register step 3 -> /download
+  - Website login page -> /download
+  - Owner dashboard login -> '/'
+
+None of these breaks: every consumer's fallback
+behavior is unchanged.
+
+Implementation: Slice 8.1, spec lines IV.5.1.
+
+================================================================
+R.3 - Q.20 RESOLVED - USER TABLE ONLY
+================================================================
+
+Evidence (R3, R5, R6 from this session):
+
+  R3 - "prisma.agent|from agents|INTO agents|
+        UPDATE agents" across src/backend:
+        ZERO HITS.
+
+    The Agent table has no code consumers.
+    It exists in the schema as dead code.
+
+  R5 - every "role === 'X'" or "role !== 'X'"
+       in src/backend:
+        SUPER_ADMIN (1 hit, tenant middleware)
+        OWNER (many hits, various routes)
+        PLATFORM_OWNER (several, support routes)
+        NO hits for AGENT. NO hits for CLIENT.
+
+    The CLIENT / AGENT distinction exists in the
+    JWT payload but nothing gates on it today.
+
+  R6 - DeviceRegistration model:
+        userId String
+        user   User @relation(fields: [userId],
+                              references: [id],
+                              onDelete: Restrict)
+
+    Device identity references User, not Agent.
+    Writing agents to the Agent table would leave
+    DeviceRegistration with no FK to attach to.
+
+DECISION: Q.20 = Option A. User row only,
+role='AGENT'. The Agent table is not written by
+any Slice 8 code path.
+
+The Agent table is a candidate for removal or
+repurposing in a future slice. Do not touch it
+now. Recorded as IV.9 Q.20 in Part IV.
+
+================================================================
+R.4 - NEW FINDING - MISSING ROLE ENFORCEMENT
+================================================================
+
+R5 revealed: no backend code checks
+role === 'AGENT' or role === 'CLIENT'.
+
+Every role check is OWNER, SUPER_ADMIN, or
+PLATFORM_OWNER. The CLIENT and AGENT roles exist
+in the JWT (login handler line 449-457) but
+nothing enforces them.
+
+Consequence for Slice 8.3:
+
+  The new endpoints POST /api/users/invite-agent
+  and GET /api/users must add their own inline
+  role check:
+
+    if (req.user.role !== 'OWNER' &&
+        req.user.role !== 'CLIENT') {
+      return res.status(403).json({...});
+    }
+
+  There is no middleware doing this today.
+
+  Founder to decide whether a shared
+  requireOwnerOrClient middleware is worth
+  adding for two endpoints, or whether inline
+  checks suffice.
+
+Recorded as IV.6 item 5 in Part IV (Pre-freeze
+verification items).
+
+================================================================
+R.5 - PART IV FROZEN
+================================================================
+
+The Slice 8 mini spec was frozen as PART IV of
+CONNECTOR-EVENT-ORDER-SPEC.md.
+
+Status: FROZEN 2026-10-15.
+
+Location: appended to
+  GORKA_RECOVERY/recovery-notes/CONNECTOR-EVENT-ORDER-SPEC.md
+after the Slice 6 close note.
+
+Full text lives in that file. This appendix does
+NOT duplicate it. Read it there.
+
+Structure of Part IV:
+  IV.0  Gate 0 (passed)
+  IV.1  Goal
+  IV.2  Scope (in/out)
+  IV.3  Decisions locked with evidence
+  IV.4  C8 slice order (C, dependency-driven)
+  IV.5  Slice detail (8.1 through 8.6)
+  IV.6  Pre-freeze verification items (8 items)
+  IV.7  Acceptance criteria (14 items)
+  IV.8  Cloud trip plan (3 trips)
+  IV.9  Reference values (Q.17-20)
+  IV.10 Revision history
+  IV.11 What Part IV does not do
+
+Commit message when it lands:
+  "CONNECTOR-EVENT-ORDER-SPEC: Part IV, Slice 8
+   mini spec v1.0 frozen"
+
+Verify before proceeding:
+  cd /d C:\Users\kucha\gorka-app
+  git log --oneline -3
+  findstr /n "PART IV - SLICE 8" GORKA_RECOVERY\recovery-notes\CONNECTOR-EVENT-ORDER-SPEC.md
+  findstr /n "END OF PART IV" GORKA_RECOVERY\recovery-notes\CONNECTOR-EVENT-ORDER-SPEC.md
+
+================================================================
+R.6 - Q.15 BRAND ICONS (parallel task)
+================================================================
+
+Goal: replace the default Tauri icon on both
+Client and Agent dashboards with a branded icon.
+
+Design (LOCKED):
+  Red "G" on transparent background.
+  Letter fills ~85% of the icon frame.
+  Font: Inter Bold (or ExtraBold).
+  Color: #DE1D1E (Canada Post Red).
+  No background badge. Matches Microsoft Edge
+  icon model.
+
+Rationale: any background that must remain
+visible reduces the G's size. The user chose the
+Edge model (letter fills the frame, transparent
+around it) over the badge model (white on
+colored square).
+
+Small-size legibility: bold weight ensures the G
+reads at 16x16, the smallest variant Windows
+embeds in the .ico. Verify at 16 px before
+committing the assets.
+
+Source asset: one 1024x1024 PNG.
+
+Generate variants:
+  npx @tauri-apps/cli icon <source.png>
+Produces .ico, .icns, and 32/128/256/512 PNG.
+
+Placement:
+  src-tauri/icons/         (Client)
+  src-tauri-agent/icons/   (Agent)
+  gorka-website/public/    (download page)
+
+Rebuild: one cloud trip after placement.
+
+Tooling options if needed:
+  1. Figma / Canva / design tool (highest fidelity)
+  2. HTML page rendered in Inter via Google Fonts,
+     screenshot at 1024x1024 (highest fidelity,
+     no design tool)
+  3. PowerShell + .NET System.Drawing (serviceable,
+     no kerning control)
+
+================================================================
+R.7 - Q.16 APP NAMES AND LABELS
+================================================================
+
+Set in src-tauri/tauri.conf.json and
+src-tauri-agent/tauri.conf.json:
+
+  Client: productName = "GORKA Client"
+          mainBinaryName = "GORKA Client"
+  Agent:  productName = "GORKA Agent"
+          mainBinaryName = "GORKA Agent"
+
+Windows shows this under the icon on the desktop
+and in the taskbar tooltip. No truncation (10
+chars vs ~25 char limit).
+
+Note: desktop icon label font size is a global
+Windows setting (Settings -> Accessibility ->
+Text size). It cannot be overridden per-app.
+Document on the download page as a user tip.
+
+Same cloud trip as Q.15.
+
+================================================================
+R.8 - WHAT WAS READ THIS SESSION
+================================================================
+
+Confirms what a fresh session does NOT need to
+re-read:
+
+  - Register wizard: gorka-website/app/[locale]/
+    register/page.tsx (434 lines, three-step,
+    Model 2 already built)
+
+  - Verify-email page: gorka-website/app/[locale]/
+    verify-email/page.tsx (124 lines, redirects
+    to /register?step=3 on success)
+
+  - All five auth proxies: register, verify-email,
+    complete-registration, login, me
+
+  - Backend auth.ts full flow: register (67),
+    verify-email (193), complete-registration
+    (274), login (384), logout (497), /me (521)
+
+  - Client Dashboard generate_handler! (860-900):
+    enable_sync registered at 871,
+    export_enrollment_package registered at 900
+
+  - enable_sync body (208-239)
+  - export_enrollment_package body (738-783)
+  - import_enrollment_package body (786-826)
+
+  - Prisma Organization (22-67), User (69-86),
+    Agent (88-100), License (102-121),
+    PlatformSettings (123-129),
+    DeviceRegistration (420-450+)
+
+  - agent-dashboard/src/pages/ file list
+    (EnrollPage.tsx exists)
+
+  - role checks across src/backend (R5 output)
+
+  - redirectUrl consumers (R1 output)
+
+  - The register i18n strings in
+    gorka-website/messages/en.json
+
+================================================================
+R.9 - WHAT IS STILL UNREAD
+================================================================
+
+None of these blocks Slice 8.3. They are
+implementation-time reads.
+
+  For Slice 8.4 (Agent enroll verify):
+    - src-tauri-agent/src/main.rs generate_handler!
+      list. Confirm import_enrollment_package is
+      registered.
+    - agent-dashboard/src/pages/EnrollPage.tsx
+      full body. Confirm invoke call shape.
+    - agent-dashboard/src/App.tsx first-run
+      routing. Confirm EnrollPage is reached.
+
+  For Slice 8.5 (Owner Dashboard):
+    - owner-dashboard/src/ or pages/ current
+      state. Existing LoginPage.tsx confirmed at
+      line 49.
+    - Full DeviceRegistration model (we saw
+      through line 450; read the rest if online
+      count is implemented).
+
+  For Slice 8.1 backend work:
+    - Line 140-190 of auth.ts (rest of register
+      handler, email send confirmation). We saw
+      60-140 and 140-260; the middle was read.
+    - authenticateToken middleware definition
+      (needed to know what req.user contains).
+
+None of these needs an extra reconnaissance
+session. Each is a single read at the start of
+its slice.
+
+================================================================
+R.10 - IMMEDIATE NEXT ACTIONS FOR A FRESH CHAT
+================================================================
+
+Recommended order. Each step is small.
+
+  1. Verify Part IV landed.
+     - git log --oneline -5
+     - findstr /n "PART IV" GORKA_RECOVERY\
+       recovery-notes\CONNECTOR-EVENT-ORDER-SPEC.md
+     - findstr /n "END OF PART IV" GORKA_RECOVERY\
+       recovery-notes\CONNECTOR-EVENT-ORDER-SPEC.md
+     If Part IV is not in the file, paste it from
+     this appendix's companion message or from
+     the previous session's chat. It is not
+     duplicated here.
+
+  2. Confirm gate 0.
+     - git status --short
+     - Expect: untracked gorka-website/, plus the
+       known leftovers (CHAT-HANDOFF-DUMP.txt,
+       make-dump.ps1, balance.txt,
+       balance_get.txt, response.txt).
+
+  3. Start Slice 8.3 (backend agent-user endpoints).
+     Read before editing:
+       - src/backend/routes/auth.ts:1-30 (imports,
+         rate limiters)
+       - src/backend/routes/auth.ts:521-560 (/me
+         handler, for the req.user shape)
+       - src/backend/middleware/* (authenticateToken)
+       - src/backend/index.ts (route mounting
+         pattern)
+     Then implement:
+       - New file src/backend/routes/users.ts
+       - POST /api/users/invite-agent
+       - GET /api/users
+       - Inline role checks (OWNER or CLIENT)
+       - Organization scoping (from req.user.organizationId)
+       - Never return passwordHash
+       - Zod validation
+
+  4. Cloud trip 1 (R.1 above). Verify backend
+     endpoints work. Then proceed to 8.2.
+
+================================================================
+R.11 - THE SLICE 8 SEQUENCE (REPEATED FOR CONVENIENCE)
+================================================================
+
+From Part IV.4:
+
+  8.3  backend endpoint + auth rules
+  8.2  Client wizard + Users page
+  8.4  verify Agent enroll
+  8.5  Owner Dashboard (may parallel with 8.2/8.4)
+  8.1  website (parallel to all above)
+  8.6  deploy (after 8.1)
+
+Cloud trips:
+  Trip 1: after 8.3 + 8.2
+  Trip 2: after 8.4 + 8.5 + 8.1
+  Trip 3: deployment (8.6)
+
+================================================================
+R.12 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not duplicate Part IV. Read Part IV for
+  the frozen spec.
+  Does not edit Appendix Q.
+  Does not commit gorka-website/.
+  Does not start any slice.
+  Does not decide the shared-middleware question
+  (IV.6 item 5). That is implementation-time.
+
+================================================================
+END OF APPENDIX R
+================================================================
