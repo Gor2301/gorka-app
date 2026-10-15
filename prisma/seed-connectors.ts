@@ -101,11 +101,10 @@ const connectors = [
     documentationUrl: 'https://www.moceanapi.com/docs',
     credentialSchema: {
       credentials: [
-        { name: 'apiKey', label: 'API Key', type: 'password', required: true },
-        { name: 'apiSecret', label: 'API Secret', type: 'password', required: true },
+        { name: 'apiToken', label: 'API Token', type: 'password', required: true, placeholder: 'apit-...' },
       ],
       configuration: [
-        { name: 'from', label: 'Sender name', type: 'text', required: true, default: 'GORKA' },
+        { name: 'from', label: 'Sender name', type: 'text', required: true, default: 'MOCEAN' },
       ],
     },
   },

@@ -4,18 +4,20 @@
 // calls go through the injected HttpClient; this module never opens
 // a socket itself. Tests use MockHttpClient.
 //
-// Credential shape (CONNECTOR-MODEL.md Section 6.2):
-//   value:         JSON {"apiKey": "...", "apiSecret": "..."}
-//   configuration: JSON {"from": "GORKA"}
+// Credential shape (confirmed 2026-10-15 against the live API):
+//   value:         JSON {"apiToken": "apit-..."}
+//   configuration: JSON {"from": "MOCEAN"}
 //
-// HTTP shape per Mocean REST 2. Endpoints and payload fields below
-// are reasonable defaults written from general knowledge of the
-// Mocean API, NOT yet confirmed against Mocean's current docs.
-// Same caveat as the original Resend adapter carried when it first
-// landed. Confirm against Mocean's documentation before the first
-// live send. A wrong shape will not fail the unit tests (they test
-// our code with a mocked transport); it will surface at first live
-// send.
+// HTTP contract (confirmed 2026-10-15 via live curl against
+// rest.moceanapi.com):
+//   Auth:            Authorization: Bearer <apiToken>
+//   SMS send:        POST /rest/2/sms  (form-urlencoded)
+//                    success: HTTP 202
+//                    body:    {"messages":[{"status":0,"receiver":"...","msgid":"..."}]}
+//   Account balance: GET  /rest/2/account/balance?mocean-resp-format=json
+//                    success: HTTP 202
+//                    body:    {"status":0,"value":17.0000}
+//   Non-zero message status or HTTP 4xx/5xx is an error.
 
 use crate::connectors::http::{HttpClient, HttpErrorKind, HttpMethod, HttpRequest};
 use crate::connectors::http_reqwest::ReqwestHttpClient;
@@ -23,7 +25,6 @@ use crate::connectors::{
     ConnectorAdapter, ConnectorCredential, ConnectorError, ConnectorErrorKind, SendRequest,
     SendResult,
 };
-use base64::Engine;
 use serde::Deserialize;
 
 const CATALOG_CODE: &str = "mocean-sms";
@@ -31,12 +32,17 @@ const CATALOG_CODE: &str = "mocean-sms";
 const SEND_URL: &str = "https://rest.moceanapi.com/rest/2/sms";
 const BALANCE_URL: &str = "https://rest.moceanapi.com/rest/2/account/balance";
 
+/// Success HTTP status codes. Mocean returns 202 for both SMS send
+/// and account balance. 200 is accepted defensively in case a proxy
+/// or a future API revision normalizes to 200.
+fn is_success_status(s: u16) -> bool {
+    s == 200 || s == 202
+}
+
 #[derive(Deserialize)]
 struct CredentialJson {
-    #[serde(rename = "apiKey")]
-    api_key: String,
-    #[serde(rename = "apiSecret")]
-    api_secret: String,
+    #[serde(rename = "apiToken")]
+    api_token: String,
 }
 
 #[derive(Deserialize)]
@@ -56,8 +62,7 @@ struct SendMessage {
 }
 
 pub struct MoceanSmsAdapter {
-    api_key: String,
-    api_secret: String,
+    api_token: String,
     from: String,
     http: Box<dyn HttpClient>,
 }
@@ -75,21 +80,14 @@ impl MoceanSmsAdapter {
 
         let cred: CredentialJson = serde_json::from_str(value_str).map_err(|_| ConnectorError {
             kind: ConnectorErrorKind::LocalConfigurationError,
-            message: "Mocean credential JSON is malformed or missing 'apiKey'/'apiSecret'".into(),
+            message: "Mocean credential JSON is malformed or missing 'apiToken'".into(),
             provider_response: None,
         })?;
 
-        if cred.api_key.trim().is_empty() {
+        if cred.api_token.trim().is_empty() {
             return Err(ConnectorError {
                 kind: ConnectorErrorKind::LocalConfigurationError,
-                message: "Mocean credential has empty 'apiKey'".into(),
-                provider_response: None,
-            });
-        }
-        if cred.api_secret.trim().is_empty() {
-            return Err(ConnectorError {
-                kind: ConnectorErrorKind::LocalConfigurationError,
-                message: "Mocean credential has empty 'apiSecret'".into(),
+                message: "Mocean credential has empty 'apiToken'".into(),
                 provider_response: None,
             });
         }
@@ -114,17 +112,14 @@ impl MoceanSmsAdapter {
         }
 
         Ok(Self {
-            api_key: cred.api_key,
-            api_secret: cred.api_secret,
+            api_token: cred.api_token,
             from,
             http,
         })
     }
 
-    fn basic_auth_header(&self) -> String {
-        let raw = format!("{}:{}", self.api_key, self.api_secret);
-        let encoded = base64::engine::general_purpose::STANDARD.encode(raw.as_bytes());
-        format!("Basic {}", encoded)
+    fn auth_header(&self) -> String {
+        format!("Bearer {}", self.api_token)
     }
 
     fn build_send_request(&self, request: &SendRequest) -> HttpRequest {
@@ -140,7 +135,7 @@ impl MoceanSmsAdapter {
             method: HttpMethod::Post,
             url: SEND_URL.to_string(),
             headers: vec![
-                ("Authorization".to_string(), self.basic_auth_header()),
+                ("Authorization".to_string(), self.auth_header()),
                 (
                     "Content-Type".to_string(),
                     "application/x-www-form-urlencoded".to_string(),
@@ -151,17 +146,14 @@ impl MoceanSmsAdapter {
     }
 
     fn build_balance_request(&self) -> HttpRequest {
+        // Balance endpoint is GET with a query parameter. Confirmed
+        // 2026-10-15: POST returned HTTP 400 {"status":34,"err_msg":
+        // "Unknown request"}; GET returned HTTP 202.
         HttpRequest {
-            method: HttpMethod::Post,
-            url: BALANCE_URL.to_string(),
-            headers: vec![
-                ("Authorization".to_string(), self.basic_auth_header()),
-                (
-                    "Content-Type".to_string(),
-                    "application/x-www-form-urlencoded".to_string(),
-                ),
-            ],
-            body: b"mocean-resp-format=json".to_vec(),
+            method: HttpMethod::Get,
+            url: format!("{}?mocean-resp-format=json", BALANCE_URL),
+            headers: vec![("Authorization".to_string(), self.auth_header())],
+            body: Vec::new(),
         }
     }
 
@@ -178,7 +170,8 @@ impl MoceanSmsAdapter {
     }
 
     fn map_error_response(status: u16, body: &[u8]) -> ConnectorError {
-        // Mocean returns JSON; use err_msg if present, otherwise raw body snippet.
+        // Mocean returns JSON; use err_msg if present, otherwise raw
+        // body snippet.
         let parsed: Option<SendEnvelope> = serde_json::from_slice(body).ok();
         let provider_message = parsed
             .as_ref()
@@ -237,7 +230,7 @@ impl ConnectorAdapter for MoceanSmsAdapter {
             .execute(&http_request)
             .map_err(Self::map_http_error)?;
 
-        if response.status == 200 {
+        if is_success_status(response.status) {
             let envelope: SendEnvelope =
                 serde_json::from_slice(&response.body).map_err(|_| ConnectorError {
                     kind: ConnectorErrorKind::ResponseParseError,
@@ -282,7 +275,7 @@ impl ConnectorAdapter for MoceanSmsAdapter {
             .execute(&http_request)
             .map_err(Self::map_http_error)?;
 
-        if response.status == 200 {
+        if is_success_status(response.status) {
             Ok(())
         } else {
             Err(Self::map_error_response(response.status, &response.body))
@@ -300,27 +293,23 @@ mod tests {
     use crate::connectors::http::testing::MockHttpClient;
     use crate::connectors::http::{HttpError, HttpErrorKind, HttpResponse};
 
-    const SAMPLE_KEY: &str = "mocean_api_key_do_not_use";
-    const SAMPLE_SECRET: &str = "mocean_api_secret_do_not_use";
+    const SAMPLE_TOKEN: &str = "apit-SAMPLE_TOKEN_DO_NOT_USE";
 
     fn sample_credential() -> ConnectorCredential {
         ConnectorCredential {
-            value: serde_json::json!({
-                "apiKey": SAMPLE_KEY,
-                "apiSecret": SAMPLE_SECRET,
-            })
-            .to_string()
-            .into_bytes(),
-            configuration: serde_json::json!({"from": "GORKA"}),
+            value: serde_json::json!({ "apiToken": SAMPLE_TOKEN })
+                .to_string()
+                .into_bytes(),
+            configuration: serde_json::json!({"from": "MOCEAN"}),
         }
     }
 
     fn sample_request() -> SendRequest {
         SendRequest {
-            to: "+15550000002".to_string(),
+            to: "639610489002".to_string(),
             body: "Hello from GORKA".to_string(),
             subject: None,
-            from: "GORKA".to_string(),
+            from: "MOCEAN".to_string(),
         }
     }
 
@@ -364,7 +353,7 @@ mod tests {
         let (mock, _handle) = MockHttpClient::new(vec![]);
         let cred = ConnectorCredential {
             value: b"not json at all".to_vec(),
-            configuration: serde_json::json!({"from": "GORKA"}),
+            configuration: serde_json::json!({"from": "MOCEAN"}),
         };
         let err = expect_constructor_error(MoceanSmsAdapter::new(cred, Box::new(mock)));
         assert!(matches!(
@@ -374,13 +363,13 @@ mod tests {
     }
 
     #[test]
-    fn new_rejects_missing_api_key() {
+    fn new_rejects_missing_api_token() {
         let (mock, _handle) = MockHttpClient::new(vec![]);
         let cred = ConnectorCredential {
-            value: serde_json::json!({"apiSecret": SAMPLE_SECRET})
+            value: serde_json::json!({"other": "value"})
                 .to_string()
                 .into_bytes(),
-            configuration: serde_json::json!({"from": "GORKA"}),
+            configuration: serde_json::json!({"from": "MOCEAN"}),
         };
         let err = expect_constructor_error(MoceanSmsAdapter::new(cred, Box::new(mock)));
         assert!(matches!(
@@ -390,13 +379,13 @@ mod tests {
     }
 
     #[test]
-    fn new_rejects_missing_api_secret() {
+    fn new_rejects_empty_api_token() {
         let (mock, _handle) = MockHttpClient::new(vec![]);
         let cred = ConnectorCredential {
-            value: serde_json::json!({"apiKey": SAMPLE_KEY})
+            value: serde_json::json!({"apiToken": "   "})
                 .to_string()
                 .into_bytes(),
-            configuration: serde_json::json!({"from": "GORKA"}),
+            configuration: serde_json::json!({"from": "MOCEAN"}),
         };
         let err = expect_constructor_error(MoceanSmsAdapter::new(cred, Box::new(mock)));
         assert!(matches!(
@@ -409,12 +398,9 @@ mod tests {
     fn new_rejects_missing_from() {
         let (mock, _handle) = MockHttpClient::new(vec![]);
         let cred = ConnectorCredential {
-            value: serde_json::json!({
-                "apiKey": SAMPLE_KEY,
-                "apiSecret": SAMPLE_SECRET,
-            })
-            .to_string()
-            .into_bytes(),
+            value: serde_json::json!({ "apiToken": SAMPLE_TOKEN })
+                .to_string()
+                .into_bytes(),
             configuration: serde_json::json!({}),
         };
         let err = expect_constructor_error(MoceanSmsAdapter::new(cred, Box::new(mock)));
@@ -429,8 +415,8 @@ mod tests {
     #[test]
     fn send_builds_expected_request() {
         let (mock, handle) = MockHttpClient::new(vec![ok(
-            200,
-            r#"{"messages":[{"status":0,"msgid":"m_1"}]}"#,
+            202,
+            r#"{"messages":[{"status":0,"receiver":"639610489002","msgid":"m_1"}]}"#,
         )]);
         let adapter = MoceanSmsAdapter::new(sample_credential(), Box::new(mock)).unwrap();
 
@@ -444,22 +430,41 @@ mod tests {
         assert!(req
             .headers
             .iter()
-            .any(|(k, v)| k == "Authorization" && v.starts_with("Basic ")));
+            .any(|(k, v)| k == "Authorization" && v.starts_with("Bearer ")));
 
         let body_str = std::str::from_utf8(&req.body).unwrap();
-        assert!(body_str.contains("mocean-to=%2B15550000002"));
-        assert!(body_str.contains("mocean-from=GORKA"));
+        assert!(body_str.contains("mocean-to=639610489002"));
+        assert!(body_str.contains("mocean-from=MOCEAN"));
         assert!(body_str.contains("mocean-text=Hello+from+GORKA"));
         assert!(body_str.contains("mocean-resp-format=json"));
+    }
+
+    #[test]
+    fn send_uses_bearer_auth_header_with_token() {
+        let (mock, handle) = MockHttpClient::new(vec![ok(
+            202,
+            r#"{"messages":[{"status":0,"msgid":"m_x"}]}"#,
+        )]);
+        let adapter = MoceanSmsAdapter::new(sample_credential(), Box::new(mock)).unwrap();
+        let _ = adapter.send(&sample_request());
+
+        let received = handle.received();
+        let auth = received[0]
+            .headers
+            .iter()
+            .find(|(k, _)| k == "Authorization")
+            .map(|(_, v)| v.clone())
+            .unwrap();
+        assert_eq!(auth, format!("Bearer {}", SAMPLE_TOKEN));
     }
 
     // --- send: response handling ---
 
     #[test]
-    fn send_parses_success_response() {
+    fn send_accepts_202_success_response() {
         let (mock, _handle) = MockHttpClient::new(vec![ok(
-            200,
-            r#"{"messages":[{"status":0,"msgid":"m_abc"}]}"#,
+            202,
+            r#"{"messages":[{"status":0,"receiver":"639610489002","msgid":"m_abc"}]}"#,
         )]);
         let adapter = MoceanSmsAdapter::new(sample_credential(), Box::new(mock)).unwrap();
 
@@ -470,9 +475,20 @@ mod tests {
     }
 
     #[test]
+    fn send_accepts_200_success_response_defensively() {
+        let (mock, _handle) = MockHttpClient::new(vec![ok(
+            200,
+            r#"{"messages":[{"status":0,"msgid":"m_abc"}]}"#,
+        )]);
+        let adapter = MoceanSmsAdapter::new(sample_credential(), Box::new(mock)).unwrap();
+        let result = adapter.send(&sample_request()).unwrap();
+        assert!(result.success);
+    }
+
+    #[test]
     fn send_rejects_message_with_nonzero_status() {
         let body = r#"{"messages":[{"status":2,"err_msg":"Invalid recipient"}]}"#;
-        let (mock, _handle) = MockHttpClient::new(vec![ok(200, body)]);
+        let (mock, _handle) = MockHttpClient::new(vec![ok(202, body)]);
         let adapter = MoceanSmsAdapter::new(sample_credential(), Box::new(mock)).unwrap();
 
         let err = adapter.send(&sample_request()).unwrap_err();
@@ -527,14 +543,37 @@ mod tests {
     // --- test_connection ---
 
     #[test]
-    fn test_connection_ok_on_balance_200() {
-        let (mock, _handle) = MockHttpClient::new(vec![ok(200, r#"{"balance":100.0}"#)]);
+    fn test_connection_builds_get_request_to_balance() {
+        let (mock, handle) = MockHttpClient::new(vec![ok(202, r#"{"status":0,"value":17.0}"#)]);
+        let adapter = MoceanSmsAdapter::new(sample_credential(), Box::new(mock)).unwrap();
+
+        assert!(adapter.test_connection().is_ok());
+
+        let received = handle.received();
+        assert_eq!(received.len(), 1);
+        assert_eq!(received[0].method, HttpMethod::Get);
+        assert!(received[0].url.contains("/account/balance"));
+        assert!(received[0].url.contains("mocean-resp-format=json"));
+    }
+
+    #[test]
+    fn test_connection_ok_on_balance_202() {
+        let (mock, _handle) = MockHttpClient::new(vec![ok(202, r#"{"status":0,"value":17.0}"#)]);
         let adapter = MoceanSmsAdapter::new(sample_credential(), Box::new(mock)).unwrap();
 
         assert!(adapter.test_connection().is_ok());
     }
 
-    // --- mandatory credential-leak regression (CONNECTOR-MODEL.md Section 7.8) ---
+    #[test]
+    fn test_connection_err_on_balance_401() {
+        let (mock, _handle) = MockHttpClient::new(vec![ok(401, r#"{"err_msg":"Unauthorized"}"#)]);
+        let adapter = MoceanSmsAdapter::new(sample_credential(), Box::new(mock)).unwrap();
+
+        let err = adapter.test_connection().unwrap_err();
+        assert!(matches!(err.kind, ConnectorErrorKind::AuthenticationFailed));
+    }
+
+    // --- credential-leak regression ---
 
     #[test]
     fn credential_never_appears_in_debug_or_display() {
@@ -546,24 +585,24 @@ mod tests {
         let debug_str = format!("{:?}", err);
         let display_str = format!("{}", err);
         assert!(
-            !debug_str.contains(SAMPLE_SECRET),
-            "api secret leaked via ConnectorError Debug"
+            !debug_str.contains(SAMPLE_TOKEN),
+            "api token leaked via ConnectorError Debug"
         );
         assert!(
-            !display_str.contains(SAMPLE_SECRET),
-            "api secret leaked via ConnectorError Display"
+            !display_str.contains(SAMPLE_TOKEN),
+            "api token leaked via ConnectorError Display"
         );
 
         let (mock, _handle) = MockHttpClient::new(vec![ok(
-            200,
+            202,
             r#"{"messages":[{"status":0,"msgid":"m_x"}]}"#,
         )]);
         let adapter = MoceanSmsAdapter::new(sample_credential(), Box::new(mock)).unwrap();
         let result = adapter.send(&sample_request()).unwrap();
         let result_debug = format!("{:?}", result);
         assert!(
-            !result_debug.contains(SAMPLE_SECRET),
-            "api secret leaked via SendResult Debug"
+            !result_debug.contains(SAMPLE_TOKEN),
+            "api token leaked via SendResult Debug"
         );
     }
 
@@ -580,7 +619,7 @@ mod tests {
         let (mock, _handle) = MockHttpClient::new(vec![]);
         let cred = ConnectorCredential {
             value: b"not json at all".to_vec(),
-            configuration: serde_json::json!({"from": "GORKA"}),
+            configuration: serde_json::json!({"from": "MOCEAN"}),
         };
         let err = expect_factory_error(factory_with_http(cred, Box::new(mock)));
         assert!(matches!(

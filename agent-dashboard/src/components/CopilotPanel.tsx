@@ -404,7 +404,7 @@ export default function CopilotPanel({
         return (
           <div className="copilot-panel__section">
             <p className="copilot-panel__status-ok">
-              Sent via {r.delivery_connector_code ?? 'an unknown connector'} at {r.decided_at ?? r.created_at}.
+              Sent via {r.delivery_connector_code ?? 'an unknown connector'} at {formatTimestamp(r.decided_at ?? r.created_at)}.
             </p>
             <div className="copilot-panel__actions">
               <Button onClick={handleAnalyze} loading={analyzing}>
@@ -587,6 +587,17 @@ export default function CopilotPanel({
         </p>
       </div>
     );
+  }
+}
+
+function formatTimestamp(s: string | null | undefined): string {
+  if (!s) return 'an unknown time';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return d.toLocaleString();
+  } catch {
+    return s;
   }
 }
 

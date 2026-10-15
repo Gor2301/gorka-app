@@ -14,7 +14,7 @@ use gorka_shared::recommendation_store::{insert_pending, mark_accepted};
 use gorka_shared::send_safety::{
     begin_send, check_contact_limit, confirm_delivered, confirm_not_delivered,
     finalize_failure, finalize_success, finalize_uncertain, read_snapshot,
-    recover_at_startup, AttemptState, SafetyError, SendAttemptSnapshot,
+    recover_at_startup, SafetyError, SendAttemptSnapshot,
 };
 use gorka_shared::strategy::{StrategyOutcome, StrategySource};
 use rusqlite::{params, Connection};
@@ -22,7 +22,6 @@ use rusqlite::{params, Connection};
 const ORG: &str = "org-5b";
 const OTHER_ORG: &str = "org-5b-other";
 const DEBTOR: &str = "debtor-5b-1";
-const OTHER_DEBTOR: &str = "debtor-5b-2";
 const AI_CODE: &str = "gemini-ai";
 const CONNECTOR: &str = "resend-email";
 const USER: &str = "user-5b";
