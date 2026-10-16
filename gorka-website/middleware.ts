@@ -1,28 +1,8 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import createMiddleware from 'next-intl/middleware';
+import { routing } from './i18n/routing';
 
-const locales = ['en', 'es'];
-const defaultLocale = 'en';
-
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  
-  // Check if the path already has a locale prefix
-  const pathnameHasLocale = locales.some(
-    (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
-  );
-  
-  if (pathnameHasLocale) {
-    return NextResponse.next();
-  }
-  
-  // Redirect to default locale
-const newUrl = new URL(`/${defaultLocale}${pathname}`, request.url);
-// Preserve query parameters
-newUrl.search = request.nextUrl.search;
-return NextResponse.redirect(newUrl);
-}
+export default createMiddleware(routing);
 
 export const config = {
-  matcher: ['/((?!_next|api|.*\\..*).*)'],
+  matcher: ['/((?!api|_next|_vercel|.*\\..*).*)']
 };
