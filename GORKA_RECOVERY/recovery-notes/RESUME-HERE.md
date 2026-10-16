@@ -8176,3 +8176,297 @@ V.9 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX V
 ================================================================
+
+================================================================
+APPENDIX W - SLICE 8.6a CLOSE
+(added v3.16, 2026-10-16)
+================================================================
+
+W.0 - WHY THIS APPENDIX EXISTS
+
+Appendix V closed Slice 8.1 and pointed at 8.6
+deployment. This session reordered the deployment
+block: 8.6a (icons + app names) first, then 8.6b
+(website content), then 8.6c (deploy).
+
+8.6a is complete. Both desktop binaries carry the
+new red-G icon; app names updated. Cloud build
+green. Icons verified file-level; desktop-level
+verification deferred to the next cloud session.
+
+Prior appendices are not edited.
+
+================================================================
+W.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 3063850 plus the Appendix W commit that
+        follows. Pushed to origin/main.
+
+CLOUD:  at 3063850. All four build gates PASS. Cargo
+        test 497 / 3 / 0.
+
+Commit this session:
+
+  3063850  slice 8.6a: red G icon set for both
+           binaries; app names Admin dashboard v.1 /
+           Agent dashboard v.1
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -4
+    git status --short
+
+================================================================
+W.2 - WHAT SLICE 8.6a SHIPPED
+================================================================
+
+Icon source (new, tracked in git):
+
+  scripts/icon.html         Static HTML template:
+                            1024x1024, transparent,
+                            Inter Black 900, letter G,
+                            color #F01428,
+                            transform translate(-24px,12px).
+
+  scripts/icon-source.png   Rendered source. 25,693 bytes.
+                            Produced by Edge headless.
+
+Generated icon sets (npx @tauri-apps/cli icon):
+
+  src-tauri/icons/          17 replaced + ~45 new files.
+                            icon.ico, icon.icns, all PNGs,
+                            Android mipmaps, iOS AppIcons.
+  src-tauri-agent/icons/    Same, byte-identical to the
+                            Client set.
+
+tauri.conf.json:
+
+  src-tauri/tauri.conf.json
+    productName: "GORKA-Client-Dashboard"
+              -> "Admin dashboard v.1"
+    identifier: unchanged (click.gorka.client).
+
+  src-tauri-agent/tauri.conf.json
+    productName: "GORKA-Agent-Dashboard"
+              -> "Agent dashboard v.1"
+    identifier: unchanged (click.gorka.agent).
+
+Identifiers are unchanged deliberately. Changing
+them would move the %APPDATA% data path and orphan
+the local SQLCipher database.
+
+================================================================
+W.3 - VERIFICATION
+================================================================
+
+ICON GENERATION:
+  npx @tauri-apps/cli icon scripts\icon-source.png
+    Both outputs identical byte-for-byte (18,792 byte
+    icon.ico, 103,695 byte icon.icns).
+
+CLOUD at 3063850:
+
+  cargo build --workspace       PASS. Tauri processed
+                                the new icons
+                                (tauri::generate_context!
+                                reads icon paths from
+                                tauri.conf.json).
+  gorka-website npm run build   PASS.
+  root npm run build            PASS, 15.80s.
+  owner-dashboard npm run build PASS, 2.52s.
+  cargo test --workspace        497 passed, 3 ignored,
+                                0 failed.
+
+NOT VERIFIED:
+  The desktop icon and title bar label on an actual
+  running binary. This requires `cargo run --bin
+  gorka-client` on cloud with a GUI session and
+  inspecting the window chrome. Deferred to the next
+  cloud session.
+
+================================================================
+W.4 - DEVIATIONS FROM PART IV
+================================================================
+
+D1. Icon color.
+    Q.15 locked #DE1D1E (Canada Post red).
+    Delivered #F01428 (Air Canada red) to match the
+    website's existing gorka-red Tailwind token.
+    Founder direction, 2026-10-16. The website, the
+    icon, and the accent color used throughout the
+    product now match.
+
+D2. App names.
+    Q.16 locked "GORKA Client" / "GORKA Agent".
+    Delivered "Admin dashboard v.1" / "Agent
+    dashboard v.1". Founder direction, 2026-10-16.
+    Rationale: clear function over product branding
+    on the Windows desktop label.
+
+D3. Slice order.
+    Part IV.4 ordered deployment as one block.
+    Reordered to 8.6a (icons) -> 8.6b (website
+    content) -> 8.6c (deploy). Founder direction,
+    2026-10-16. Rationale: icons baked into binaries
+    before any deployment build; website content
+    prepared before pushing to production.
+
+================================================================
+W.5 - FINDINGS THIS SESSION
+================================================================
+
+FG-W1  Edge headless screenshot flags matter.
+       The first attempt with the default profile hung
+       and produced no output. The working form
+       requires --user-data-dir="%TEMP%\edge-headless"
+       to avoid handing off to the running Edge
+       instance, and --disable-gpu to silence GPU init.
+       The benign Chromium task-manager ERROR lines
+       can be ignored.
+       Working command:
+         "C:\Program Files (x86)\Microsoft\Edge\
+          Application\msedge.exe" --headless=new
+          --disable-gpu
+          --user-data-dir="%TEMP%\edge-headless"
+          --screenshot="<abs path>.png"
+          --window-size=1024,1024
+          --default-background-color=00000000
+          --hide-scrollbars
+          --virtual-time-budget=6000
+          "file:///<abs path to icon.html>"
+
+FG-W2  Transparent PNGs render as black in Windows
+       Photos and as white/light in Edge. The founder
+       initially saw "black" and read it as the icon
+       color being wrong. It was the transparency.
+       Diagnosis: use Edge or a viewer that draws a
+       checkerboard.
+
+FG-W3  Inter's G leans visually right. Geometric
+       centering is not optical centering. The glyph
+       needs translate(-24px, ...) to look centered.
+       First pass used -8px, still looked right-leaning.
+
+FG-W4  The tauri CLI generates Android and iOS
+       variants by default. Roughly 45 extra files per
+       app. Harmless; ~90 new binary files committed.
+       Candidate for .gitignore if the project never
+       targets those platforms.
+
+FG-W5  notepad returned 0-byte files twice on the
+       icon.html write. Recovered via PowerShell
+       here-string. Consistent with earlier sessions'
+       notepad flakiness (FG25, FG26, FG30). The
+       PowerShell form is more reliable for new files.
+
+================================================================
+W.6 - PROCESS AMENDMENTS
+================================================================
+
+P-DDD  EDGE HEADLESS REQUIRES A PRIVATE
+       --user-data-dir.
+       Otherwise it hands off to the running browser
+       and produces no screenshot. FG-W1 is the
+       evidence.
+
+P-EEE  A 0-BYTE FILE AFTER A SAVE IS A SAVE THAT
+       DID NOT LAND.
+       dir the file to confirm size before assuming
+       notepad wrote it. FG-W5 is the evidence.
+
+P-FFF  FOR FIRST-TIME FILE CREATES, PREFER
+       POWERSHELL HERE-STRING OVER NOTEPAD.
+       Set-Content -Path ... -Encoding UTF8 with a
+       here-string is deterministic. Notepad on this
+       Windows install has produced 0-byte files,
+       .txt suffixes, and stale buffers multiple
+       times across sessions.
+
+P-GGG  ONE APPENDIX PER SESSION (restated, P-JJ,
+       P-M, P-V, P-Y, P-DD, P-QQ, P-UU, P-XX,
+       P-CCC). This appendix is new.
+
+================================================================
+W.7 - OPEN ITEMS
+================================================================
+
+New this session:
+  - Desktop-level icon and title bar verification
+    (deferred to next cloud GUI session).
+  - Android/iOS icon variants in git (FG-W4).
+    Candidate for .gitignore.
+  - Two pre-existing warning categories persist:
+    Next.js multiple-lockfile, Next.js
+    middleware->proxy deprecation, Vite __dirname.
+    All benign.
+
+Carried from Appendix V.7, unchanged:
+  - gorka-website/src/app/ skeleton duplication.
+  - Slice 8.6b - website content (founder preparing).
+  - Slice 8.6c - deploy.
+  - Support-OD auth reconciliation spec.
+  - OD Data Bridge spec.
+  - OI-9, OI-10, OI-11.
+  - logout does not clear gorka_od_session.
+  - Browser end-to-end OD test.
+  - OI-7, OI-8, OI-3.
+  - O1, O2, STEP 1.5, STEP 1.6.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - ACCEPTANCE - end-to-end.
+  - PF-4: local cargo check / GitHub Actions.
+
+================================================================
+W.8 - QUEUE
+================================================================
+
+DONE
+  Slices 1-7.
+  8.2, 8.3, 8.4. Appendix S.
+  8.6.5, 8.7. Appendix T.
+  8.5. Appendix U.
+  8.1. Appendix V.
+  8.6a. This appendix.
+
+IN FLIGHT
+  None.
+
+NEXT - IN ORDER
+
+  1. SLICE 8.6b - Website content.
+     Founder is preparing texts and images. When
+     ready, we build the site against the content
+     brief delivered this session. No code until
+     the content is in hand.
+
+  2. SLICE 8.6c - Deployment.
+     www.gorka.click, api.gorka.click,
+     owner.gorka.click.
+     DNS + TLS for all three.
+     JWT_SECRET_OD in production.
+     VITE_API_URL baked into both Tauri binaries.
+     /downloads/*.exe placed under
+       gorka-website/public/downloads/.
+     Live acceptance per Part IV.7.
+
+  Then the carried items.
+
+================================================================
+W.9 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I, II, III, IV, or V.
+  Does not edit prior appendices.
+  Does not start 8.6b or 8.6c.
+  Does not claim the icons have been visually
+  verified on a running binary.
+  Does not decide where the website content comes
+  from; the founder is preparing it.
+
+================================================================
+END OF APPENDIX W
+================================================================
