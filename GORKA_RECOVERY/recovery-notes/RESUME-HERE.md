@@ -7611,3 +7611,263 @@ T.11 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX T
 ================================================================
+
+================================================================
+APPENDIX U - SLICE 8.5 CLOSE
+(added v3.14, 2026-10-16)
+================================================================
+
+U.0 - WHY THIS APPENDIX EXISTS
+
+Appendix T closed 8.6.5 and 8.7. This session ran
+Slice 8.5: the Owner Dashboard organizations page.
+Code-complete, cloud-verified, functionally curl-
+tested. Owner Dashboard is now both reachable and
+useful.
+
+Prior appendices are not edited.
+
+================================================================
+U.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 28f4e59 plus the Appendix U commit that
+        follows. Pushed to origin/main.
+
+CLOUD:  at 28f4e59. Cargo build PASS, cargo test
+        497 passed / 3 ignored / 0 failed. Root npm
+        build PASS. OD npm build PASS. Backend started
+        clean. All three curl tests green.
+
+Commit this session:
+
+  28f4e59  slice 8.5: OD organizations page;
+           GET /api/admin/organizations; route and
+           sidebar entry
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -4
+    git status --short
+
+================================================================
+U.2 - WHAT SLICE 8.5 SHIPPED
+================================================================
+
+Backend:
+
+  src/backend/routes/admin.ts (new, 3.8 KB)
+    GET /api/admin/organizations
+    Five parallel queries, stitched in JS. No N+1.
+      1. organization.findMany       - the orgs
+      2. user.groupBy role=AGENT     - registered
+      3. deviceRegistration.groupBy  - online
+         (isAuthorized=true, lastSeenAt > now-5min)
+      4. user.groupBy _max lastLogin - lastActivity
+      5. license.findMany desc       - latest per org
+    Response shape per Part IV.5.5:
+      { id, name, clientType, contactEmail,
+        contactPhone, verificationStatus, createdAt,
+        lastActivity,
+        agentCounts: { registered, online, offline },
+        licenseStatus }
+
+  src/backend/index.ts
+    import adminRoutes from './routes/admin';
+    import { authenticateTokenOD } from './middleware/auth';
+    import { requireRole } from './middleware/requireRole';
+    app.use('/api/admin', authenticateTokenOD,
+            requireRole('OWNER'), adminRoutes);
+
+Owner Dashboard:
+
+  services/api.ts
+    New interfaces: OrganizationAgentCounts,
+      OrganizationRow.
+    New function: getOrganizations().
+
+  pages/OrganizationsPage.tsx (new, 6.5 KB)
+    Table view. Search by name. Loading + error +
+    retry states, matching ClientsPage conventions.
+    Columns: Name (with verificationStatus
+    sub-line), Type, Contact, Created, Agents
+    (three pills: reg / on / off), License.
+    Footer: "N of M organizations".
+
+  index.tsx
+    import OrganizationsPage
+    <Route path="/organizations" element={
+      <ProtectedRoute><OrganizationsPage /></ProtectedRoute>
+    } />
+
+  components/OwnerSidebar.tsx
+    Building2 icon imported from lucide-react.
+    Nav item: { Building2, 'Organizations',
+    '/organizations' } after Clients.
+
+================================================================
+U.3 - VERIFICATION
+================================================================
+
+CLOUD at 28f4e59:
+
+  cargo build --workspace        PASS.
+  cargo test --workspace         497 passed, 3 ignored,
+                                 0 failed.
+  npm run build (root)           PASS.
+  npm run build (owner-dashboard) PASS.
+  npx tsx src/backend/index.ts   Backend started clean.
+
+FUNCTIONAL CURL TESTS:
+
+  Test 1 - unauthenticated.
+    GET /api/admin/organizations (no token).
+    Result: HTTP 401,
+      {"success":false,"error":"No token provided"}.
+    Proves: route mounted, authenticateTokenOD runs,
+    404 ruled out.
+
+  Test 2 - OD login.
+    POST /api/auth/login with X-OD: 1.
+    Result: HTTP 200, OD-signed token, role=OWNER.
+
+  Test 3 - authenticated endpoint call.
+    GET /api/admin/organizations with the OD token.
+    Result: HTTP 200,
+      {"success":true,"data":[ ... 2 orgs ... ]}.
+    Each org has the full shape including
+    agentCounts, lastActivity, licenseStatus.
+
+OBSERVED DATA (cloud test DB):
+  Both orgs returned agentCounts {0, 0, 0}.
+  Neither org has AGENT users or DeviceRegistration
+  rows. The counts are structurally correct;
+  values are zero because the underlying data is
+  zero. Positive-value counts not exercised in this
+  session.
+
+================================================================
+U.4 - DEVIATIONS FROM PART IV.5.5
+================================================================
+
+D1. None material. The spec's field list is matched
+    exactly. lastActivity uses MAX(User.lastLogin)
+    per Resolution 2. licenseStatus uses the latest
+    License row per org, "NONE" if absent.
+
+================================================================
+U.5 - FINDINGS THIS SESSION
+================================================================
+
+FG-U1  OwnerSidebar.tsx was not edited on the first
+       pass. Both edits (Building2 import, nav item)
+       were applied on retry. No defect in the file,
+       no code change needed — the first attempt to
+       save did not land. Verification caught it.
+       No process rule needed; the verify-first
+       pattern (P-T) worked as intended.
+
+FG-U2  Part IV.5.5 said "OWNER || PLATFORM_OWNER".
+       Slice 8.6.5 already consolidated the string to
+       OWNER. The mount uses requireRole('OWNER'),
+       matching the current codebase. The Part V.4
+       correction is now the operative text.
+
+================================================================
+U.6 - OPEN ITEMS
+================================================================
+
+New this session:
+  - None. Slice 8.5 is closed.
+
+Carried from Appendix T.9, unchanged:
+  - Slice 8.1 - Website fixes + download page.
+  - Slice 8.6 - Deploy.
+  - Support-OD auth reconciliation spec.
+  - OD Data Bridge spec.
+  - OI-9, OI-10, OI-11.
+  - logout does not clear gorka_od_session.
+  - Browser end-to-end OD test not yet run.
+  - Non-OD negative case (AGENT/CLIENT with X-OD: 1)
+    not exercised via curl.
+  - OI-7, OI-8, OI-3.
+  - O1, O2, STEP 1.5, STEP 1.6.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - ACCEPTANCE - end-to-end.
+  - PF-4: local cargo check / GitHub Actions.
+
+================================================================
+U.7 - QUEUE
+================================================================
+
+DONE
+  Slices 1-7.
+  8.2, 8.3, 8.4. Appendix S.
+  8.6.5, 8.7. Appendix T.
+  8.5. This appendix.
+
+IN FLIGHT
+  None.
+
+NEXT - IN ORDER
+
+  1. SLICE 8.1 - Website fixes + download page.
+     Customer-facing. Unblocks end-to-end
+     registration.
+
+     Backend (src/backend/routes/auth.ts):
+       - registerSchema.password becomes optional.
+         Backend generates a random placeholder
+         hash. /complete-registration overwrites.
+       - Add POST /resend-verification.
+         Rate-limited. Generic 200 regardless of
+         account existence.
+       - Zod .refine() rejecting free-provider
+         email domains. 400 with disclosure.
+       - Delete redirectUrl from /login and
+         /complete-registration responses.
+
+     Website (gorka-website/):
+       - Register step 2 calls
+         /api/auth/resend-verification.
+       - Register step 1: inline email-domain
+         validation + disclosure.
+       - Register step 3 (page.tsx:145): route to
+         /download instead of redirectUrl.
+       - Login page (login/page.tsx:39): route to
+         /download.
+       - New page: /[locale]/download.
+       - i18n strings (en, es).
+
+     gorka-website/ is currently untracked. First
+     commit of the slice adds it to git.
+
+  2. SLICE 8.6 - Deployment.
+     www.gorka.click, api.gorka.click.
+     JWT_SECRET_OD in production.
+     VITE_API_URL baked into both Tauri binaries.
+     Icons (Q.15), app names (Q.16).
+     owner.gorka.click for OD.
+     Live acceptance per Part IV.7.
+
+  Then the carried items.
+
+================================================================
+U.8 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I, II, III, IV, or V.
+  Does not edit prior appendices.
+  Does not start Slice 8.1.
+  Does not claim positive-value agent counts have
+  been exercised; only structural correctness is
+  proven.
+  Does not run the browser OD test.
+
+================================================================
+END OF APPENDIX U
+================================================================
