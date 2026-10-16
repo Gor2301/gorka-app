@@ -21,7 +21,7 @@ export default function Header() {
           GORKA
         </Link>
 
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden md:flex items-center gap-6">
           {navLinks.map((link) => (
             <Link
               key={link.key}
@@ -31,6 +31,12 @@ export default function Header() {
               {t(link.key)}
             </Link>
           ))}
+          <Link
+            href="/download"
+            className="text-sm font-medium text-white bg-[#F01428] px-3 py-1.5 rounded-md hover:bg-[#F01428]/90 transition"
+          >
+            {t('download')}
+          </Link>
         </nav>
 
         <div className="flex items-center gap-3">

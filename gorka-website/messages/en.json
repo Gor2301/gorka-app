@@ -21,7 +21,7 @@
     "requirement2": "4 GB RAM",
     "requirement3": "500 MB disk space",
     "tipTitle": "User tip",
-    "tipBody": "To enlarge desktop icon labels: Settings \u2192 Accessibility \u2192 Text size.",
+    "tipBody": "To enlarge desktop icon labels: Settings → Accessibility → Text size.",
     "needHelp": "Need help?",
     "contactUs": "Contact us"
   },
@@ -30,6 +30,7 @@
     "about": "About",
     "pricing": "Pricing",
     "faq": "FAQ",
+    "download": "Download",
     "contact": "Contact",
     "bookDemo": "Book a Demo"
   },
@@ -74,7 +75,7 @@
         "number": "05",
         "category": "THE GORKA DIFFERENCE",
         "headline": "One platform. A smarter way to collect.",
-        "subheadline": "Productivity, privacy, and value\u2014designed together.",
+        "subheadline": "Productivity, privacy, and value—designed together.",
         "body": "GORKA brings local-first data architecture, encrypted synchronization, team workflows, communication integrations, and AI-assisted productivity into one collection platform. Instead of choosing between convenience and control, your organization gets a foundation designed around both."
       }
     ]
@@ -82,22 +83,34 @@
   "twoColumn": {
     "security": {
       "title": "Your data stays yours",
-      "description": "GORKA uses a local-first architecture \u2014 your data never leaves your infrastructure unless you choose to use a cloud provider.",
+      "description": "GORKA uses a local-first architecture — your data never leaves your infrastructure unless you choose to use a cloud provider.",
       "detail": "For banks and agencies handling sensitive debtor information, this means full control over compliance, security, and data sovereignty."
     },
     "copilot": {
       "title": "AI Copilot that actually helps",
-      "description": "GORKA's AI Copilot generates follow-up emails, strategy recommendations, and insights \u2014 all reviewed and approved by your team before sending.",
+      "description": "GORKA's AI Copilot generates follow-up emails, strategy recommendations, and insights — all reviewed and approved by your team before sending.",
       "detail": "Powered by Gemini, it learns your agency's tone and patterns, making every interaction more effective without sacrificing human judgment."
     }
   },
   "comparison": {
     "title": "Why GORKA",
     "rows": [
-      { "gorka": "Dynamic, automated data organization", "other": "Manual sorting, error-prone" },
-      { "gorka": "Data stays on your infrastructure", "other": "Data uploaded to third-party servers" },
-      { "gorka": "AI-assisted follow-ups", "other": "Manual tracking" },
-      { "gorka": "Built for agencies, scales to banks", "other": "One-size-fits-none" }
+      {
+        "gorka": "Dynamic, automated data organization",
+        "other": "Manual sorting, error-prone"
+      },
+      {
+        "gorka": "Data stays on your infrastructure",
+        "other": "Data uploaded to third-party servers"
+      },
+      {
+        "gorka": "AI-assisted follow-ups",
+        "other": "Manual tracking"
+      },
+      {
+        "gorka": "Built for agencies, scales to banks",
+        "other": "One-size-fits-none"
+      }
     ]
   },
   "pricing": {
@@ -108,27 +121,42 @@
         "price": "$0",
         "description": "Start small. Scale when ready.",
         "cta": "Get Started",
-        "features": ["Basic AI tools", "Limited automation", "Basic chatbot integration", "Real-time reporting"]
+        "features": [
+          "Basic AI tools",
+          "Limited automation",
+          "Basic chatbot integration",
+          "Real-time reporting"
+        ]
       },
       {
         "name": "Professional",
         "price": "$1,700",
         "description": "Full power for growing agencies.",
         "cta": "Get Started",
-        "features": ["Everything in Free", "Advanced analytics", "Premium chatbot", "Cross-platform integrations"]
+        "features": [
+          "Everything in Free",
+          "Advanced analytics",
+          "Premium chatbot",
+          "Cross-platform integrations"
+        ]
       },
       {
         "name": "Enterprise",
         "price": "Contact us",
         "description": "Custom solutions for banks and large agencies.",
         "cta": "Contact Sales",
-        "features": ["Everything in Professional", "Dedicated growth manager", "Custom reports & dashboards", "Fully customized AI"]
+        "features": [
+          "Everything in Professional",
+          "Dedicated growth manager",
+          "Custom reports & dashboards",
+          "Fully customized AI"
+        ]
       }
     ]
   },
   "faq": {
     "title": "Questions answered",
-    "intro": "GORKA helps collection teams organize their work, coordinate across devices, and make more informed decisions\u2014while keeping control of their data in their own hands. Here are answers to the questions we think matter most.",
+    "intro": "GORKA helps collection teams organize their work, coordinate across devices, and make more informed decisions—while keeping control of their data in their own hands. Here are answers to the questions we think matter most.",
     "categories": [
       {
         "title": "About GORKA",
@@ -222,7 +250,7 @@
         "items": [
           {
             "question": "What does the GORKA AI Copilot do?",
-            "answer": "The AI Copilot is designed to assist collection agents by generating recommendations and drafting email messages using approved context from the local application. It is an assistant for your team\u2014not an autonomous collection agent. Your staff remain responsible for reviewing recommendations, checking facts, and deciding what to do."
+            "answer": "The AI Copilot is designed to assist collection agents by generating recommendations and drafting email messages using approved context from the local application. It is an assistant for your team—not an autonomous collection agent. Your staff remain responsible for reviewing recommendations, checking facts, and deciding what to do."
           },
           {
             "question": "Does the AI send messages automatically?",
@@ -263,7 +291,7 @@
         "items": [
           {
             "question": "How much does GORKA cost?",
-            "answer": "GORKA offers a free plan to help organizations get started. Professional is intended for growing teams, while Enterprise pricing is tailored to organizational needs. Plan availability, feature limits, and current prices are listed on the Pricing page. External provider charges\u2014such as email, SMS, voice, or AI usage\u2014may be separate from your GORKA subscription."
+            "answer": "GORKA offers a free plan to help organizations get started. Professional is intended for growing teams, while Enterprise pricing is tailored to organizational needs. Plan availability, feature limits, and current prices are listed on the Pricing page. External provider charges—such as email, SMS, voice, or AI usage—may be separate from your GORKA subscription."
           },
           {
             "question": "What do I need to get started?",
@@ -279,7 +307,7 @@
           },
           {
             "question": "How do I get help choosing the right setup?",
-            "answer": "If you are unsure whether GORKA fits your collection process, book a demo or contact the team. We can discuss your team size, current data sources, communication providers, security requirements, and onboarding needs. We recommend resolving important requirements\u2014especially access control, data recovery, compliance, and integrations\u2014before moving production data into a new system."
+            "answer": "If you are unsure whether GORKA fits your collection process, book a demo or contact the team. We can discuss your team size, current data sources, communication providers, security requirements, and onboarding needs. We recommend resolving important requirements—especially access control, data recovery, compliance, and integrations—before moving production data into a new system."
           }
         ]
       }
@@ -297,7 +325,7 @@
   "footer": {
     "tagline": "AI-powered debt collection for agencies and banks.",
     "contact": "hello@gorka.click",
-    "copyright": "\u00a9 2026 GORKA. All rights reserved."
+    "copyright": "© 2026 GORKA. All rights reserved."
   },
   "about": {
     "title": "About GORKA",

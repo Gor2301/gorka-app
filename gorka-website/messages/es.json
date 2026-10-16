@@ -1,103 +1,116 @@
 {
   "download": {
     "title": "Descargar GORKA",
-    "systemWindows": "Windows 10 / 11 (64 bits). macOS y Linux pr\u00f3ximamente.",
+    "systemWindows": "Windows 10 / 11 (64 bits). macOS y Linux próximamente.",
     "clientTitle": "Panel del Cliente GORKA",
     "clientDescription": "Para administradores de agencia. Gestione clientes, agentes, conectores y comunicaciones.",
     "clientButton": "Descargar Panel del Cliente",
     "agentTitle": "Panel del Agente GORKA",
     "agentDescription": "Para agentes de cobro. Trabaje el plan, contacte deudores, registre resultados.",
     "agentButton": "Descargar Panel del Agente",
-    "installStepsTitle": "Pasos de instalaci\u00f3n",
+    "installStepsTitle": "Pasos de instalación",
     "installStep1": "Ejecute el instalador.",
-    "installStep2": "Permita SmartScreen (vea la nota a continuaci\u00f3n).",
-    "installStep3": "La aplicaci\u00f3n se abre en la pantalla de inicio de sesi\u00f3n.",
-    "installStep4": "Ingrese su correo electr\u00f3nico y contrase\u00f1a registrados.",
-    "installStep5": "Establezca su contrase\u00f1a de cifrado local (solo la primera vez).",
+    "installStep2": "Permita SmartScreen (vea la nota a continuación).",
+    "installStep3": "La aplicación se abre en la pantalla de inicio de sesión.",
+    "installStep4": "Ingrese su correo electrónico y contraseña registrados.",
+    "installStep5": "Establezca su contraseña de cifrado local (solo la primera vez).",
     "smartScreenTitle": "Nota sobre Windows SmartScreen",
-    "smartScreenBody": "Windows puede mostrar \"Windows protegi\u00f3 su PC\". Haga clic en M\u00e1s informaci\u00f3n, luego en Ejecutar de todas formas. El binario MVP no est\u00e1 firmado; la firma viene en producci\u00f3n.",
+    "smartScreenBody": "Windows puede mostrar \"Windows protegió su PC\". Haga clic en Más información, luego en Ejecutar de todas formas. El binario MVP no está firmado; la firma viene en producción.",
     "requirementsTitle": "Requisitos del sistema",
     "requirement1": "Windows 10 o posterior",
     "requirement2": "4 GB de RAM",
     "requirement3": "500 MB de espacio en disco",
     "tipTitle": "Consejo para el usuario",
-    "tipBody": "Para ampliar las etiquetas de los iconos del escritorio: Configuraci\u00f3n \u2192 Accesibilidad \u2192 Tama\u00f1o del texto.",
-    "needHelp": "\u00bfNecesita ayuda?",
-    "contactUs": "Cont\u00e1ctenos"
+    "tipBody": "Para ampliar las etiquetas de los iconos del escritorio: Configuración → Accesibilidad → Tamaño del texto.",
+    "needHelp": "¿Necesita ayuda?",
+    "contactUs": "Contáctenos"
   },
   "nav": {
     "home": "Inicio",
     "about": "Acerca de",
     "pricing": "Precios",
     "faq": "Preguntas",
+    "download": "Descargar",
     "contact": "Contacto",
     "bookDemo": "Reservar una Demo"
   },
   "hero": {
     "title": "Plataforma de Cobro con IA",
-    "subtitle": "Dise\u00f1ada para agencias. Lista para bancos. Automatiza cobros con Copilot de IA, comunicaciones multicanal y seguridad de datos local.",
+    "subtitle": "Diseñada para agencias. Lista para bancos. Automatiza cobros con Copilot de IA, comunicaciones multicanal y seguridad de datos local.",
     "ctaPrimary": "Empieza Gratis",
     "ctaSecondary": "Reservar una Demo"
   },
   "features": {
-    "title": "Dise\u00f1ada para cobros modernos, creada para cumplimiento",
+    "title": "Diseñada para cobros modernos, creada para cumplimiento",
     "items": [
       {
         "number": "01",
         "category": "SIMPLICIDAD Y ESCALA",
         "headline": "Software de cobro, sin la carga de TI",
         "subheadline": "Conveniencia SaaS para equipos de cobro modernos.",
-        "body": "Comience con un proceso de incorporaci\u00f3n directo, gestione su equipo y facilite el trabajo distribuido. GORKA est\u00e1 dise\u00f1ado para ayudar a las empresas de cobro en crecimiento a escalar sin la complejidad y la infraestructura tradicionalmente asociadas a los grandes sistemas empresariales."
+        "body": "Comience con un proceso de incorporación directo, gestione su equipo y facilite el trabajo distribuido. GORKA está diseñado para ayudar a las empresas de cobro en crecimiento a escalar sin la complejidad y la infraestructura tradicionalmente asociadas a los grandes sistemas empresariales."
       },
       {
         "number": "02",
-        "category": "PRIVACIDAD POR DISE\u00d1O",
+        "category": "PRIVACIDAD POR DISEÑO",
         "headline": "Conveniencia en la nube. Control local de los datos.",
-        "subheadline": "Dise\u00f1ado para proteger sus datos empresariales m\u00e1s sensibles.",
-        "body": "GORKA mantiene los datos operativos de los deudores en los dispositivos de su organizaci\u00f3n y sincroniza registros seleccionados entre dispositivos autorizados mediante cifrado. Su plataforma central est\u00e1 dise\u00f1ada para coordinar su servicio sin descifrar los registros de sus deudores."
+        "subheadline": "Diseñado para proteger sus datos empresariales más sensibles.",
+        "body": "GORKA mantiene los datos operativos de los deudores en los dispositivos de su organización y sincroniza registros seleccionados entre dispositivos autorizados mediante cifrado. Su plataforma central está diseñada para coordinar su servicio sin descifrar los registros de sus deudores."
       },
       {
         "number": "03",
         "category": "PRODUCTIVIDAD ASISTIDA POR IA",
-        "headline": "Menos rutina. Acci\u00f3n m\u00e1s informada.",
-        "subheadline": "Un Copilot de IA pr\u00e1ctico, con las personas al mando.",
-        "body": "Ayude a su equipo a realizar tareas rutinarias con recomendaciones asistidas por IA y borradores de correos electr\u00f3nicos. Sus agentes revisan las sugerencias, verifican los hechos y deciden qu\u00e9 hacer. La base de IA de GORKA est\u00e1 dise\u00f1ada para evolucionar a medida que se desarrollen nuevas capacidades de asistencia empresarial responsables."
+        "headline": "Menos rutina. Acción más informada.",
+        "subheadline": "Un Copilot de IA práctico, con las personas al mando.",
+        "body": "Ayude a su equipo a realizar tareas rutinarias con recomendaciones asistidas por IA y borradores de correos electrónicos. Sus agentes revisan las sugerencias, verifican los hechos y deciden qué hacer. La base de IA de GORKA está diseñada para evolucionar a medida que se desarrollen nuevas capacidades de asistencia empresarial responsables."
       },
       {
         "number": "04",
         "category": "VALOR ACCESIBLE",
         "headline": "Capacidades modernas. Un precio sensato.",
         "subheadline": "Herramientas profesionales sin gastos innecesarios.",
-        "body": "El software avanzado de cobro deber\u00eda estar al alcance de los equipos m\u00e1s peque\u00f1os, no solo de las grandes instituciones. GORKA busca combinar capacidades modernas con precios accesibles, para que pueda invertir en mejores flujos de trabajo sin asumir el costo y la complejidad de un sistema de TI pesado."
+        "body": "El software avanzado de cobro debería estar al alcance de los equipos más pequeños, no solo de las grandes instituciones. GORKA busca combinar capacidades modernas con precios accesibles, para que pueda invertir en mejores flujos de trabajo sin asumir el costo y la complejidad de un sistema de TI pesado."
       },
       {
         "number": "05",
         "category": "LA DIFERENCIA GORKA",
-        "headline": "Una plataforma. Una forma m\u00e1s inteligente de cobrar.",
-        "subheadline": "Productividad, privacidad y valor\u2014dise\u00f1ados juntos.",
-        "body": "GORKA re\u00fane arquitectura de datos local-first, sincronizaci\u00f3n cifrada, flujos de trabajo en equipo, integraciones de comunicaci\u00f3n y productividad asistida por IA en una sola plataforma de cobro. En lugar de elegir entre conveniencia y control, su organizaci\u00f3n obtiene una base dise\u00f1ada en torno a ambos."
+        "headline": "Una plataforma. Una forma más inteligente de cobrar.",
+        "subheadline": "Productividad, privacidad y valor—diseñados juntos.",
+        "body": "GORKA reúne arquitectura de datos local-first, sincronización cifrada, flujos de trabajo en equipo, integraciones de comunicación y productividad asistida por IA en una sola plataforma de cobro. En lugar de elegir entre conveniencia y control, su organización obtiene una base diseñada en torno a ambos."
       }
     ]
   },
   "twoColumn": {
     "security": {
       "title": "Tus datos siguen siendo tuyos",
-      "description": "GORKA usa una arquitectura local-first \u2014 tus datos nunca abandonan tu infraestructura a menos que decidas usar un proveedor de nube.",
-      "detail": "Para bancos y agencias que manejan informaci\u00f3n sensible de deudores, esto significa control total sobre cumplimiento, seguridad y soberan\u00eda de datos."
+      "description": "GORKA usa una arquitectura local-first — tus datos nunca abandonan tu infraestructura a menos que decidas usar un proveedor de nube.",
+      "detail": "Para bancos y agencias que manejan información sensible de deudores, esto significa control total sobre cumplimiento, seguridad y soberanía de datos."
     },
     "copilot": {
       "title": "Copilot de IA que realmente ayuda",
-      "description": "El Copilot de IA de GORKA genera correos de seguimiento, recomendaciones de estrategia y perspectivas \u2014 todo revisado y aprobado por tu equipo antes de enviar.",
-      "detail": "Impulsado por Gemini, aprende el tono y los patrones de tu agencia, haciendo cada interacci\u00f3n m\u00e1s efectiva sin sacrificar el juicio humano."
+      "description": "El Copilot de IA de GORKA genera correos de seguimiento, recomendaciones de estrategia y perspectivas — todo revisado y aprobado por tu equipo antes de enviar.",
+      "detail": "Impulsado por Gemini, aprende el tono y los patrones de tu agencia, haciendo cada interacción más efectiva sin sacrificar el juicio humano."
     }
   },
   "comparison": {
-    "title": "\u00bfPor qu\u00e9 GORKA?",
+    "title": "¿Por qué GORKA?",
     "rows": [
-      { "gorka": "Organizaci\u00f3n de datos din\u00e1mica y automatizada", "other": "Clasificaci\u00f3n manual, propensa a errores" },
-      { "gorka": "Los datos permanecen en tu infraestructura", "other": "Datos subidos a servidores de terceros" },
-      { "gorka": "Seguimientos asistidos por IA", "other": "Seguimiento manual" },
-      { "gorka": "Dise\u00f1ada para agencias, escala para bancos", "other": "Un tama\u00f1o que no sirve para ninguno" }
+      {
+        "gorka": "Organización de datos dinámica y automatizada",
+        "other": "Clasificación manual, propensa a errores"
+      },
+      {
+        "gorka": "Los datos permanecen en tu infraestructura",
+        "other": "Datos subidos a servidores de terceros"
+      },
+      {
+        "gorka": "Seguimientos asistidos por IA",
+        "other": "Seguimiento manual"
+      },
+      {
+        "gorka": "Diseñada para agencias, escala para bancos",
+        "other": "Un tamaño que no sirve para ninguno"
+      }
     ]
   },
   "pricing": {
@@ -106,52 +119,67 @@
       {
         "name": "Gratis",
         "price": "$0",
-        "description": "Empieza peque\u00f1o. Escala cuando est\u00e9s listo.",
+        "description": "Empieza pequeño. Escala cuando estés listo.",
         "cta": "Comenzar",
-        "features": ["Herramientas b\u00e1sicas de IA", "Automatizaci\u00f3n limitada", "Integraci\u00f3n b\u00e1sica de chatbot", "Informes en tiempo real"]
+        "features": [
+          "Herramientas básicas de IA",
+          "Automatización limitada",
+          "Integración básica de chatbot",
+          "Informes en tiempo real"
+        ]
       },
       {
         "name": "Profesional",
         "price": "$1,700",
         "description": "Todo el poder para agencias en crecimiento.",
         "cta": "Comenzar",
-        "features": ["Todo en Gratis", "An\u00e1lisis avanzado", "Chatbot premium", "Integraciones multiplataforma"]
+        "features": [
+          "Todo en Gratis",
+          "Análisis avanzado",
+          "Chatbot premium",
+          "Integraciones multiplataforma"
+        ]
       },
       {
         "name": "Empresarial",
-        "price": "Cont\u00e1ctanos",
+        "price": "Contáctanos",
         "description": "Soluciones personalizadas para bancos y grandes agencias.",
         "cta": "Contactar Ventas",
-        "features": ["Todo en Profesional", "Gestor de crecimiento dedicado", "Informes y paneles personalizados", "IA completamente personalizada"]
+        "features": [
+          "Todo en Profesional",
+          "Gestor de crecimiento dedicado",
+          "Informes y paneles personalizados",
+          "IA completamente personalizada"
+        ]
       }
     ]
   },
   "faq": {
     "title": "Preguntas respondidas",
-    "intro": "GORKA ayuda a los equipos de cobro a organizar su trabajo, coordinarse entre dispositivos y tomar decisiones m\u00e1s informadas\u2014manteniendo el control de sus datos en sus propias manos. Aqu\u00ed est\u00e1n las respuestas a las preguntas que consideramos m\u00e1s importantes.",
+    "intro": "GORKA ayuda a los equipos de cobro a organizar su trabajo, coordinarse entre dispositivos y tomar decisiones más informadas—manteniendo el control de sus datos en sus propias manos. Aquí están las respuestas a las preguntas que consideramos más importantes.",
     "categories": [
       {
         "title": "Acerca de GORKA",
         "items": [
           {
-            "question": "\u00bfQu\u00e9 es GORKA?",
-            "answer": "GORKA es una plataforma de cobro de deudas dise\u00f1ada para ayudar a las agencias de cobro y a los prestamistas a gestionar cuentas vencidas, coordinar equipos de cobro, registrar acciones y comunicaciones, y trabajar de manera m\u00e1s eficiente. Combina almacenamiento local de datos, colaboraci\u00f3n en equipo, integraciones de comunicaci\u00f3n y recomendaciones asistidas por IA en una sola plataforma."
+            "question": "¿Qué es GORKA?",
+            "answer": "GORKA es una plataforma de cobro de deudas diseñada para ayudar a las agencias de cobro y a los prestamistas a gestionar cuentas vencidas, coordinar equipos de cobro, registrar acciones y comunicaciones, y trabajar de manera más eficiente. Combina almacenamiento local de datos, colaboración en equipo, integraciones de comunicación y recomendaciones asistidas por IA en una sola plataforma."
           },
           {
-            "question": "\u00bfPara qui\u00e9n est\u00e1 dise\u00f1ado GORKA?",
-            "answer": "GORKA est\u00e1 dise\u00f1ado principalmente para agencias de cobro y peque\u00f1os prestamistas que gestionan cuentas vencidas con un equipo de agentes. Su arquitectura est\u00e1 pensada para apoyar a organizaciones que desean una mejor coordinaci\u00f3n y visibilidad sin renunciar al control de sus datos."
+            "question": "¿Para quién está diseñado GORKA?",
+            "answer": "GORKA está diseñado principalmente para agencias de cobro y pequeños prestamistas que gestionan cuentas vencidas con un equipo de agentes. Su arquitectura está pensada para apoyar a organizaciones que desean una mejor coordinación y visibilidad sin renunciar al control de sus datos."
           },
           {
-            "question": "\u00bfQu\u00e9 hace diferente a GORKA de otros softwares de cobro de deudas?",
-            "answer": "GORKA est\u00e1 construido en torno a un enfoque local-first. En lugar de depender de una base de datos central en la nube que contenga toda su informaci\u00f3n de deudores, sus aplicaciones mantienen los datos operativos en los dispositivos de su organizaci\u00f3n y sincronizan informaci\u00f3n seleccionada entre dispositivos autorizados mediante sincronizaci\u00f3n cifrada basada en eventos. GORKA tambi\u00e9n re\u00fane flujos de trabajo de cobro, colaboraci\u00f3n en equipo, integraciones de comunicaci\u00f3n externas y recomendaciones asistidas por IA en un dise\u00f1o consciente de la privacidad."
+            "question": "¿Qué hace diferente a GORKA de otros softwares de cobro de deudas?",
+            "answer": "GORKA está construido en torno a un enfoque local-first. En lugar de depender de una base de datos central en la nube que contenga toda su información de deudores, sus aplicaciones mantienen los datos operativos en los dispositivos de su organización y sincronizan información seleccionada entre dispositivos autorizados mediante sincronización cifrada basada en eventos. GORKA también reúne flujos de trabajo de cobro, colaboración en equipo, integraciones de comunicación externas y recomendaciones asistidas por IA en un diseño consciente de la privacidad."
           },
           {
-            "question": "\u00bfEs GORKA adecuado para una agencia peque\u00f1a, o es solo para grandes organizaciones?",
-            "answer": "GORKA est\u00e1 pensado para servir a equipos de cobro de diferentes tama\u00f1os, comenzando por agencias de cobro y prestamistas m\u00e1s peque\u00f1os. Puede comenzar con su propio flujo de trabajo y evaluar si las funciones disponibles satisfacen las necesidades operativas de su equipo antes de expandirse."
+            "question": "¿Es GORKA adecuado para una agencia pequeña, o es solo para grandes organizaciones?",
+            "answer": "GORKA está pensado para servir a equipos de cobro de diferentes tamaños, comenzando por agencias de cobro y prestamistas más pequeños. Puede comenzar con su propio flujo de trabajo y evaluar si las funciones disponibles satisfacen las necesidades operativas de su equipo antes de expandirse."
           },
           {
-            "question": "\u00bfReemplaza GORKA mi proceso de cobro existente?",
-            "answer": "GORKA est\u00e1 dise\u00f1ado para apoyar y mejorar su flujo de trabajo de cobro, no para eliminar el criterio de su equipo. Su organizaci\u00f3n sigue siendo responsable de sus pol\u00edticas de cobro, decisiones y comunicaciones."
+            "question": "¿Reemplaza GORKA mi proceso de cobro existente?",
+            "answer": "GORKA está diseñado para apoyar y mejorar su flujo de trabajo de cobro, no para eliminar el criterio de su equipo. Su organización sigue siendo responsable de sus políticas de cobro, decisiones y comunicaciones."
           }
         ]
       },
@@ -159,36 +187,36 @@
         "title": "Privacidad y Seguridad",
         "items": [
           {
-            "question": "\u00bfD\u00f3nde se almacenan mis datos?",
-            "answer": "Las aplicaciones Cliente y Agente de GORKA mantienen los datos operativos localmente en los dispositivos de su organizaci\u00f3n. La informaci\u00f3n seleccionada puede sincronizarse entre dispositivos autorizados mediante sincronizaci\u00f3n cifrada basada en eventos. El Control Plane central de GORKA admite funciones como autenticaci\u00f3n, gesti\u00f3n de organizaciones y dispositivos, y coordinaci\u00f3n de servicios. No est\u00e1 dise\u00f1ado para almacenar ni descifrar los registros de sus deudores."
+            "question": "¿Dónde se almacenan mis datos?",
+            "answer": "Las aplicaciones Cliente y Agente de GORKA mantienen los datos operativos localmente en los dispositivos de su organización. La información seleccionada puede sincronizarse entre dispositivos autorizados mediante sincronización cifrada basada en eventos. El Control Plane central de GORKA admite funciones como autenticación, gestión de organizaciones y dispositivos, y coordinación de servicios. No está diseñado para almacenar ni descifrar los registros de sus deudores."
           },
           {
-            "question": "\u00bfPueden los servidores centrales de GORKA leer mis datos de deudores?",
-            "answer": "La arquitectura de GORKA est\u00e1 dise\u00f1ada para que el Control Plane central no pueda descifrar los datos de deudores almacenados localmente ni leer la informaci\u00f3n de deudores que se transmite por el canal de sincronizaci\u00f3n cifrado. Esta frontera es un principio arquitect\u00f3nico central. Sin embargo, no significa que toda la informaci\u00f3n involucrada en cada funci\u00f3n permanezca local: los servicios externos pueden recibir datos cuando usted elige utilizarlos."
+            "question": "¿Pueden los servidores centrales de GORKA leer mis datos de deudores?",
+            "answer": "La arquitectura de GORKA está diseñada para que el Control Plane central no pueda descifrar los datos de deudores almacenados localmente ni leer la información de deudores que se transmite por el canal de sincronización cifrado. Esta frontera es un principio arquitectónico central. Sin embargo, no significa que toda la información involucrada en cada función permanezca local: los servicios externos pueden recibir datos cuando usted elige utilizarlos."
           },
           {
-            "question": "\u00bfEnv\u00eda GORKA mis datos de deudores a la nube?",
-            "answer": "No como una base de datos de deudores completa almacenada centralmente. GORKA est\u00e1 dise\u00f1ado para mantener los datos operativos de los deudores en los dispositivos de su organizaci\u00f3n y sincronizar registros seleccionados de forma cifrada. Algunas funciones involucran servicios externos. Por ejemplo, enviar un correo electr\u00f3nico requiere comunicarse con un proveedor de correo, y usar un proveedor externo de IA implica enviar una solicitud aprobada a ese proveedor. La informaci\u00f3n compartida depende de la funci\u00f3n y su configuraci\u00f3n."
+            "question": "¿Envía GORKA mis datos de deudores a la nube?",
+            "answer": "No como una base de datos de deudores completa almacenada centralmente. GORKA está diseñado para mantener los datos operativos de los deudores en los dispositivos de su organización y sincronizar registros seleccionados de forma cifrada. Algunas funciones involucran servicios externos. Por ejemplo, enviar un correo electrónico requiere comunicarse con un proveedor de correo, y usar un proveedor externo de IA implica enviar una solicitud aprobada a ese proveedor. La información compartida depende de la función y su configuración."
           },
           {
-            "question": "\u00bfEst\u00e1n mis datos cifrados?",
-            "answer": "GORKA utiliza cifrado para la protecci\u00f3n de la base de datos local y para la sincronizaci\u00f3n entre dispositivos autorizados. Su dise\u00f1o de sincronizaci\u00f3n utiliza cifrado autenticado para proteger los datos de eventos en tr\u00e1nsito. El cifrado es una capa de seguridad, no una garant\u00eda contra todas las amenazas. Tambi\u00e9n importan la seguridad del dispositivo, el acceso a la cuenta, el manejo de credenciales, las copias de seguridad y las pr\u00e1cticas operativas de su organizaci\u00f3n."
+            "question": "¿Están mis datos cifrados?",
+            "answer": "GORKA utiliza cifrado para la protección de la base de datos local y para la sincronización entre dispositivos autorizados. Su diseño de sincronización utiliza cifrado autenticado para proteger los datos de eventos en tránsito. El cifrado es una capa de seguridad, no una garantía contra todas las amenazas. También importan la seguridad del dispositivo, el acceso a la cuenta, el manejo de credenciales, las copias de seguridad y las prácticas operativas de su organización."
           },
           {
-            "question": "\u00bfQu\u00e9 sucede si un empleado deja mi organizaci\u00f3n?",
-            "answer": "El acceso debe gestionarse a trav\u00e9s de los procesos de administraci\u00f3n de usuarios y dispositivos de su organizaci\u00f3n. Debe revisar y revocar el acceso donde sea compatible cuando un empleado se va. Limitaci\u00f3n importante: el MVP actual no proporciona identidad criptogr\u00e1fica por m\u00e1quina, revocaci\u00f3n criptogr\u00e1fica de dispositivos ni rotaci\u00f3n de claves de organizaci\u00f3n. Por lo tanto, no debe asumirse que eliminar una cuenta o un dispositivo invalide las copias de las claves de cifrado o los datos que el dispositivo ya posee. Las organizaciones deben establecer procedimientos adecuados de desvinculaci\u00f3n y seguridad de dispositivos."
+            "question": "¿Qué sucede si un empleado deja mi organización?",
+            "answer": "El acceso debe gestionarse a través de los procesos de administración de usuarios y dispositivos de su organización. Debe revisar y revocar el acceso donde sea compatible cuando un empleado se va. Limitación importante: el MVP actual no proporciona identidad criptográfica por máquina, revocación criptográfica de dispositivos ni rotación de claves de organización. Por lo tanto, no debe asumirse que eliminar una cuenta o un dispositivo invalide las copias de las claves de cifrado o los datos que el dispositivo ya posee. Las organizaciones deben establecer procedimientos adecuados de desvinculación y seguridad de dispositivos."
           },
           {
-            "question": "\u00bfPuede GORKA acceder a mis datos sin mi permiso?",
-            "answer": "La arquitectura de GORKA est\u00e1 dise\u00f1ada para impedir que el Control Plane central descifre los registros locales de deudores. El acceso a las aplicaciones y sus datos sigue dependiendo de la seguridad del dispositivo, la autenticaci\u00f3n, los permisos de usuario y qui\u00e9n tiene acceso a la clave de cifrado de la organizaci\u00f3n. Debe proteger las credenciales de usuario, asegurar sus dispositivos y limitar el acceso al personal autorizado."
+            "question": "¿Puede GORKA acceder a mis datos sin mi permiso?",
+            "answer": "La arquitectura de GORKA está diseñada para impedir que el Control Plane central descifre los registros locales de deudores. El acceso a las aplicaciones y sus datos sigue dependiendo de la seguridad del dispositivo, la autenticación, los permisos de usuario y quién tiene acceso a la clave de cifrado de la organización. Debe proteger las credenciales de usuario, asegurar sus dispositivos y limitar el acceso al personal autorizado."
           },
           {
-            "question": "\u00bfQu\u00e9 sucede si un dispositivo se pierde o se da\u00f1a?",
-            "answer": "Un dispositivo perdido o da\u00f1ado puede hacer que la informaci\u00f3n almacenada localmente no est\u00e9 disponible. Otros dispositivos autorizados pueden tener copias sincronizadas de los registros elegibles, pero la sincronizaci\u00f3n no sustituye una copia de seguridad verificada. Su organizaci\u00f3n debe mantener un procedimiento de copia de seguridad y recuperaci\u00f3n adecuado a sus requisitos operativos y legales."
+            "question": "¿Qué sucede si un dispositivo se pierde o se daña?",
+            "answer": "Un dispositivo perdido o dañado puede hacer que la información almacenada localmente no esté disponible. Otros dispositivos autorizados pueden tener copias sincronizadas de los registros elegibles, pero la sincronización no sustituye una copia de seguridad verificada. Su organización debe mantener un procedimiento de copia de seguridad y recuperación adecuado a sus requisitos operativos y legales."
           },
           {
-            "question": "\u00bfGarantiza GORKA el cumplimiento de las leyes de cobro de deudas y privacidad?",
-            "answer": "Ning\u00fan software puede garantizar el cumplimiento en todas las jurisdicciones o situaciones empresariales. GORKA puede respaldar flujos de trabajo m\u00e1s organizados y comunicaciones controladas, pero su organizaci\u00f3n sigue siendo responsable de los requisitos aplicables de cobro de deudas, privacidad, protecci\u00f3n al consumidor, mantenimiento de registros y comunicaciones. Debe revisar su uso previsto de GORKA con asesores legales o de cumplimiento calificados en las jurisdicciones donde opera."
+            "question": "¿Garantiza GORKA el cumplimiento de las leyes de cobro de deudas y privacidad?",
+            "answer": "Ningún software puede garantizar el cumplimiento en todas las jurisdicciones o situaciones empresariales. GORKA puede respaldar flujos de trabajo más organizados y comunicaciones controladas, pero su organización sigue siendo responsable de los requisitos aplicables de cobro de deudas, privacidad, protección al consumidor, mantenimiento de registros y comunicaciones. Debe revisar su uso previsto de GORKA con asesores legales o de cumplimiento calificados en las jurisdicciones donde opera."
           }
         ]
       },
@@ -196,24 +224,24 @@
         "title": "Primeros Pasos",
         "items": [
           {
-            "question": "\u00bfC\u00f3mo cargo mis cuentas en GORKA?",
-            "answer": "El flujo de incorporaci\u00f3n previsto comienza con la importaci\u00f3n de un archivo CSV. La experiencia de importaci\u00f3n de GORKA est\u00e1 dise\u00f1ada para ayudar a identificar las columnas de su archivo, de modo que no tenga que preparar cada archivo seg\u00fan una plantilla r\u00edgida. Antes de importar datos reales de clientes, revise los campos admitidos y valide la importaci\u00f3n con una muestra peque\u00f1a. Otros formatos de archivo e integraciones directas pueden introducirse a medida que el producto evolucione."
+            "question": "¿Cómo cargo mis cuentas en GORKA?",
+            "answer": "El flujo de incorporación previsto comienza con la importación de un archivo CSV. La experiencia de importación de GORKA está diseñada para ayudar a identificar las columnas de su archivo, de modo que no tenga que preparar cada archivo según una plantilla rígida. Antes de importar datos reales de clientes, revise los campos admitidos y valide la importación con una muestra pequeña. Otros formatos de archivo e integraciones directas pueden introducirse a medida que el producto evolucione."
           },
           {
-            "question": "\u00bfPuedo importar datos desde mi sistema de cobro existente?",
-            "answer": "Puede comenzar con exportaciones CSV compatibles desde su sistema existente. Si hay una conexi\u00f3n directa disponible depende del sistema de origen y de las integraciones compatibles con GORKA. Si depende de una base de datos, CRM, sistema de gesti\u00f3n de pr\u00e9stamos o plataforma de cobro espec\u00edficos, analice con nosotros los campos de importaci\u00f3n necesarios y el proceso de migraci\u00f3n antes de comprometerse con una migraci\u00f3n."
+            "question": "¿Puedo importar datos desde mi sistema de cobro existente?",
+            "answer": "Puede comenzar con exportaciones CSV compatibles desde su sistema existente. Si hay una conexión directa disponible depende del sistema de origen y de las integraciones compatibles con GORKA. Si depende de una base de datos, CRM, sistema de gestión de préstamos o plataforma de cobro específicos, analice con nosotros los campos de importación necesarios y el proceso de migración antes de comprometerse con una migración."
           },
           {
-            "question": "\u00bfPuede mi equipo trabajar junto en varios dispositivos?",
-            "answer": "S\u00ed. Las aplicaciones Cliente y Agente de GORKA est\u00e1n dise\u00f1adas para coordinarse mediante sincronizaci\u00f3n cifrada basada en eventos. Los registros seleccionados se pueden compartir entre dispositivos autorizados sin sincronizar toda la base de datos local. No todas las categor\u00edas de datos se sincronizan. Por ejemplo, las deudas y los documentos son solo locales en el alcance de sincronizaci\u00f3n actual, mientras que los registros elegibles de deudores, las acciones y los registros de comunicaciones pueden sincronizarse. Planifique su flujo de trabajo en torno a estas fronteras."
+            "question": "¿Puede mi equipo trabajar junto en varios dispositivos?",
+            "answer": "Sí. Las aplicaciones Cliente y Agente de GORKA están diseñadas para coordinarse mediante sincronización cifrada basada en eventos. Los registros seleccionados se pueden compartir entre dispositivos autorizados sin sincronizar toda la base de datos local. No todas las categorías de datos se sincronizan. Por ejemplo, las deudas y los documentos son solo locales en el alcance de sincronización actual, mientras que los registros elegibles de deudores, las acciones y los registros de comunicaciones pueden sincronizarse. Planifique su flujo de trabajo en torno a estas fronteras."
           },
           {
-            "question": "\u00bfQu\u00e9 sucede cuando un dispositivo est\u00e1 desconectado?",
-            "answer": "La arquitectura local-first est\u00e1 pensada para permitir que las aplicaciones funcionen con datos disponibles localmente sin depender de una base de datos central para cada operaci\u00f3n. La sincronizaci\u00f3n puede reanudarse cuando las conexiones necesarias est\u00e9n disponibles. Sin embargo, la informaci\u00f3n creada en un dispositivo puede no estar disponible en otro hasta que se sincronice. Su equipo debe comprender qu\u00e9 registros son solo locales y c\u00f3mo reconocer el estado de sincronizaci\u00f3n."
+            "question": "¿Qué sucede cuando un dispositivo está desconectado?",
+            "answer": "La arquitectura local-first está pensada para permitir que las aplicaciones funcionen con datos disponibles localmente sin depender de una base de datos central para cada operación. La sincronización puede reanudarse cuando las conexiones necesarias estén disponibles. Sin embargo, la información creada en un dispositivo puede no estar disponible en otro hasta que se sincronice. Su equipo debe comprender qué registros son solo locales y cómo reconocer el estado de sincronización."
           },
           {
-            "question": "\u00bfPuedo controlar a qu\u00e9 puede acceder cada empleado?",
-            "answer": "GORKA admite la gesti\u00f3n de organizaciones y usuarios, con roles que distinguen a propietarios, clientes y agentes. El acceso debe configurarse seg\u00fan las responsabilidades de cada persona. No asuma que todas las funciones admiten permisos detallados, restricciones por sucursal o visibilidad solo por asignaci\u00f3n. Confirme los controles de acceso exactos disponibles en su versi\u00f3n antes de depender de ellos para un flujo de trabajo espec\u00edfico."
+            "question": "¿Puedo controlar a qué puede acceder cada empleado?",
+            "answer": "GORKA admite la gestión de organizaciones y usuarios, con roles que distinguen a propietarios, clientes y agentes. El acceso debe configurarse según las responsabilidades de cada persona. No asuma que todas las funciones admiten permisos detallados, restricciones por sucursal o visibilidad solo por asignación. Confirme los controles de acceso exactos disponibles en su versión antes de depender de ellos para un flujo de trabajo específico."
           }
         ]
       },
@@ -221,40 +249,40 @@
         "title": "IA e Integraciones",
         "items": [
           {
-            "question": "\u00bfQu\u00e9 hace el Copilot de IA de GORKA?",
-            "answer": "El Copilot de IA est\u00e1 dise\u00f1ado para asistir a los agentes de cobro generando recomendaciones y redactando correos electr\u00f3nicos a partir de contexto aprobado de la aplicaci\u00f3n local. Es un asistente para su equipo\u2014no un agente de cobro aut\u00f3nomo. Su personal sigue siendo responsable de revisar las recomendaciones, verificar los hechos y decidir qu\u00e9 hacer."
+            "question": "¿Qué hace el Copilot de IA de GORKA?",
+            "answer": "El Copilot de IA está diseñado para asistir a los agentes de cobro generando recomendaciones y redactando correos electrónicos a partir de contexto aprobado de la aplicación local. Es un asistente para su equipo—no un agente de cobro autónomo. Su personal sigue siendo responsable de revisar las recomendaciones, verificar los hechos y decidir qué hacer."
           },
           {
-            "question": "\u00bfEl AI env\u00eda mensajes autom\u00e1ticamente?",
-            "answer": "No. El flujo de trabajo actual del Copilot est\u00e1 dise\u00f1ado en torno a la revisi\u00f3n y aprobaci\u00f3n humanas. No env\u00eda mensajes de forma independiente sin la acci\u00f3n requerida del usuario. Antes de enviar, GORKA aplica las validaciones y comprobaciones de cumplimiento pertinentes. Un borrador que no pase las comprobaciones aplicables no debe enviarse a trav\u00e9s del flujo de trabajo del Copilot."
+            "question": "¿El AI envía mensajes automáticamente?",
+            "answer": "No. El flujo de trabajo actual del Copilot está diseñado en torno a la revisión y aprobación humanas. No envía mensajes de forma independiente sin la acción requerida del usuario. Antes de enviar, GORKA aplica las validaciones y comprobaciones de cumplimiento pertinentes. Un borrador que no pase las comprobaciones aplicables no debe enviarse a través del flujo de trabajo del Copilot."
           },
           {
-            "question": "\u00bfVe la IA toda mi informaci\u00f3n de deudores?",
-            "answer": "No. El Copilot est\u00e1 dise\u00f1ado para usar una lista de permitidos de contexto aprobado en lugar de enviar autom\u00e1ticamente un registro completo de deudor a un proveedor de IA. El sistema est\u00e1 dise\u00f1ado para excluir identificadores directos y otros detalles sensibles no aprobados del contexto de IA. La informaci\u00f3n real enviada depende de la funci\u00f3n configurada y de la solicitud del proveedor, por lo que las organizaciones deben revisar su configuraci\u00f3n de IA y los t\u00e9rminos del proveedor antes de habilitarla."
+            "question": "¿Ve la IA toda mi información de deudores?",
+            "answer": "No. El Copilot está diseñado para usar una lista de permitidos de contexto aprobado en lugar de enviar automáticamente un registro completo de deudor a un proveedor de IA. El sistema está diseñado para excluir identificadores directos y otros detalles sensibles no aprobados del contexto de IA. La información real enviada depende de la función configurada y de la solicitud del proveedor, por lo que las organizaciones deben revisar su configuración de IA y los términos del proveedor antes de habilitarla."
           },
           {
-            "question": "\u00bfQu\u00e9 proveedor de IA usa GORKA?",
-            "answer": "La arquitectura del Copilot admite proveedores externos de IA configurados, incluidos Gemini y proveedores compatibles que usan una API estilo OpenAI. La disponibilidad depende de la versi\u00f3n actual y de la configuraci\u00f3n. El proveedor procesa la solicitud de IA fuera de GORKA. Revise el manejo de datos, la retenci\u00f3n y los t\u00e9rminos de privacidad del proveedor antes de usarlo con datos empresariales."
+            "question": "¿Qué proveedor de IA usa GORKA?",
+            "answer": "La arquitectura del Copilot admite proveedores externos de IA configurados, incluidos Gemini y proveedores compatibles que usan una API estilo OpenAI. La disponibilidad depende de la versión actual y de la configuración. El proveedor procesa la solicitud de IA fuera de GORKA. Revise el manejo de datos, la retención y los términos de privacidad del proveedor antes de usarlo con datos empresariales."
           },
           {
-            "question": "\u00bfPuede la IA cometer errores?",
-            "answer": "S\u00ed. Las recomendaciones y los mensajes generados por IA pueden ser incompletos, enga\u00f1osos o factualmente incorrectos. El flujo de trabajo del Copilot de GORKA incluye validaciones destinadas a detectar ciertos problemas, pero ninguna comprobaci\u00f3n automatizada puede garantizar que cada recomendaci\u00f3n sea correcta. Los agentes deben verificar los hechos importantes, revisar la redacci\u00f3n propuesta y seguir las pol\u00edticas organizativas antes de actuar sobre una recomendaci\u00f3n."
+            "question": "¿Puede la IA cometer errores?",
+            "answer": "Sí. Las recomendaciones y los mensajes generados por IA pueden ser incompletos, engañosos o factualmente incorrectos. El flujo de trabajo del Copilot de GORKA incluye validaciones destinadas a detectar ciertos problemas, pero ninguna comprobación automatizada puede garantizar que cada recomendación sea correcta. Los agentes deben verificar los hechos importantes, revisar la redacción propuesta y seguir las políticas organizativas antes de actuar sobre una recomendación."
           },
           {
-            "question": "\u00bfUsa GORKA IA para decidir qu\u00e9 deudores merecen acci\u00f3n de cobro?",
-            "answer": "El Copilot est\u00e1 dise\u00f1ado para respaldar recomendaciones y redacci\u00f3n, no para reemplazar el criterio humano con decisiones de cobro aut\u00f3nomas. Su alcance actual no debe confundirse con un sistema de puntuaci\u00f3n predictiva sin restricciones ni con un sistema que decide de manera independiente a qui\u00e9n perseguir. Su organizaci\u00f3n sigue siendo responsable de pr\u00e1cticas de cobro justas, legales y apropiadas."
+            "question": "¿Usa GORKA IA para decidir qué deudores merecen acción de cobro?",
+            "answer": "El Copilot está diseñado para respaldar recomendaciones y redacción, no para reemplazar el criterio humano con decisiones de cobro autónomas. Su alcance actual no debe confundirse con un sistema de puntuación predictiva sin restricciones ni con un sistema que decide de manera independiente a quién perseguir. Su organización sigue siendo responsable de prácticas de cobro justas, legales y apropiadas."
           },
           {
-            "question": "\u00bfPuedo enviar correos electr\u00f3nicos o mensajes de texto desde GORKA?",
-            "answer": "La arquitectura de conectores de GORKA admite servicios de comunicaci\u00f3n externos, incluidos proveedores de correo electr\u00f3nico y SMS. Los servicios disponibles para usted dependen de la versi\u00f3n actual, su configuraci\u00f3n y las credenciales de su proveedor. Usar un proveedor externo significa que el contenido del mensaje y la informaci\u00f3n de entrega relevantes deben compartirse con ese proveedor para realizar el servicio solicitado."
+            "question": "¿Puedo enviar correos electrónicos o mensajes de texto desde GORKA?",
+            "answer": "La arquitectura de conectores de GORKA admite servicios de comunicación externos, incluidos proveedores de correo electrónico y SMS. Los servicios disponibles para usted dependen de la versión actual, su configuración y las credenciales de su proveedor. Usar un proveedor externo significa que el contenido del mensaje y la información de entrega relevantes deben compartirse con ese proveedor para realizar el servicio solicitado."
           },
           {
-            "question": "\u00bfNecesito mis propias cuentas y credenciales de proveedor?",
-            "answer": "Depende de la integraci\u00f3n. Algunos servicios compatibles utilizan un modelo de proveedor gestionado, mientras que otros utilizan un arreglo de traiga-su-propio-proveedor en el que su organizaci\u00f3n proporciona sus propias credenciales. Los requisitos aplicables, los costos y los pasos de configuraci\u00f3n deben verificarse para cada conector antes de habilitarlo."
+            "question": "¿Necesito mis propias cuentas y credenciales de proveedor?",
+            "answer": "Depende de la integración. Algunos servicios compatibles utilizan un modelo de proveedor gestionado, mientras que otros utilizan un arreglo de traiga-su-propio-proveedor en el que su organización proporciona sus propias credenciales. Los requisitos aplicables, los costos y los pasos de configuración deben verificarse para cada conector antes de habilitarlo."
           },
           {
-            "question": "\u00bfAlmacena GORKA mis contrase\u00f1as o claves API de proveedores de comunicaci\u00f3n en su nube?",
-            "answer": "La arquitectura de GORKA est\u00e1 dise\u00f1ada para mantener las credenciales de proveedores fuera del Control Plane central. Las credenciales para las integraciones compatibles de traiga-su-propio-proveedor se almacenan localmente en la base de datos protegida de la aplicaci\u00f3n y pueden sincronizarse de forma cifrada con dispositivos autorizados que las necesiten. Usted sigue siendo responsable de proteger sus cuentas de proveedor y de seguir las pautas de gesti\u00f3n de credenciales del proveedor."
+            "question": "¿Almacena GORKA mis contraseñas o claves API de proveedores de comunicación en su nube?",
+            "answer": "La arquitectura de GORKA está diseñada para mantener las credenciales de proveedores fuera del Control Plane central. Las credenciales para las integraciones compatibles de traiga-su-propio-proveedor se almacenan localmente en la base de datos protegida de la aplicación y pueden sincronizarse de forma cifrada con dispositivos autorizados que las necesiten. Usted sigue siendo responsable de proteger sus cuentas de proveedor y de seguir las pautas de gestión de credenciales del proveedor."
           }
         ]
       },
@@ -262,136 +290,136 @@
         "title": "Precios y Soporte",
         "items": [
           {
-            "question": "\u00bfCu\u00e1nto cuesta GORKA?",
-            "answer": "GORKA ofrece un plan gratuito para ayudar a las organizaciones a comenzar. Professional est\u00e1 pensado para equipos en crecimiento, mientras que el precio Enterprise se adapta a las necesidades organizativas. La disponibilidad de planes, los l\u00edmites de funciones y los precios actuales se enumeran en la p\u00e1gina de Precios. Los cargos de proveedores externos\u2014como correo electr\u00f3nico, SMS, voz o uso de IA\u2014pueden ser independientes de su suscripci\u00f3n a GORKA."
+            "question": "¿Cuánto cuesta GORKA?",
+            "answer": "GORKA ofrece un plan gratuito para ayudar a las organizaciones a comenzar. Professional está pensado para equipos en crecimiento, mientras que el precio Enterprise se adapta a las necesidades organizativas. La disponibilidad de planes, los límites de funciones y los precios actuales se enumeran en la página de Precios. Los cargos de proveedores externos—como correo electrónico, SMS, voz o uso de IA—pueden ser independientes de su suscripción a GORKA."
           },
           {
-            "question": "\u00bfQu\u00e9 necesito para comenzar?",
-            "answer": "Puede comenzar creando una cuenta y verificando su correo electr\u00f3nico. El flujo de incorporaci\u00f3n actual est\u00e1 dise\u00f1ado en torno a descargar la aplicaci\u00f3n Cliente de GORKA para Windows, iniciar sesi\u00f3n, completar la configuraci\u00f3n inicial e importar su primer archivo de datos compatible. Necesitar\u00e1 acceso adecuado al dispositivo donde instale la aplicaci\u00f3n y autorizaci\u00f3n para usar los datos que importe."
+            "question": "¿Qué necesito para comenzar?",
+            "answer": "Puede comenzar creando una cuenta y verificando su correo electrónico. El flujo de incorporación actual está diseñado en torno a descargar la aplicación Cliente de GORKA para Windows, iniciar sesión, completar la configuración inicial e importar su primer archivo de datos compatible. Necesitará acceso adecuado al dispositivo donde instale la aplicación y autorización para usar los datos que importe."
           },
           {
-            "question": "\u00bfFunciona GORKA en Mac, Linux o dispositivos m\u00f3viles?",
-            "answer": "El flujo de incorporaci\u00f3n e instalaci\u00f3n actual se centra en aplicaciones de escritorio de Windows. No asuma que las versiones para Mac, Linux o m\u00f3viles est\u00e1n disponibles a menos que est\u00e9n listadas expl\u00edcitamente en el sitio web."
+            "question": "¿Funciona GORKA en Mac, Linux o dispositivos móviles?",
+            "answer": "El flujo de incorporación e instalación actual se centra en aplicaciones de escritorio de Windows. No asuma que las versiones para Mac, Linux o móviles están disponibles a menos que estén listadas explícitamente en el sitio web."
           },
           {
-            "question": "\u00bfPuedo probar GORKA antes de pagar?",
-            "answer": "GORKA tiene un plan gratuito destinado a permitir que los posibles clientes comiencen a evaluar la plataforma. Consulte la p\u00e1gina de Precios para conocer los l\u00edmites actuales y las funciones incluidas. Para una evaluaci\u00f3n, use una muestra de datos peque\u00f1a y controlada, y verifique que los flujos de trabajo disponibles se ajusten a sus requisitos antes de migrar registros de producci\u00f3n."
+            "question": "¿Puedo probar GORKA antes de pagar?",
+            "answer": "GORKA tiene un plan gratuito destinado a permitir que los posibles clientes comiencen a evaluar la plataforma. Consulte la página de Precios para conocer los límites actuales y las funciones incluidas. Para una evaluación, use una muestra de datos pequeña y controlada, y verifique que los flujos de trabajo disponibles se ajusten a sus requisitos antes de migrar registros de producción."
           },
           {
-            "question": "\u00bfC\u00f3mo obtengo ayuda para elegir la configuraci\u00f3n adecuada?",
-            "answer": "Si no est\u00e1 seguro de si GORKA se ajusta a su proceso de cobro, reserve una demostraci\u00f3n o contacte al equipo. Podemos analizar el tama\u00f1o de su equipo, sus fuentes de datos actuales, sus proveedores de comunicaci\u00f3n, sus requisitos de seguridad y sus necesidades de incorporaci\u00f3n. Recomendamos resolver los requisitos importantes\u2014especialmente control de acceso, recuperaci\u00f3n de datos, cumplimiento e integraciones\u2014antes de mover datos de producci\u00f3n a un nuevo sistema."
+            "question": "¿Cómo obtengo ayuda para elegir la configuración adecuada?",
+            "answer": "Si no está seguro de si GORKA se ajusta a su proceso de cobro, reserve una demostración o contacte al equipo. Podemos analizar el tamaño de su equipo, sus fuentes de datos actuales, sus proveedores de comunicación, sus requisitos de seguridad y sus necesidades de incorporación. Recomendamos resolver los requisitos importantes—especialmente control de acceso, recuperación de datos, cumplimiento e integraciones—antes de mover datos de producción a un nuevo sistema."
           }
         ]
       }
     ],
     "closing": {
-      "title": "\u00bfA\u00fan tiene preguntas?",
-      "body": "Cu\u00e9ntenos sobre su flujo de trabajo de cobro y qu\u00e9 necesita mejorar. Podemos ayudarle a evaluar si GORKA es la opci\u00f3n adecuada para su organizaci\u00f3n.",
-      "cta": "Cont\u00e1ctenos"
+      "title": "¿Aún tiene preguntas?",
+      "body": "Cuéntenos sobre su flujo de trabajo de cobro y qué necesita mejorar. Podemos ayudarle a evaluar si GORKA es la opción adecuada para su organización.",
+      "cta": "Contáctenos"
     }
   },
   "finalCta": {
-    "title": "\u00bfListo para transformar tu flujo de trabajo de cobros?",
+    "title": "¿Listo para transformar tu flujo de trabajo de cobros?",
     "cta": "Reservar una Demo Gratis"
   },
   "footer": {
     "tagline": "Cobro con IA para agencias y bancos.",
     "contact": "hello@gorka.click",
-    "copyright": "\u00a9 2026 GORKA. Todos los derechos reservados."
+    "copyright": "© 2026 GORKA. Todos los derechos reservados."
   },
   "about": {
     "title": "Acerca de GORKA",
-    "content": "GORKA fue creado para resolver el caos de los flujos de trabajo manuales de cobro. Combinamos IA, automatizaci\u00f3n y seguridad local para ayudar a agencias y bancos a cobrar de manera m\u00e1s inteligente."
+    "content": "GORKA fue creado para resolver el caos de los flujos de trabajo manuales de cobro. Combinamos IA, automatización y seguridad local para ayudar a agencias y bancos a cobrar de manera más inteligente."
   },
   "contact": {
-    "title": "Cont\u00e1ctanos",
+    "title": "Contáctanos",
     "name": "Nombre",
-    "email": "Correo electr\u00f3nico",
+    "email": "Correo electrónico",
     "company": "Empresa (opcional)",
     "message": "Mensaje",
     "submit": "Enviar mensaje",
-    "success": "\u00a1Mensaje enviado con \u00e9xito!",
-    "error": "Algo sali\u00f3 mal. Por favor, int\u00e9ntalo de nuevo."
+    "success": "¡Mensaje enviado con éxito!",
+    "error": "Algo salió mal. Por favor, inténtalo de nuevo."
   },
   "auth": {
     "register": {
       "title": "Comienza tu viaje con GORKA",
       "step1": {
-        "title": "Informaci\u00f3n de la Empresa",
+        "title": "Información de la Empresa",
         "companyName": "Nombre de la Empresa",
         "clientType": "Tipo de Cliente",
         "clientTypeAgency": "Agencia de Cobro",
         "clientTypeCorporate": "Corporativo",
         "clientTypeFreelancer": "Freelancer",
-        "registrationNumber": "N\u00famero de Registro (opcional)",
+        "registrationNumber": "Número de Registro (opcional)",
         "taxId": "NIF/CIF (opcional)",
         "primaryContact": "Contacto Principal",
-        "contactEmail": "Correo Electr\u00f3nico de Contacto",
-        "contactPhone": "Tel\u00e9fono de Contacto",
-        "address": "Direcci\u00f3n (opcional)",
+        "contactEmail": "Correo Electrónico de Contacto",
+        "contactPhone": "Teléfono de Contacto",
+        "address": "Dirección (opcional)",
         "website": "Sitio Web (opcional)",
         "submit": "Continuar"
       },
       "step2": {
         "title": "Verifica tu Correo",
-        "subtitle": "Hemos enviado un enlace de verificaci\u00f3n a",
-        "resend": "Reenviar correo de verificaci\u00f3n",
-        "resendSuccess": "\u00a1Correo de verificaci\u00f3n reenviado!",
-        "checkEmail": "Por favor, revisa tu correo y haz clic en el enlace de verificaci\u00f3n.",
+        "subtitle": "Hemos enviado un enlace de verificación a",
+        "resend": "Reenviar correo de verificación",
+        "resendSuccess": "¡Correo de verificación reenviado!",
+        "checkEmail": "Por favor, revisa tu correo y haz clic en el enlace de verificación.",
         "continue": "Continuar"
       },
       "step3": {
         "title": "Crea tu Cuenta",
-        "password": "Contrase\u00f1a",
-        "passwordHint": "Al menos 8 caracteres con may\u00fascula, min\u00fascula, n\u00famero y car\u00e1cter especial",
-        "terms": "Acepto los T\u00e9rminos de Servicio y la Pol\u00edtica de Privacidad",
-        "termsError": "Debes aceptar los T\u00e9rminos de Servicio",
+        "password": "Contraseña",
+        "passwordHint": "Al menos 8 caracteres con mayúscula, minúscula, número y carácter especial",
+        "terms": "Acepto los Términos de Servicio y la Política de Privacidad",
+        "termsError": "Debes aceptar los Términos de Servicio",
         "submit": "Crear Cuenta"
       },
-      "success": "\u00a1Cuenta creada con \u00e9xito! Redirigiendo...",
-      "error": "Algo sali\u00f3 mal. Por favor, int\u00e9ntalo de nuevo."
+      "success": "¡Cuenta creada con éxito! Redirigiendo...",
+      "error": "Algo salió mal. Por favor, inténtalo de nuevo."
     },
     "login": {
       "title": "Bienvenido de vuelta a GORKA",
-      "email": "Correo Electr\u00f3nico",
-      "password": "Contrase\u00f1a",
-      "submit": "Iniciar Sesi\u00f3n",
-      "forgotPassword": "\u00bfOlvidaste tu contrase\u00f1a?",
-      "noAccount": "\u00bfNo tienes una cuenta?",
-      "register": "Reg\u00edstrate aqu\u00ed",
-      "error": "Correo o contrase\u00f1a inv\u00e1lidos. Por favor, int\u00e9ntalo de nuevo."
+      "email": "Correo Electrónico",
+      "password": "Contraseña",
+      "submit": "Iniciar Sesión",
+      "forgotPassword": "¿Olvidaste tu contraseña?",
+      "noAccount": "¿No tienes una cuenta?",
+      "register": "Regístrate aquí",
+      "error": "Correo o contraseña inválidos. Por favor, inténtalo de nuevo."
     },
     "verifyEmail": {
-      "title": "Verificaci\u00f3n de Correo",
+      "title": "Verificación de Correo",
       "verifying": "Verificando tu correo...",
-      "success": "\u00a1Correo verificado con \u00e9xito!",
+      "success": "¡Correo verificado con éxito!",
       "successMessage": "Tu correo ha sido verificado. Ahora puedes completar tu registro.",
       "continue": "Continuar con el registro",
-      "error": "Token de verificaci\u00f3n inv\u00e1lido o expirado.",
-      "errorMessage": "El enlace de verificaci\u00f3n es inv\u00e1lido o ha expirado. Por favor, solicita uno nuevo.",
-      "resend": "Reenviar correo de verificaci\u00f3n"
+      "error": "Token de verificación inválido o expirado.",
+      "errorMessage": "El enlace de verificación es inválido o ha expirado. Por favor, solicita uno nuevo.",
+      "resend": "Reenviar correo de verificación"
     }
   },
   "support": {
     "title": "Enviar una Solicitud de Soporte",
-    "subtitle": "\u00bfNecesitas ayuda? Nuestro equipo est\u00e1 aqu\u00ed para ayudarte.",
+    "subtitle": "¿Necesitas ayuda? Nuestro equipo está aquí para ayudarte.",
     "subject": "Asunto",
     "subjectPlaceholder": "Resumen breve de tu problema",
     "message": "Mensaje",
     "messagePlaceholder": "Por favor, describe tu problema en detalle...",
-    "category": "Categor\u00eda",
-    "categoryBilling": "Facturaci\u00f3n",
-    "categoryTechnical": "Problema T\u00e9cnico",
+    "category": "Categoría",
+    "categoryBilling": "Facturación",
+    "categoryTechnical": "Problema Técnico",
     "categoryAccount": "Acceso a la Cuenta",
     "categoryFeature": "Solicitud de Funcionalidad",
     "categoryBug": "Reporte de Error",
     "categoryOther": "Otro",
-    "piiAcknowledged": "Entiendo que esta solicitud puede contener informaci\u00f3n sensible y acepto su procesamiento.",
+    "piiAcknowledged": "Entiendo que esta solicitud puede contener información sensible y acepto su procesamiento.",
     "submit": "Enviar Solicitud",
-    "success": "\u00a1Solicitud enviada con \u00e9xito!",
+    "success": "¡Solicitud enviada con éxito!",
     "successMessage": "Tu ticket #",
     "successMessage2": " ha sido creado. Te responderemos en breve.",
-    "error": "Algo sali\u00f3 mal. Por favor, int\u00e9ntalo de nuevo.",
-    "loginRequired": "Por favor, inicia sesi\u00f3n para enviar una solicitud de soporte."
+    "error": "Algo salió mal. Por favor, inténtalo de nuevo.",
+    "loginRequired": "Por favor, inicia sesión para enviar una solicitud de soporte."
   }
 }

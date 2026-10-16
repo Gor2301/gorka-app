@@ -1,6 +1,6 @@
 "use client";
 
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { useTranslations } from 'next-intl';
 
 export default function Footer() {
@@ -11,6 +11,7 @@ export default function Footer() {
     { key: 'home', href: '/' },
     { key: 'pricing', href: '/pricing' },
     { key: 'faq', href: '/faq' },
+    { key: 'download', href: '/download' },
     { key: 'contact', href: '/contact' },
   ] as const;
 
@@ -36,7 +37,11 @@ export default function Footer() {
                 <li key={link.key}>
                   <Link
                     href={link.href}
-                    className="text-gray-400 hover:text-white transition"
+                    className={
+                      link.key === 'download'
+                        ? 'text-[#F01428] font-medium hover:text-[#F01428]/80 transition'
+                        : 'text-gray-400 hover:text-white transition'
+                    }
                   >
                     {tNav(link.key)}
                   </Link>
