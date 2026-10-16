@@ -6,16 +6,12 @@ import { Link } from '@/i18n/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 
-const VERSION = 'v0.1.0';
-
 const INSTALLERS = {
   client: {
     url: '/downloads/gorka-client-setup.exe',
-    filename: 'GORKA-Client-Setup.exe',
   },
   agent: {
     url: '/downloads/gorka-agent-setup.exe',
-    filename: 'GORKA-Agent-Setup.exe',
   },
 };
 
@@ -38,22 +34,19 @@ export default function DownloadPage() {
             style={{
               fontSize: '40px',
               fontWeight: 600,
-              marginBottom: '8px',
+              marginBottom: '32px',
               color: '#111111',
             }}
           >
             {t('title')}
           </h1>
-          <p style={{ fontSize: '14px', color: '#6B7280', marginBottom: '32px' }}>
-            {VERSION}
-          </p>
 
           <p
             style={{
               fontSize: '16px',
               color: '#4A4A4A',
               lineHeight: 1.6,
-              marginBottom: '40px',
+              marginBottom: '48px',
             }}
           >
             {t('systemWindows')}
@@ -67,18 +60,8 @@ export default function DownloadPage() {
               marginBottom: '48px',
             }}
           >
-            <DownloadCard
-              title={t('clientTitle')}
-              description={t('clientDescription')}
-              url={INSTALLERS.client.url}
-              label={t('clientButton')}
-            />
-            <DownloadCard
-              title={t('agentTitle')}
-              description={t('agentDescription')}
-              url={INSTALLERS.agent.url}
-              label={t('agentButton')}
-            />
+            <DownloadCard title={t('clientTitle')} url={INSTALLERS.client.url} />
+            <DownloadCard title={t('agentTitle')} url={INSTALLERS.agent.url} />
           </div>
 
           <h2
@@ -182,75 +165,44 @@ export default function DownloadPage() {
   );
 }
 
-function DownloadCard({
-  title,
-  description,
-  url,
-  label,
-}: {
-  title: string;
-  description: string;
-  url: string;
-  label: string;
-}) {
+function DownloadCard({ title, url }: { title: string; url: string }) {
   return (
     <div
       style={{
         border: '1px solid #E3E3E3',
         borderRadius: '10px',
-        padding: '24px',
+        padding: '40px 24px',
         backgroundColor: 'white',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between',
+        alignItems: 'center',
+        textAlign: 'center',
       }}
     >
-      <div>
-        <Image
-          src="/gorka-icon.png"
-          alt="GORKA"
-          width={56}
-          height={56}
-          style={{ marginBottom: '16px' }}
-        />
-        <h3
-          style={{
-            fontSize: '18px',
-            fontWeight: 600,
-            marginBottom: '8px',
-            color: '#111111',
-          }}
-        >
-          {title}
-        </h3>
-        <p
-          style={{
-            fontSize: '14px',
-            color: '#6B7280',
-            lineHeight: 1.6,
-            marginBottom: '20px',
-          }}
-        >
-          {description}
-        </p>
-      </div>
       <a
         href={url}
         download
+        aria-label={title}
+        style={{ display: 'inline-block', marginBottom: '20px' }}
+      >
+        <Image
+          src="/gorka-icon.png"
+          alt="GORKA"
+          width={96}
+          height={96}
+          style={{ display: 'block' }}
+        />
+      </a>
+      <h3
         style={{
-          display: 'block',
-          textAlign: 'center',
-          padding: '12px 16px',
-          backgroundColor: '#F01428',
-          color: 'white',
-          borderRadius: '6px',
-          fontSize: '15px',
-          fontWeight: 500,
-          textDecoration: 'none',
+          fontSize: '18px',
+          fontWeight: 600,
+          margin: 0,
+          color: '#111111',
         }}
       >
-        {label}
-      </a>
+        {title}
+      </h3>
     </div>
   );
 }

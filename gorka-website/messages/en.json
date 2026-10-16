@@ -2,10 +2,10 @@
   "download": {
     "title": "Download GORKA",
     "systemWindows": "Windows 10 / 11 (64-bit). macOS and Linux are coming soon.",
-    "clientTitle": "GORKA Client Dashboard",
+    "clientTitle": "Admin dashboard v.1",
     "clientDescription": "For agency admins. Manage clients, agents, connectors, and communications.",
     "clientButton": "Download Client Dashboard",
-    "agentTitle": "GORKA Agent Dashboard",
+    "agentTitle": "Agent dashboard v.1",
     "agentDescription": "For collection agents. Work the plan, contact debtors, log outcomes.",
     "agentButton": "Download Agent Dashboard",
     "installStepsTitle": "Install steps",

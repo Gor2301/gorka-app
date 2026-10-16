@@ -2,10 +2,10 @@
   "download": {
     "title": "Descargar GORKA",
     "systemWindows": "Windows 10 / 11 (64 bits). macOS y Linux próximamente.",
-    "clientTitle": "Panel del Cliente GORKA",
+    "clientTitle": "Admin dashboard v.1",
     "clientDescription": "Para administradores de agencia. Gestione clientes, agentes, conectores y comunicaciones.",
     "clientButton": "Descargar Panel del Cliente",
-    "agentTitle": "Panel del Agente GORKA",
+    "agentTitle": "Agent dashboard v.1",
     "agentDescription": "Para agentes de cobro. Trabaje el plan, contacte deudores, registre resultados.",
     "agentButton": "Descargar Panel del Agente",
     "installStepsTitle": "Pasos de instalación",
