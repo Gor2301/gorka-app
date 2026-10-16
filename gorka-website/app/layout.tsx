@@ -13,15 +13,16 @@ export const metadata = {
   description: 'Built for agencies. Ready for banks. Automate collections with AI Copilot.',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: { locale: string };
+  params: Promise<{ locale: string }>;
 }) {
+  const { locale } = await params;
   return (
-    <html lang={params.locale} className={inter.variable}>
+    <html lang={locale} className={inter.variable}>
       <body className="font-sans antialiased bg-gorka-cream text-gorka-dark">
         <NextIntlClientProvider>
           {children}
