@@ -8470,3 +8470,493 @@ W.9 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX W
 ================================================================
+
+================================================================
+APPENDIX X - SLICE 8.6b (PART 1) CLOSE
+(added v3.17, 2026-10-16)
+================================================================
+
+X.0 - WHY THIS APPENDIX EXISTS
+
+Appendix W closed Slice 8.6a and pointed at 8.6b
+(website content). This session ran the first part
+of 8.6b: FAQ section rewrite, five outcome cards on
+the home page, Spanish locale fix, locale-aware
+navigation, download page fixes.
+
+The session produced four commits on main. All four
+are pushed. Cloud dev server verified visually for
+EN and ES.
+
+Prior appendices are not edited.
+
+================================================================
+X.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 7beb0ca. Pushed to origin/main.
+        Clean tree except the five known untracked
+        files (CHAT-HANDOFF-DUMP.txt, balance.txt,
+        balance_get.txt, make-dump.ps1, response.txt).
+
+CLOUD:  at 7beb0ca. Dev server running for the
+        session. No cargo build run this session -
+        no Rust touched. npm build not re-run this
+        session - the changes are content and
+        component-level; the site was verified live
+        in the browser instead.
+
+Commits this session, oldest first:
+
+  4267972  website: FAQ 5 categories + 32 questions;
+           5 outcome feature cards with SVG icons;
+           full ES translation
+  bf4fd12  website: fix Spanish locale loading;
+           next-intl routing + middleware
+  4b234a5  website: move i18n/navigation to src/
+           so @/ alias resolves; delete misplaced file
+  6a83737  website: features cards stack vertically;
+           two-column internal layout
+  a228ff5  website: download page header padding +
+           G icon + red CTA; nav and footer download
+           links
+  7beb0ca  website: download cards use clickable G
+           icon; titles match installed app names
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -8
+    git status --short
+
+================================================================
+X.2 - WHAT SHIPPED
+================================================================
+
+FAQ (sections/FAQ.tsx + messages/*.json):
+
+  - 5 collapsible categories: About GORKA /
+    Privacy & Security / Getting Started /
+    AI & Integrations / Pricing & Support.
+  - 32 questions and answers, translated EN + ES.
+  - New intro paragraph above categories.
+  - Closing "Still have questions?" block with
+    Contact us CTA.
+  - Category titles styled #F01428.
+  - Accordion is per-category (multiple={false}).
+
+Features (sections/Features.tsx + messages/*.json):
+
+  - Five outcome cards replace the previous
+    feature-list cards. Content: Simplicity &
+    Scale / Privacy by Design / AI-Assisted
+    Productivity / Accessible Value / The GORKA
+    Difference.
+  - Vertical stack (space-y-6), full-width cards.
+  - Two-column internal layout on md+ screens:
+    200px left rail (icon + number + category),
+    flexible right column (headline + subheadline
+    + body).
+  - Inline SVG icons (bars, shield, spark, tag,
+    two circles), #F01428 tint on #F01428/10
+    background. Placeholders - see X.6.
+  - Section title: "Built for modern collections,
+    designed for compliance".
+
+Spanish locale fix (three files):
+
+  - i18n/routing.ts (new): locales en, es;
+    defaultLocale en; localePrefix always.
+  - middleware.ts (rewrite): now uses next-intl's
+    createMiddleware(routing) instead of the
+    hand-rolled prefix-check. This is what made
+    requestLocale resolve correctly.
+  - i18n/request.ts (rewrite): reads
+    requestLocale from next-intl instead of
+    hardcoding "en".
+
+Locale-aware navigation (two files):
+
+  - src/i18n/navigation.ts (new): exports Link,
+    redirect, usePathname, useRouter, getPathname
+    via createNavigation(routing).
+  - Header.tsx and Footer.tsx now import Link from
+    @/i18n/navigation instead of next/link. Nav
+    clicks stay in the current locale.
+
+FAQ page header (app/[locale]/faq/page.tsx):
+
+  - Removed the hardcoded English header band
+    ("Frequently Asked Questions / Everything you
+    need to know about GORKA"). The FAQ component
+    provides title + intro now.
+
+Root layout (app/layout.tsx):
+
+  - Metadata em-dash mojibake fixed. Was
+    'GORKA \u0393\u00c7\u00f6 ...' now 'GORKA
+    \u2014 ...'.
+
+Download page (app/[locale]/download/page.tsx):
+
+  - Added pt-16 md:pt-20 wrapper. Fixes content
+    hiding under the fixed header.
+  - Download cards rewritten: clickable G icon
+    (whole card is the trigger), title only.
+    Descriptions and red rectangular buttons
+    removed per founder direction.
+  - Card titles changed to installed binary
+    names: "Admin dashboard v.1" and
+    "Agent dashboard v.1".
+  - v0.1.0 version line removed from below the
+    page title.
+  - Contact us link switched to locale-aware Link
+    and recolored #F01428.
+  - Local Link import switched to
+    @/i18n/navigation.
+
+Nav and footer (Header.tsx, Footer.tsx):
+
+  - Added a Download entry. Red pill style in
+    header (#F01428), red text in footer.
+
+Icon asset (public/gorka-icon.png):
+
+  - Copied from src-tauri/icons/icon.png
+    (21,731 bytes). Used on both download cards.
+
+Messages (messages/en.json, messages/es.json):
+
+  - features.items rewritten: each item now has
+    number, category, headline, subheadline, body.
+  - faq rewritten: intro, 5 categories with items,
+    closing block.
+  - nav.download added: "Download" / "Descargar".
+  - download.clientTitle / download.agentTitle
+    changed to installed binary names, identical
+    in EN and ES.
+
+================================================================
+X.3 - VERIFICATION
+================================================================
+
+Browser-verified on cloud:
+
+  /en/faq     - FAQ renders, 5 categories, English
+  /es/faq     - fully Spanish, no duplicate header
+  /en         - 5 cards stack vertically, two-
+                column internal layout, SVG icons
+  /es         - same cards in Spanish
+  /en/download - header clears, G icon clickable,
+                 "Admin dashboard v.1" /
+                 "Agent dashboard v.1", no red
+                 rectangular buttons
+  /es/download - Spanish page except product
+                 names (intentional, matches
+                 installed binaries)
+
+  Nav clicks:
+    Clicking Precios from /es/faq -> /es/pricing
+    Clicking FAQ stays in /es
+    Clicking Iniciar Sesi\u00f3n -> /es/login
+    Clicking Contacto -> /es/contact
+
+  G icon on download page: clicking triggers
+  browser download attempt. Files do not exist
+  yet (see X.6), so 404. Expected.
+
+NOT re-verified this session:
+
+  cargo build / cargo test - no Rust touched.
+  npm run build - the browser proved the pages
+  render; a production build has not been run
+  against these six commits.
+
+================================================================
+X.4 - FINDINGS THIS SESSION
+================================================================
+
+FG-X1  next-intl locale was hardcoded to "en" in
+       i18n/request.ts. The hand-rolled middleware
+       never set the header next-intl reads. So
+       every URL loaded en.json regardless of the
+       URL prefix. /es/faq showed English content
+       with a Spanish URL.
+       Fixed in bf4fd12 by switching to
+       createMiddleware(routing) and reading
+       requestLocale.
+
+FG-X2  Dead config file. Both gorka-website/i18n.ts
+       (root) and gorka-website/i18n/request.ts
+       existed. Only the second is loaded by the
+       plugin. The root i18n.ts is orphaned. Not
+       deleted. Candidate for a cleanup pass.
+
+FG-X3  @/ alias points at src/, not the project
+       root. The first attempt to place
+       i18n/navigation.ts at the project root
+       failed with "Module not found: Can't
+       resolve '@/i18n/navigation'". Fix: place
+       at src/i18n/navigation.ts and import
+       routing via ../../i18n/routing.
+       Commit 4b234a5.
+
+FG-X4  next/link is locale-blind. Every Header
+       and Footer link was rendering href="/" or
+       href="/pricing" without the locale prefix.
+       On /es/* every nav click redirected to the
+       English equivalent. Fixed by switching to
+       the locale-aware Link from
+       @/i18n/navigation.
+
+FG-X5  next/codemod's middleware-to-proxy rename
+       was aborted by the FG-X3 error before it
+       could run. middleware.ts remains, works
+       correctly. Next 16 warns about the
+       deprecated name but the site builds and
+       runs. Not addressed this session.
+
+FG-X6  notepad cannot create parent folders. The
+       first attempt to open
+       gorka-website\src\i18n\navigation.ts
+       failed because src\i18n\ did not exist.
+       Fix: mkdir first, then notepad.
+
+FG-X7  Download page hid under the fixed header.
+       Every other page wraps its content in
+       <section className="pt-16 md:pt-20">; the
+       download page did not. Fixed in a228ff5.
+
+FG-X8  Header nav has no "Download" entry. The
+       page existed since Slice 8.1 but was
+       unreachable from the site. Fixed in
+       a228ff5 (nav pill) and 7beb0ca (footer
+       link).
+
+FG-X9  Spanish nav labels crowd the right-side
+       cluster. On /es/download the purple
+       "Reservar una Demo" button is clipped at
+       the right edge. Cosmetic. Two options:
+       shorten to "Reservar Demo", or reduce gap
+       on es locale. Not fixed.
+
+FG-X10 Download .exe files do not exist. The
+       clickable G triggers a browser download
+       that 404s. Expected - files land in
+       gorka-website/public/downloads/ at Slice
+       8.6c. Not a defect.
+
+FG-X11 Node -e JSON edit pattern worked
+       cleanly. No encoding damage. Both files
+       parsed with require() before and after.
+       This is the preferred method for
+       surgical JSON value edits.
+
+================================================================
+X.5 - PROCESS AMENDMENTS
+================================================================
+
+P-HHH  FOR JSON VALUE EDITS, USE node -e WITH
+       JSON.parse / JSON.stringify.
+       Do not open notepad for a one-value
+       change. The Node pattern preserves
+       validity by construction and cannot
+       introduce trailing commas or bracket
+       mismatches. FG-X11 is the evidence.
+
+P-III  THE @/ ALIAS IS src/, NOT THE PROJECT
+       ROOT.
+       Files under gorka-website/i18n/ are not
+       reachable as @/i18n/. Files under
+       gorka-website/src/i18n/ are.
+       Restating because this cost one failed
+       session. FG-X3 is the evidence.
+
+P-JJJ  NOTEPAD CANNOT CREATE PARENT DIRECTORIES.
+       mkdir first, then notepad <full path>.
+       FG-X6 is the evidence.
+
+P-KKK  ENGLISH FIRST, THEN SPANISH - ONE
+       SECTION AT A TIME.
+       Polishing Spanish before English is right
+       produces a reflection of unsettled copy.
+       Founder direction, this session. Apply
+       to all remaining 8.6b work.
+
+P-LLL  A PAGE THAT HAS NEVER BEEN BUILT IN THE
+       CURRENT PIPELINE MAY HAVE HARDCODED
+       ENGLISH HEADERS THAT DO NOT SWITCH.
+       FAQ and Pricing both had this. Any page
+       under app/[locale]/ whose header does not
+       call useTranslations will show English on
+       /es. Audit required. See X.6.
+
+P-MMM  ONE APPENDIX PER SESSION (restated,
+       P-JJ, P-M, P-V, P-Y, P-DD, P-QQ, P-UU,
+       P-XX, P-CCC, P-GGG). This appendix is new.
+
+================================================================
+X.6 - OPEN ITEMS
+================================================================
+
+New this session:
+
+  - HERO REWORK (postponed by founder).
+    Current hero still reads "AI-Powered Debt
+    Collection Platform / Built for agencies.
+    Ready for banks." This contradicts the five
+    cards directly below it. Proposed replacement
+    delivered in session, not applied. Proposed:
+      Title: "Modern debt collection. Smarter
+              by design."
+      Subtitle: one-paragraph positioning state-
+      ment leading with privacy, then team
+      coordination, then AI.
+      CTAs: Book a Demo primary, "See how it
+      works" secondary (scroll anchor vs new
+      page - decision pending).
+    Founder: "postpone to another session or
+    later this session".
+
+  - FEATURE CARD ICONS. The five inline SVG
+    icons (bars, shield, spark, tag, circles)
+    are placeholders. Replace with qualitative
+    imagery matching the card themes. Founder
+    decision 2026-10-16: deferred, later session.
+    Do NOT source stock photos - the earlier
+    rounds produced garbled text ("FDCPA
+    Compliance Checklist" badge, AI-generated
+    garbage text), watermarks, legal claims,
+    and inconsistent visual languages.
+
+  - HARDCODED ENGLISH PAGE HEADERS. FAQ fixed.
+    Pricing still has "Choose your plan / Start
+    free. Scale when you're ready." English on
+    /es/pricing. Likely present on other pages:
+    contact, support, register, verify-email.
+    Full audit not run. Candidate for a small
+    dedicated pass before 8.6c.
+
+  - ENGLISH POLISH PASS. TwoColumn still says
+    "Powered by Gemini, it learns your agency's
+    tone and patterns" - a claim the FAQ now
+    contradicts (no autonomous learning, no
+    memory of tone). Comparison's "Data stays
+    on your infrastructure" is imprecise (should
+    be "on your devices"). FinalCTA is generic.
+    Not addressed.
+
+  - INSTALLER .EXE FILES DO NOT EXIST. Download
+    buttons 404. Files land at
+    gorka-website/public/downloads/ in Slice
+    8.6c. Buttons wired and ready.
+
+  - SPANISH NAV CROWDING (FG-X9). Cosmetic.
+
+  - DEAD CONFIG FILE (FG-X2).
+    gorka-website/i18n.ts (root) is orphaned.
+    Cleanup candidate.
+
+  - NEXT 16 middleware -> proxy deprecation
+    (FG-X5). Cosmetic. Codemod not run.
+
+  - PRODUCTION BUILD NOT RUN against these six
+    commits. Browser verified; next build not
+    re-run. Run at the next cloud trip.
+
+Carried from Appendix W.7, unchanged:
+
+  - Desktop-level icon and title bar verification
+    on a running binary.
+  - Android/iOS icon variants in git
+    (~90 files). Candidate for .gitignore.
+  - Support-OD auth reconciliation spec.
+  - OD Data Bridge spec.
+  - OI-9, OI-10, OI-11.
+  - logout does not clear gorka_od_session.
+  - Browser end-to-end OD test not yet run.
+  - OI-7, OI-8, OI-3.
+  - O1, O2, STEP 1.5, STEP 1.6.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - ACCEPTANCE - end-to-end.
+  - PF-4: local cargo check / GitHub Actions.
+
+================================================================
+X.7 - QUEUE
+================================================================
+
+DONE
+
+  Slices 1-7. See Appendices F-P.
+  8.2, 8.3, 8.4. Appendix S.
+  8.6.5, 8.7. Appendix T.
+  8.5. Appendix U.
+  8.1. Appendix V.
+  8.6a. Appendix W.
+  8.6b (part 1): FAQ, five cards, Spanish locale
+    fix, locale-aware nav, download page fixes.
+    This appendix.
+
+IN FLIGHT
+
+  None.
+
+NEXT - IN ORDER
+
+  1. SLICE 8.6b (part 2) - English polish, one
+     section at a time, then Spanish mirror.
+
+     Order proposed this session:
+
+       a. Hero rework (title, subtitle, CTA swap).
+       b. TwoColumn - remove "learns your tone"
+          claim, align with FAQ.
+       c. Comparison - "on your devices" not
+          "on your infrastructure".
+       d. FinalCTA - stronger close.
+       e. Pricing header - remove hardcoded
+          English, translate or strip.
+       f. Audit remaining pages for hardcoded
+          English headers (contact, support,
+          register, verify-email).
+       g. Feature card icons - replace SVG
+          placeholders with qualitative imagery
+          (separate session).
+
+     Rule: English approved first, then
+     translate to Spanish. One section at a time.
+     Look at both /en and /es before moving to
+     the next section.
+
+  2. SLICE 8.6c - Deployment.
+     www.gorka.click, api.gorka.click,
+     owner.gorka.click. DNS + TLS for all three.
+     JWT_SECRET_OD in production. VITE_API_URL
+     baked into both Tauri binaries. Installer
+     .exe files placed at
+     gorka-website/public/downloads/. Live
+     acceptance per Part IV.7.
+
+  Then the carried items from X.6.
+
+================================================================
+X.8 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I, II, III, IV, or V.
+  Does not edit prior appendices.
+  Does not begin the Hero rework.
+  Does not perform the hardcoded English audit.
+  Does not replace the feature card SVG icons.
+  Does not claim cargo/npm production build has
+  been run this session; verification was
+  browser-level only.
+  Does not claim the download buttons work; the
+  installer files do not exist yet.
+
+================================================================
+END OF APPENDIX X
+================================================================
