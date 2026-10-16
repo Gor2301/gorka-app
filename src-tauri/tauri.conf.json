@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "GORKA-Client-Dashboard",
+  "productName": "Admin dashboard v.1",
   "version": "0.1.0",
   "identifier": "click.gorka.client",
   "build": {

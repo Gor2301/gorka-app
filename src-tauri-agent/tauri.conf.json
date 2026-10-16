@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "GORKA-Agent-Dashboard",
+  "productName": "Agent dashboard v.1",
   "version": "0.1.0",
   "identifier": "click.gorka.agent",
   "build": {
