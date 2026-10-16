@@ -74,36 +74,37 @@ export default function Features() {
           {t("title")}
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
           {items.map((item, index) => (
             <div
               key={index}
-              className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-lg transition duration-200 border border-gray-100 flex flex-col"
+              className="bg-white rounded-2xl p-8 md:p-10 shadow-sm hover:shadow-lg transition duration-200 border border-gray-100 grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-12"
             >
-              <div className="flex items-center justify-between mb-6">
-                <div className="w-14 h-14 rounded-xl bg-[#F01428]/10 flex items-center justify-center text-[#F01428]">
+              <div className="flex md:flex-col items-center md:items-start gap-4 md:gap-6">
+                <div className="w-16 h-16 rounded-xl bg-[#F01428]/10 flex items-center justify-center text-[#F01428] shrink-0">
                   <FeatureIcon index={index} />
                 </div>
-                <span className="text-sm font-semibold text-[#F01428] tracking-wider">
-                  {item.number}
-                </span>
+                <div>
+                  <div className="text-2xl font-bold text-[#F01428] tracking-wider leading-none mb-1">
+                    {item.number}
+                  </div>
+                  <p className="text-xs font-semibold tracking-widest text-[#F01428] uppercase">
+                    {item.category}
+                  </p>
+                </div>
               </div>
 
-              <p className="text-xs font-semibold tracking-widest text-[#F01428] uppercase mb-3">
-                {item.category}
-              </p>
-
-              <h3 className="text-xl font-semibold text-gorka-dark mb-2 leading-snug">
-                {item.headline}
-              </h3>
-
-              <p className="text-sm text-gray-500 font-medium mb-4">
-                {item.subheadline}
-              </p>
-
-              <p className="text-gray-600 text-sm leading-relaxed">
-                {item.body}
-              </p>
+              <div>
+                <h3 className="text-2xl md:text-3xl font-semibold text-gorka-dark mb-3 leading-snug">
+                  {item.headline}
+                </h3>
+                <p className="text-base text-gray-500 font-medium mb-5">
+                  {item.subheadline}
+                </p>
+                <p className="text-gray-600 text-base leading-relaxed max-w-3xl">
+                  {item.body}
+                </p>
+              </div>
             </div>
           ))}
         </div>
