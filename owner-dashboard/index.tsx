@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
 import ClientsPage from './pages/ClientsPage';
+import OrganizationsPage from './pages/OrganizationsPage';
 import ClientDetailPage from './pages/ClientDetailPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import BillingPage from './pages/BillingPage';
@@ -79,6 +80,11 @@ const App = () => {
         <Route path="/clients" element={
           <ProtectedRoute>
             <ClientsPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/organizations" element={
+          <ProtectedRoute>
+            <OrganizationsPage />
           </ProtectedRoute>
         } />
         <Route path="/clients/:id" element={

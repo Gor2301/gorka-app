@@ -362,6 +362,25 @@ export interface BoundaryProofResponse {
   offset: number;
 }
 
+export interface OrganizationAgentCounts {
+  registered: number;
+  online: number;
+  offline: number;
+}
+
+export interface OrganizationRow {
+  id: string;
+  name: string;
+  clientType: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  verificationStatus: string;
+  createdAt: string;
+  lastActivity: string | null;
+  agentCounts: OrganizationAgentCounts;
+  licenseStatus: string;
+}
+
 export async function getBoundaryProofs(params?: {
   organizationId?: string;
   eventType?: string;
@@ -381,6 +400,14 @@ export async function getBoundaryProofs(params?: {
   const queryString = query.toString();
   const endpoint = queryString ? `/boundary-proofs?${queryString}` : '/boundary-proofs';
   const response = await fetchAPI<{ data: BoundaryProofResponse }>(endpoint);
+  return response.data;
+}
+
+// ============================================
+// ORGANIZATIONS API (Owner Dashboard)
+// ============================================
+export async function getOrganizations(): Promise<OrganizationRow[]> {
+  const response = await fetchAPI<{ data: OrganizationRow[] }>('/admin/organizations');
   return response.data;
 }
 

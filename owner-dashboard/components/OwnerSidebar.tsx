@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
+  Building2,
   BarChart3,
   CreditCard,
   Activity,
@@ -20,6 +21,7 @@ const OwnerSidebar: React.FC = () => {
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     { icon: Users, label: 'Clients', path: '/clients' },
+    { icon: Building2, label: 'Organizations', path: '/organizations' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: CreditCard, label: 'Billing', path: '/billing' },
     { icon: Activity, label: 'Audit Logs', path: '/audit' },

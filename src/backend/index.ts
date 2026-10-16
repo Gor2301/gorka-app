@@ -21,6 +21,9 @@ import metricsRoutes from './routes/metrics.routes';
 import syncRoutes from './routes/sync.routes';
 import activityRoutes from './routes/activity.routes';
 import usersRoutes from './routes/users';
+import adminRoutes from './routes/admin';
+import { authenticateTokenOD } from './middleware/auth';
+import { requireRole } from './middleware/requireRole';
 
 dotenv.config();
 
@@ -90,6 +93,7 @@ app.use('/api/billing', authenticateToken, billingRoutes);
 app.use('/api/licenses', authenticateToken, licensesRoutes);
 app.use('/api/sync', authenticateToken, syncRoutes);
 app.use('/api/users', authenticateToken, usersRoutes);
+app.use('/api/admin', authenticateTokenOD, requireRole('OWNER'), adminRoutes);
 
 // ─── Health Check ──────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
