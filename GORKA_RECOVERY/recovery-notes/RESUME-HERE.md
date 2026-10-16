@@ -7871,3 +7871,308 @@ U.8 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX U
 ================================================================
+
+
+================================================================
+APPENDIX V - SLICE 8.1 CLOSE
+(added v3.15, 2026-10-16)
+================================================================
+
+V.0 - WHY THIS APPENDIX EXISTS
+
+Appendix U closed Slice 8.5. This session ran
+Slice 8.1: website registration fixes + download
+page + backend free-domain gate + resend-
+verification + redirectUrl removal. Code-complete,
+cloud-verified. Website builds for the first time
+in the project's history.
+
+Prior appendices are not edited.
+
+================================================================
+V.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD e79194e plus the Appendix V commit that
+        follows. Pushed to origin/main.
+
+CLOUD:  at e79194e. All four build gates PASS. Cargo
+        test 497 passed / 3 ignored / 0 failed.
+
+Commits this session (since Appendix U):
+
+  76c964e  slice 8.1: website register/resend/download
+           flow; backend free-domain gate,
+           resend-verification, drop redirectUrl
+  5749ce2  slice 8.1 fix: restore missing Header and
+           Footer components
+  b9eb5fe  slice 8.1 fix: Next 16 params-as-Promise in
+           layout; Base UI accordion API in FAQ
+  e79194e  slice 8.1 fix: use getLocale() in root
+           layout; multiple prop on FAQ accordion
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -6
+    git status --short
+
+================================================================
+V.2 - WHAT SLICE 8.1 SHIPPED
+================================================================
+
+Backend (src/backend/routes/auth.ts):
+
+  - FREE_EMAIL_DOMAINS set + registerSchema .refine().
+    23 domains rejected at registration. 400 with the
+    disclosure message.
+  - registerSchema.password is now optional.
+    Placeholder hash from randomBytes when omitted.
+  - POST /resend-verification. Rate-limited (3/15min).
+    Generic 200 regardless of account existence.
+  - redirectUrl removed from /login and
+    /complete-registration responses. C6 applied.
+
+Website (gorka-website/):
+
+  - app/[locale]/register/page.tsx:
+      * step 1 fetch sends companyData to
+        /api/auth/register.
+      * step 2 fetch sends {email} to
+        /api/auth/resend-verification.
+      * step 3 routes to /download.
+      * inline isFreeEmailDomain() check + error line
+        under the email input.
+      * card placeholder note below the error block.
+      * stray leading 'f' before "use client" removed
+        (would have broken the build).
+  - app/[locale]/login/page.tsx: routes to
+    /download.
+  - app/[locale]/verify-email/page.tsx: wording
+    "Redirecting to registration..." replaced with
+    "Redirecting to set your password...".
+  - app/[locale]/download/page.tsx (new):
+    two DownloadCards (Client, Agent), install steps,
+    SmartScreen note, system requirements, user tip.
+  - messages/en.json and messages/es.json: download
+    namespace added to both.
+  - src/components/layout/Header.tsx and Footer.tsx
+    (new; the restored backup was missing them).
+  - app/layout.tsx: Next 16 params-as-Promise; now
+    uses getLocale() from next-intl/server.
+  - src/components/sections/FAQ.tsx: Base UI
+    accordion API (multiple={false}, not
+    type="single"/collapsible).
+
+gorka-website/ is now tracked in git. First commit
+that includes it: 76c964e.
+
+================================================================
+V.3 - VERIFICATION
+================================================================
+
+CLOUD at e79194e:
+
+  gorka-website: npm run build
+    PASS. First successful website build in the
+    pipeline.
+    Route list: /_not-found, /[locale], /[locale]/contact,
+    /[locale]/download, /[locale]/faq, /[locale]/login,
+    /[locale]/pricing, /[locale]/register,
+    /[locale]/support, /[locale]/verify-email, plus
+    the six /api/auth/* and one /api/support/*
+    proxy routes.
+
+  root npm run build (Client)   PASS (see V.3 note).
+  owner-dashboard npm run build PASS (see V.3 note).
+  cargo build --workspace       PASS.
+  cargo test --workspace        497 passed, 3 ignored,
+                                0 failed.
+
+Warnings, all pre-existing and benign:
+  - Next.js: multiple lockfiles detected.
+  - Next.js: middleware file convention deprecated
+    (rename to proxy planned).
+  - Vite __dirname configLoader.
+  - Bundle size > 500 kB (Client).
+  - gorka-recover linker PDB note.
+  - auth.rs::is_unlocked is never used.
+
+NOT EXERCISED LIVE:
+  Full registration end-to-end (submit step 1,
+  receive verification email, click link, set
+  password, land on /download). That requires a
+  running backend and a real Resend email. Belongs
+  to Slice 8.6 deployment.
+
+================================================================
+V.4 - DEVIATIONS FROM PART IV.5.1
+================================================================
+
+D1. gorka-website/ added to git in this slice.
+    Part IV.5.1 implied this without saying it
+    directly; the file list assumed the folder
+    was already tracked.
+
+D2. Two additional pre-existing website bugs
+    fixed in-slice:
+      - Next 16 changed params to a Promise;
+        app/layout.tsx was using the Next 15
+        signature.
+      - Base UI accordion's prop is multiple, not
+        Radix's type="single" collapsible.
+    Both were latent from before Slice 8.1; the
+    website had never been built in this pipeline
+    to expose them.
+
+D3. Header.tsx and Footer.tsx were missing from
+    the restored backup. Written new to match
+    Tailwind theme tokens (gorka-cream, gorka-dark,
+    gorka-violet, gorka-red) and the nav/footer i18n
+    namespaces.
+
+================================================================
+V.5 - FINDINGS THIS SESSION
+================================================================
+
+FG-V1  gorka-website/ backup was incomplete.
+       src/components/layout/ was entirely absent.
+       18 module-not-found errors on the first
+       build. Fixed by writing Header.tsx and
+       Footer.tsx new.
+       The backup at C:\Users\kucha\gorka-app-backup
+       also does not contain the layout folder.
+
+FG-V2  First-time-in-pipeline builds reveal
+       pre-existing bugs. The website had never
+       been built by `next build` in this project's
+       history. Four separate issues (missing files,
+       Next 16 API change, Base UI vs Radix API,
+       stray 'f' character at file start) surfaced
+       in a single trip.
+       New process note: a component that has never
+       been built should be expected to need
+       multiple fix passes on first introduction.
+
+FG-V3  The website had two unreachable files:
+       gorka-website/src/app/layout.tsx and
+       gorka-website/src/app/page.tsx. They are a
+       create-next-app skeleton, not used by the
+       real app at app/[locale]/*. Cosmetic
+       cleanup candidate for a later slice.
+
+FG-V4  Stray 'f' prefix on "use client" at the top
+       of register/page.tsx. Python f-string syntax
+       copied into TypeScript. Would have failed
+       the build. Caught pre-commit during the
+       fixed-string verification pass.
+
+================================================================
+V.6 - PROCESS AMENDMENTS
+================================================================
+
+P-ZZ  FIRST BUILD OF A COMPONENT EXPECTS MULTIPLE
+      FIX PASSES.
+      A file or folder that has never been built in
+      the current pipeline should be treated as
+      new code, not as known-working code being
+      edited. Budget two to four fix passes.
+      FG-V2 is the evidence.
+
+P-AAA  WHEN A BUILD ERROR NAMES A MISSING MODULE,
+       CONFIRM THE DIRECTORY, NOT JUST THE FILE.
+       gorka-website/src/components/layout/ was
+       absent entirely. A single findstr for the
+       file would have missed that the parent
+       directory didn't exist. Look at both.
+
+P-BBB  VERIFY THE FIRST TWO LINES OF EVERY FILE
+       THAT HAS NEVER BEEN BUILT.
+      FG-V4 (stray 'f') would have been caught
+      instantly.
+
+P-CCC  ONE APPENDIX PER SESSION (restated, P-JJ,
+       P-M, P-V, P-Y, P-DD, P-QQ, P-UU, P-XX).
+       This appendix is new.
+
+================================================================
+V.7 - OPEN ITEMS
+================================================================
+
+New this session:
+  - Website full registration end-to-end not yet
+    tested live (belongs to Slice 8.6).
+  - gorka-website/src/app/ skeleton duplication
+    (FG-V3). Candidate for cleanup.
+  - Next.js multiple-lockfile warning. Cosmetic.
+  - Next.js middleware->proxy deprecation.
+    Cosmetic; Next 16 migration.
+
+Carried from Appendix U.6, unchanged:
+  - Slice 8.6 - Deploy.
+  - Support-OD auth reconciliation spec.
+  - OD Data Bridge spec.
+  - OI-9, OI-10, OI-11.
+  - logout does not clear gorka_od_session.
+  - Browser end-to-end OD test not yet run.
+  - OI-7, OI-8, OI-3.
+  - O1, O2, STEP 1.5, STEP 1.6.
+  - CONNECTOR_CREDENTIAL_REPLACED.
+  - TWILIO SMS BYOP SEND VERIFICATION.
+  - B7 CREDENTIAL-TRANSIT REVIEW.
+  - CANCEL-NEGATIVE FOR TIER 1.
+  - ACCEPTANCE - end-to-end.
+  - PF-4: local cargo check / GitHub Actions.
+
+================================================================
+V.8 - QUEUE
+================================================================
+
+DONE
+  Slices 1-7.
+  8.2, 8.3, 8.4. Appendix S.
+  8.6.5, 8.7. Appendix T.
+  8.5. Appendix U.
+  8.1. This appendix.
+
+IN FLIGHT
+  None.
+
+NEXT - IN ORDER
+
+  1. SLICE 8.6 - Deployment.
+     The last block of Part IV. Infrastructure
+     and live acceptance.
+
+     Deliverables:
+       - Deploy gorka-website to www.gorka.click.
+       - Deploy backend to api.gorka.click.
+       - Deploy Owner Dashboard to
+         owner.gorka.click.
+       - DNS + TLS for all three.
+       - .env.production with VITE_API_URL set.
+       - JWT_SECRET_OD in production environment.
+       - Q.15 icons (red G, transparent, #DE1D1E).
+       - Q.16 app names ("GORKA Client",
+         "GORKA Agent").
+       - Q.19 /downloads/*.exe files placed under
+         gorka-website/public/downloads/.
+       - Live acceptance per Part IV.7 (14 items).
+
+  Then the carried items.
+
+================================================================
+V.9 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I, II, III, IV, or V.
+  Does not edit prior appendices.
+  Does not start Slice 8.6.
+  Does not claim the website has been visually
+  verified in a browser; only the build is proven.
+  Does not claim registration works end-to-end;
+  only the individual pieces are proven.
+
+================================================================
+END OF APPENDIX V
+================================================================
