@@ -1,5 +1,6 @@
 import { Inter } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
+import { getLocale } from 'next-intl/server';
 import './globals.css';
 
 const inter = Inter({
@@ -15,12 +16,10 @@ export const metadata = {
 
 export default async function RootLayout({
   children,
-  params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ locale: string }>;
 }) {
-  const { locale } = await params;
+  const locale = await getLocale();
   return (
     <html lang={locale} className={inter.variable}>
       <body className="font-sans antialiased bg-gorka-cream text-gorka-dark">

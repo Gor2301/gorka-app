@@ -19,7 +19,7 @@ export default function FAQ() {
           {t("title")}
         </h2>
         
-        <Accordion openMultiple={false} className="w-full">
+        <Accordion multiple={false} className="w-full">
           {items.map((item, index) => (
             <AccordionItem key={index} value={`item-${index}`}>
               <AccordionTrigger className="text-left text-gorka-dark font-medium hover:text-gorka-violet">
