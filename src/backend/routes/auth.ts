@@ -33,6 +33,23 @@ const loginEmailLimiter = rateLimit({
   keyGenerator: (req) => req.body.email || ipKeyGenerator(req.ip),
 });
 
+// Free-provider email domains are rejected at registration.
+// Part IV.9 Q.17. Corporate-only signup.
+const FREE_EMAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk',
+  'ymail.com', 'outlook.com', 'hotmail.com', 'live.com',
+  'msn.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com',
+  'protonmail.com', 'proton.me', 'mail.com', 'gmx.com',
+  'gmx.net', 'yandex.com', 'yandex.ru', 'zoho.com',
+  'tutanota.com', 'tuta.io',
+]);
+
+const resendVerificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  message: { success: false, error: 'Too many resend attempts' },
+  keyGenerator: (req) => req.body.email || ipKeyGenerator(req.ip),
+});
 // Validation schemas
 const registerSchema = z.object({
   companyName: z.string().min(2),
@@ -42,11 +59,19 @@ const registerSchema = z.object({
   firstName: z.string().min(2, 'First name is required'),
   lastName: z.string().min(2, 'Last name is required'),
   primaryContact: z.string().optional(),
-  contactEmail: z.string().email().toLowerCase(),
+  contactEmail: z.string().email().toLowerCase().refine(
+    (v) => {
+      const at = v.lastIndexOf('@');
+      if (at === -1) return false;
+      const domain = v.slice(at + 1).toLowerCase();
+      return !FREE_EMAIL_DOMAINS.has(domain);
+    },
+    { message: 'Please use a corporate email address. Free email providers are not accepted.' }
+  ),
   contactPhone: z.string().regex(/^\+?[1-9]\d{1,14}$/),
   address: z.string().optional(),
   website: z.string().url().optional().or(z.literal('')),
-  password: z.string().min(8),
+  password: z.string().min(8).optional(),
 });
 
 const loginSchema = z.object({
@@ -95,8 +120,11 @@ console.log('🔍 REGISTER RESULT error:', result.error);
       });
     }
 
-    // Hash the password
-    const passwordHash = await bcrypt.hash(data.password, 12);
+    // Hash the password. When the caller omits it (the website's
+    // step-1 submission does), a random placeholder is hashed and
+    // later overwritten by /complete-registration.
+    const passwordForHash = data.password ?? randomBytes(32).toString('hex');
+    const passwordHash = await bcrypt.hash(passwordForHash, 12);
 
     // Generate verification token
     const rawToken = randomBytes(32).toString('hex');
@@ -186,6 +214,57 @@ console.log('🔍 REGISTER RESULT error:', result.error);
       success: false,
       error: 'Registration failed',
     });
+  }
+});
+
+// ─── RESEND VERIFICATION ────────────────────────────────────────────────
+// Regenerates the verification token and re-sends the email.
+// Generic 200 regardless of whether the account exists (anti-enumeration).
+router.post('/resend-verification', resendVerificationLimiter, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const email = typeof req.body?.email === 'string'
+      ? req.body.email.toLowerCase()
+      : null;
+
+    if (!email || !z.string().email().safeParse(email).success) {
+      return res.status(200).json({ success: true });
+    }
+
+    const org = await prisma.organization.findFirst({
+      where: { contactEmail: email, verificationStatus: 'PENDING_EMAIL' },
+    });
+
+    if (!org) {
+      return res.status(200).json({ success: true });
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = await bcrypt.hash(rawToken, 12);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: {
+        emailVerificationToken: tokenHash,
+        emailVerificationExpires: expiresAt,
+      },
+    });
+
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: email,
+        subject: 'Verify your GORKA account',
+        html: `<p>Click the link below to verify your account:</p><p><a href="https://www.gorka.click/verify-email?token=${rawToken}">Verify email</a></p>`,
+      });
+    } catch (emailErr) {
+      console.error('[AUTH] resend-verification email send failed:', emailErr);
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('[AUTH] resend-verification failed:', error);
+    return res.status(200).json({ success: true });
   }
 });
 
@@ -366,9 +445,6 @@ router.post('/complete-registration', async (req: Request, res: Response): Promi
             role: user.role,
             organizationId: user.organizationId,
           },
-redirectUrl: user.role === 'OWNER'
-  ? 'http://platform.gorka.localhost:3002'
-  : 'http://client.gorka.localhost:5173',
         },
       });
   } catch (error) {
@@ -498,9 +574,6 @@ router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, re
             role: user.role,
             organizationId: user.organizationId,
           },
-redirectUrl: user.role === 'OWNER'
-  ? 'http://platform.gorka.localhost:3002'
-  : 'http://client.gorka.localhost:5173',
           token, // For desktop apps (Bearer token)
         },
       });
