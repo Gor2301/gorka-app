@@ -10,8 +10,9 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: 'GORKA — AI-Powered Debt Collection Platform',
-  description: 'Built for agencies. Ready for banks. Automate collections with AI Copilot.',
+  title: 'GORKA \u2014 AI-Powered Debt Collection Platform',
+  description:
+    'Built for agencies. Ready for banks. Automate collections with AI Copilot.',
 };
 
 export default async function RootLayout({
@@ -23,9 +24,7 @@ export default async function RootLayout({
   return (
     <html lang={locale} className={inter.variable}>
       <body className="font-sans antialiased bg-gorka-cream text-gorka-dark">
-        <NextIntlClientProvider>
-          {children}
-        </NextIntlClientProvider>
+        <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>
     </html>
   );
