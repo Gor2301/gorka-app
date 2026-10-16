@@ -21,7 +21,7 @@
     "requirement2": "4 GB RAM",
     "requirement3": "500 MB disk space",
     "tipTitle": "User tip",
-    "tipBody": "To enlarge desktop icon labels: Settings → Accessibility → Text size.",
+    "tipBody": "To enlarge desktop icon labels: Settings \u2192 Accessibility \u2192 Text size.",
     "needHelp": "Need help?",
     "contactUs": "Contact us"
   },
@@ -40,39 +40,54 @@
     "ctaSecondary": "Book a Demo"
   },
   "features": {
-    "title": "Built for collections, designed for compliance",
+    "title": "Built for modern collections, designed for compliance",
     "items": [
       {
-        "title": "Multi-user roles & permissions",
-        "description": "Granular access control for agents, managers, and admins — built for agency workflows."
+        "number": "01",
+        "category": "SIMPLICITY & SCALE",
+        "headline": "Collection software, without the IT burden",
+        "subheadline": "SaaS convenience for modern collection teams.",
+        "body": "Get started with a straightforward onboarding process, manage your team, and support distributed work. GORKA is designed to help growing collection businesses scale without the complexity and infrastructure traditionally associated with large business systems."
       },
       {
-        "title": "CSV import with dynamic detection",
-        "description": "Upload client and debtor files in any format — GORKA auto-detects columns and maps them."
+        "number": "02",
+        "category": "PRIVACY BY DESIGN",
+        "headline": "Cloud convenience. Local data control.",
+        "subheadline": "Designed to protect your most sensitive business data.",
+        "body": "GORKA keeps operational debtor data on your organization's devices and synchronizes selected records between authorized devices through encryption. Its central platform is designed to coordinate your service without decrypting your debtor records."
       },
       {
-        "title": "AI Copilot",
-        "description": "Generate follow-up emails, strategy recommendations, and insights — powered by Gemini."
+        "number": "03",
+        "category": "AI-ASSISTED PRODUCTIVITY",
+        "headline": "Less routine. More informed action.",
+        "subheadline": "A practical AI Copilot, with people in control.",
+        "body": "Help your team work through routine tasks with AI-assisted recommendations and email drafts. Your agents review the suggestions, check the facts, and decide what to do. GORKA's AI foundation is designed to evolve as new, responsible business-assistance capabilities are developed."
       },
       {
-        "title": "Action Center",
-        "description": "Task and workflow management for collection agents — track every step."
+        "number": "04",
+        "category": "ACCESSIBLE VALUE",
+        "headline": "Modern capabilities. A sensible price.",
+        "subheadline": "Professional tools without unnecessary overhead.",
+        "body": "Advanced collection software should be within reach of smaller teams, not only large institutions. GORKA aims to combine modern capabilities with accessible pricing, so you can invest in better workflows without taking on the cost and complexity of a heavyweight IT system."
       },
       {
-        "title": "Local-first architecture",
-        "description": "Your data stays on your infrastructure — never uploaded to third-party servers."
+        "number": "05",
+        "category": "THE GORKA DIFFERENCE",
+        "headline": "One platform. A smarter way to collect.",
+        "subheadline": "Productivity, privacy, and value\u2014designed together.",
+        "body": "GORKA brings local-first data architecture, encrypted synchronization, team workflows, communication integrations, and AI-assisted productivity into one collection platform. Instead of choosing between convenience and control, your organization gets a foundation designed around both."
       }
     ]
   },
   "twoColumn": {
     "security": {
       "title": "Your data stays yours",
-      "description": "GORKA uses a local-first architecture — your data never leaves your infrastructure unless you choose to use a cloud provider.",
+      "description": "GORKA uses a local-first architecture \u2014 your data never leaves your infrastructure unless you choose to use a cloud provider.",
       "detail": "For banks and agencies handling sensitive debtor information, this means full control over compliance, security, and data sovereignty."
     },
     "copilot": {
       "title": "AI Copilot that actually helps",
-      "description": "GORKA's AI Copilot generates follow-up emails, strategy recommendations, and insights — all reviewed and approved by your team before sending.",
+      "description": "GORKA's AI Copilot generates follow-up emails, strategy recommendations, and insights \u2014 all reviewed and approved by your team before sending.",
       "detail": "Powered by Gemini, it learns your agency's tone and patterns, making every interaction more effective without sacrificing human judgment."
     }
   },
@@ -113,36 +128,167 @@
   },
   "faq": {
     "title": "Questions answered",
-    "items": [
+    "intro": "GORKA helps collection teams organize their work, coordinate across devices, and make more informed decisions\u2014while keeping control of their data in their own hands. Here are answers to the questions we think matter most.",
+    "categories": [
       {
-        "question": "What is GORKA?",
-        "answer": "GORKA is an AI-powered debt collection platform built for agencies and banks. It combines AI Copilot, multi-channel communications, and local-first data security to streamline collections."
+        "title": "About GORKA",
+        "items": [
+          {
+            "question": "What is GORKA?",
+            "answer": "GORKA is a debt collection platform designed to help collection agencies and lenders manage overdue accounts, coordinate collection teams, record actions and communications, and work more efficiently. It combines local data storage, team collaboration, communication integrations, and AI-assisted recommendations in one platform."
+          },
+          {
+            "question": "Who is GORKA built for?",
+            "answer": "GORKA is designed primarily for collection agencies and small lenders that manage overdue accounts with a team of agents. Its architecture is intended to support organizations that want better coordination and visibility without giving up control of their data."
+          },
+          {
+            "question": "What makes GORKA different from other debt collection software?",
+            "answer": "GORKA is built around a local-first approach. Instead of relying on a central cloud database containing all your debtor information, its applications keep operational data on your organization's devices and synchronize selected information between authorized devices using encrypted event-based synchronization. GORKA also brings collection workflows, team collaboration, external communication integrations, and AI-assisted recommendations together in a privacy-conscious design."
+          },
+          {
+            "question": "Is GORKA suitable for a small agency, or is it only for large organizations?",
+            "answer": "GORKA is intended to serve collection teams of different sizes, starting with collection agencies and smaller lenders. You can begin with your own workflow and evaluate whether the available features meet your team's operational needs before expanding."
+          },
+          {
+            "question": "Does GORKA replace my existing collection process?",
+            "answer": "GORKA is designed to support and improve your collection workflow, not to remove your team's judgment. Your organization remains responsible for its collection policies, decisions, and communications."
+          }
+        ]
       },
       {
-        "question": "Who is it built for?",
-        "answer": "GORKA is built for debt collection agencies, banks, and financial institutions that need to manage debtor communications, track actions, and automate follow-ups."
+        "title": "Privacy & Security",
+        "items": [
+          {
+            "question": "Where is my data stored?",
+            "answer": "GORKA's Client and Agent applications maintain operational data locally on your organization's devices. Selected information can synchronize between authorized devices through encrypted event-based synchronization. GORKA's central Control Plane supports functions such as authentication, organization and device management, and service coordination. It is not designed to store or decrypt your debtor records."
+          },
+          {
+            "question": "Can GORKA's central servers read my debtor data?",
+            "answer": "GORKA's architecture is designed so the central Control Plane cannot decrypt your locally stored debtor data or read debtor information carried through the encrypted synchronization channel. This boundary is a core architectural principle. However, it does not mean that every piece of information involved in every feature stays local: external services may receive data when you choose to use them."
+          },
+          {
+            "question": "Does GORKA send my debtor data to the cloud?",
+            "answer": "Not as a complete, centrally stored debtor database. GORKA is designed to keep operational debtor data on your organization's devices and synchronize selected records in encrypted form. Some features involve external services. For example, sending an email requires communicating with an email provider, and using an external AI provider involves sending an approved request to that provider. The information shared depends on the feature and its configuration."
+          },
+          {
+            "question": "Is my data encrypted?",
+            "answer": "GORKA uses encryption for local database protection and for synchronization between authorized devices. Its synchronization design uses authenticated encryption to protect event data in transit. Encryption is one layer of security, not a guarantee against every threat. Device security, account access, credential handling, backups, and your organization's operating practices also matter."
+          },
+          {
+            "question": "What happens if an employee leaves my organization?",
+            "answer": "Access should be managed through your organization's user and device administration processes. You should review and revoke access where supported when an employee leaves. Important limitation: the current MVP does not provide per-machine cryptographic identity, cryptographic device revocation, or organization-key rotation. Removing an account or device should therefore not be assumed to invalidate copies of encryption keys or data that the device already holds. Organizations should establish appropriate offboarding and device-security procedures."
+          },
+          {
+            "question": "Can GORKA access my data without my permission?",
+            "answer": "GORKA's architecture is designed to prevent the central Control Plane from decrypting local debtor records. Access to the applications and their data still depends on device security, authentication, user permissions, and who has access to the organization's encryption key. You should protect user credentials, secure your devices, and limit access to authorized personnel."
+          },
+          {
+            "question": "What happens if a device is lost or damaged?",
+            "answer": "A lost or damaged device can make locally stored information unavailable. Other authorized devices may have synchronized copies of eligible records, but synchronization is not a substitute for a verified backup. Your organization should maintain a backup and recovery procedure appropriate to its operational and legal requirements."
+          },
+          {
+            "question": "Does GORKA guarantee compliance with debt collection and privacy laws?",
+            "answer": "No software can guarantee compliance in every jurisdiction or business situation. GORKA can support more organized workflows and controlled communications, but your organization remains responsible for applicable debt collection, privacy, consumer protection, recordkeeping, and communications requirements. You should review your intended use of GORKA with qualified legal or compliance advisers in the jurisdictions where you operate."
+          }
+        ]
       },
       {
-        "question": "How does data security work?",
-        "answer": "GORKA uses a local-first architecture — your data stays on your own infrastructure. Nothing is uploaded to third-party servers unless you explicitly choose to use a cloud provider."
+        "title": "Getting Started",
+        "items": [
+          {
+            "question": "How do I load my accounts into GORKA?",
+            "answer": "The planned onboarding workflow starts with importing a CSV file. GORKA's import experience is intended to help identify the columns in your file so you do not have to prepare every file against a rigid template. Before importing real customer data, review the supported fields and validate the import with a small sample. Other file formats and direct integrations may be introduced as the product develops."
+          },
+          {
+            "question": "Can I import data from my existing collection system?",
+            "answer": "You can start with supported CSV exports from your existing system. Whether a direct connection is available depends on the source system and the integrations supported by GORKA. If you rely on a specific database, CRM, loan management system, or collection platform, discuss the required import fields and migration process with us before committing to a migration."
+          },
+          {
+            "question": "Can my team work together across multiple devices?",
+            "answer": "Yes. GORKA's Client and Agent applications are designed to coordinate through encrypted event-based synchronization. Selected records can be shared between authorized devices without synchronizing the entire local database. Not every data category is synchronized. For example, debts and documents are local-only in the current synchronization scope, while eligible debtor records, actions, and communication logs can synchronize. Plan your workflow around these boundaries."
+          },
+          {
+            "question": "What happens when a device is offline?",
+            "answer": "Local-first architecture is intended to let the applications work with locally available data without depending on a central database for every operation. Synchronization can resume when the necessary connections are available. However, information created on one device may not be available on another until it synchronizes. Your team should understand which records are local-only and how to recognize synchronization status."
+          },
+          {
+            "question": "Can I control what each employee can access?",
+            "answer": "GORKA supports organization and user management, with roles that distinguish owners, clients, and agents. Access should be configured according to each person's responsibilities. Do not assume that every feature supports fine-grained permissions, branch-level restrictions, or assignment-only visibility. Confirm the exact access controls available in your version before relying on them for a particular workflow."
+          }
+        ]
       },
       {
-        "question": "Can I import my existing data?",
-        "answer": "Yes — GORKA supports CSV and Excel imports with dynamic column detection. No reformatting needed."
+        "title": "AI & Integrations",
+        "items": [
+          {
+            "question": "What does the GORKA AI Copilot do?",
+            "answer": "The AI Copilot is designed to assist collection agents by generating recommendations and drafting email messages using approved context from the local application. It is an assistant for your team\u2014not an autonomous collection agent. Your staff remain responsible for reviewing recommendations, checking facts, and deciding what to do."
+          },
+          {
+            "question": "Does the AI send messages automatically?",
+            "answer": "No. The current Copilot workflow is designed around human review and approval. It does not independently send messages without the required user action. Before sending, GORKA applies relevant validation and compliance checks. A draft that fails the applicable checks should not be sent through the Copilot workflow."
+          },
+          {
+            "question": "Does the AI see all my debtor information?",
+            "answer": "No. The Copilot is designed to use an allowlist of approved context rather than automatically sending an entire debtor record to an AI provider. The system is designed to exclude direct identifiers and other unapproved sensitive details from AI context. The actual information sent depends on the configured feature and provider request, so organizations should review their AI configuration and provider terms before enabling it."
+          },
+          {
+            "question": "Which AI provider does GORKA use?",
+            "answer": "The Copilot architecture supports configured external AI providers, including Gemini and compatible providers using an OpenAI-style API. Availability depends on the current release and configuration. The provider processes the AI request outside GORKA. Review the provider's data handling, retention, and privacy terms before using it with business data."
+          },
+          {
+            "question": "Can the AI make mistakes?",
+            "answer": "Yes. AI-generated recommendations and messages can be incomplete, misleading, or factually incorrect. GORKA's Copilot workflow includes validation intended to catch certain problems, but no automated check can guarantee that every recommendation is correct. Agents should verify important facts, review the proposed wording, and follow organizational policies before acting on a recommendation."
+          },
+          {
+            "question": "Does GORKA use AI to decide which debtors deserve collection action?",
+            "answer": "The Copilot is designed to support recommendations and drafting, not to replace human judgment with autonomous collection decisions. Its current scope should not be confused with an unrestricted predictive scoring system or a system that independently decides whom to pursue. Your organization remains responsible for fair, lawful, and appropriate collection practices."
+          },
+          {
+            "question": "Can I send emails or text messages from GORKA?",
+            "answer": "GORKA's connector architecture supports external communication services, including email and SMS providers. The services available to you depend on the current release, your configuration, and your provider credentials. Using an external provider means the relevant message content and delivery information must be shared with that provider to perform the requested service."
+          },
+          {
+            "question": "Do I need my own provider accounts and credentials?",
+            "answer": "It depends on the integration. Some supported services use a managed-provider model, while others use a bring-your-own-provider arrangement in which your organization supplies its own credentials. The applicable requirements, costs, and setup steps should be checked for each connector before enabling it."
+          },
+          {
+            "question": "Does GORKA store my communication-provider passwords or API keys in its cloud?",
+            "answer": "GORKA's architecture is designed to keep provider credentials out of the central Control Plane. Credentials for supported bring-your-own-provider integrations are stored locally in the protected application database and may be synchronized in encrypted form to authorized devices that need them. You remain responsible for protecting your provider accounts and following the provider's credential-management guidance."
+          }
+        ]
       },
       {
-        "question": "Do you offer a free trial?",
-        "answer": "Yes — the Free tier includes basic AI tools and automation. Upgrade when you're ready to scale."
-      },
-      {
-        "question": "How is this different from legacy tools?",
-        "answer": "GORKA automates what spreadsheets and legacy tools do manually — data organization, follow-ups, reporting — with AI assistance and local-first security."
-      },
-      {
-        "question": "What's your pricing model?",
-        "answer": "We offer three tiers: Free, Professional, and Enterprise. All tiers include AI tools and automation. Enterprise includes custom solutions."
+        "title": "Pricing & Support",
+        "items": [
+          {
+            "question": "How much does GORKA cost?",
+            "answer": "GORKA offers a free plan to help organizations get started. Professional is intended for growing teams, while Enterprise pricing is tailored to organizational needs. Plan availability, feature limits, and current prices are listed on the Pricing page. External provider charges\u2014such as email, SMS, voice, or AI usage\u2014may be separate from your GORKA subscription."
+          },
+          {
+            "question": "What do I need to get started?",
+            "answer": "You can begin by creating an account and verifying your email. The current onboarding flow is designed around downloading the GORKA Client application for Windows, signing in, completing initial setup, and importing your first supported data file. You will need appropriate access to the device where you install the application and authorization to use the data you import."
+          },
+          {
+            "question": "Does GORKA work on Mac, Linux, or mobile devices?",
+            "answer": "The current onboarding and installation workflow is focused on Windows desktop applications. Do not assume that Mac, Linux, or mobile versions are available unless they are explicitly listed on the website."
+          },
+          {
+            "question": "Can I try GORKA before paying?",
+            "answer": "GORKA has a free plan intended to let prospective customers start evaluating the platform. Check the Pricing page for the current limits and included features. For an evaluation, use a small, controlled sample of data and verify that the available workflows fit your requirements before migrating production records."
+          },
+          {
+            "question": "How do I get help choosing the right setup?",
+            "answer": "If you are unsure whether GORKA fits your collection process, book a demo or contact the team. We can discuss your team size, current data sources, communication providers, security requirements, and onboarding needs. We recommend resolving important requirements\u2014especially access control, data recovery, compliance, and integrations\u2014before moving production data into a new system."
+          }
+        ]
       }
-    ]
+    ],
+    "closing": {
+      "title": "Still have questions?",
+      "body": "Tell us about your collection workflow and what you need to improve. We can help you evaluate whether GORKA is the right fit for your organization.",
+      "cta": "Contact us"
+    }
   },
   "finalCta": {
     "title": "Ready to transform your collections workflow?",
@@ -151,7 +297,7 @@
   "footer": {
     "tagline": "AI-powered debt collection for agencies and banks.",
     "contact": "hello@gorka.click",
-    "copyright": "© 2026 GORKA. All rights reserved."
+    "copyright": "\u00a9 2026 GORKA. All rights reserved."
   },
   "about": {
     "title": "About GORKA",
