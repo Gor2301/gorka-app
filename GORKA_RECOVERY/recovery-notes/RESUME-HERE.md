@@ -9184,3 +9184,212 @@ Y.8 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX Y
 ================================================================
+
+
+================================================================
+APPENDIX Z - SLICE 8.6b (PART 3) CLOSE
+(added v3.19, 2026-10-17)
+================================================================
+
+Z.0 - WHY THIS APPENDIX EXISTS
+
+Appendix Y closed the first homepage overhaul. This
+session completed the rest of the 8.6b polish:
+brand-new pricing tiers, the "Clear Costs" disclosure,
+a strategic shift from "Book a Demo" to "Start Free",
+and the final resolution of the EN/ES language
+switcher bug.
+
+Prior appendices are not edited.
+
+================================================================
+Z.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD 91f86ad (plus the Appendix Z commit).
+        Pushed to origin/main.
+        Clean tree except the known untracked files.
+
+CLOUD:  at 91f86ad. `npm run build` passed.
+        Visual verification EN + ES passed.
+
+Commits this session, oldest first:
+
+  91f86ad  website: replace Book a Demo with Start Free;
+           new pricing tiers
+  (plus the fixes to Header.tsx committed via node)
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -6
+    git status --short
+
+================================================================
+Z.2 - WHAT SHIPPED
+================================================================
+
+Pricing (sections/Pricing.tsx + messages/*.json):
+  - Completely new tier structure:
+      Free: $0
+      Professional: $1,999 / month
+      Enterprise: $4,999 / month
+  - Feature lists updated for all three tiers.
+  - New "Clear Costs" section added below the
+    tiers, explaining GORKA subscription vs. BYOP
+    vs. GORKA-managed services.
+  - Hardcoded English header removed from the
+    pricing page (translation now comes from JSON).
+
+Funnel Shift (Header.tsx, page.tsx, FinalCTA.tsx):
+  - "Book a Demo" is officially dead.
+  - Primary CTA everywhere (Nav, Hero, FinalCTA)
+    is now "Start Free" / "Comenzar Gratis".
+  - Links point to /register instead of /contact.
+  - Enterprise tier still points to /contact.
+
+Language Switcher (Header.tsx, layout.tsx):
+  - Fully functional. Swaps between /en and /es
+    seamlessly while preserving the current path.
+  - Root layout now passes `messages` to
+    NextIntlClientProvider. This fixed a bug where
+    client components (like the FAQ) were stuck in
+    English even on the /es pages.
+  - Switcher uses standard <a> tags with hard URL
+    generation to avoid next-intl router loops.
+
+================================================================
+Z.3 - VERIFICATION
+================================================================
+
+CLOUD at 91f86ad:
+  npm run build    PASS (✓ Compiled successfully).
+  Browser check    PASS. EN and ES.
+
+Browser-verified:
+  - Header: "Start Free" / "Comenzar Gratis".
+  - Hero: "Start Free" -> /register.
+  - Pricing: $0, $1,999, $4,999, Clear Costs block.
+  - Final CTA: "Start Free" -> /register.
+  - Language Switch: /en/pricing <-> /es/pricing.
+
+================================================================
+Z.4 - FINDINGS THIS SESSION
+================================================================
+
+FG-Z1  The "Book a Demo" primary CTA was obsolete
+       once the Free tier became a real product
+       trial. Founder decision: shift to self-serve
+       "Start Free" to reduce friction.
+
+FG-Z2  The language switcher caused a fatal
+       routing loop (/en/es) and left client
+       components (FAQ) in English because
+       NextIntlClientProvider was missing the
+       `messages` prop. Both fixed.
+
+FG-Z3  Notepad corruption. Attempting to Ctrl+A
+       and paste a new version of Header.tsx left
+       ~1,000 bytes of old code at the bottom,
+       causing fatal syntax errors.
+       Resolution: used `node -e` to overwrite the
+       file entirely. Bypasses Notepad completely.
+
+FG-Z4  The Register page (/register) has the
+       "Contact Email" field duplicated. This is a
+       pre-existing bug, not introduced this session.
+       Deferred to the polish pass.
+
+================================================================
+Z.5 - PROCESS AMENDMENTS
+================================================================
+
+P-PPP  WHEN NOTEPAD CORRUPTS A FILE, USE NODE -E
+       TO FORCE OVERWRITE.
+       If a whole-file replacement fails (e.g.,
+       leftover bytes at the bottom), do not keep
+       trying Notepad. Use
+       `node -e "fs.writeFileSync(...)"` to
+       guarantee the exact bytes are written.
+
+P-QQQ  NEXTINTLCLIENTPROVIDER MUST RECEIVE BOTH
+       `locale` AND `messages` PROPS.
+       Without `messages`, client components fall
+       back to the default locale (English).
+       This was the root cause of the FAQ showing
+       English on the /es pages.
+
+P-RRR  ONE APPENDIX PER SESSION (restated).
+
+================================================================
+Z.6 - OPEN ITEMS
+================================================================
+
+New this session:
+  - REGISTER PAGE: Duplicate "Contact Email"
+    field. Needs removal.
+  - HARDCODED HEADERS AUDIT: We fixed the Pricing
+    page, but we still need to audit Contact,
+    Support, Register, and Verify-Email for
+    hardcoded English titles.
+
+Carried from Appendix Y.6:
+  - Installer .exe files do not exist (8.6c).
+  - Spanish nav crowding.
+  - Dead config file (i18n.ts root).
+  - All carried from Appendix W.7.
+
+================================================================
+Z.7 - QUEUE
+================================================================
+
+DONE
+
+  Slices 1-7. See Appendices F-P.
+  8.2, 8.3, 8.4. Appendix S.
+  8.6.5, 8.7. Appendix T.
+  8.5. Appendix U.
+  8.1. Appendix V.
+  8.6a. Appendix W.
+  8.6b (part 1). Appendix X.
+  8.6b (part 2). Appendix Y.
+  8.6b (part 3). This appendix.
+    - Pricing overhaul, Start Free funnel,
+      language switcher fix.
+
+IN FLIGHT
+  None.
+
+NEXT - IN ORDER
+
+  1. FINAL POLISH PASS.
+     - Fix Register page duplicate email.
+     - Audit other page headers for hardcoded
+       English (Contact, Support, Register,
+       Verify-Email).
+
+  2. SLICE 8.6c - Deployment.
+     www.gorka.click, api.gorka.click,
+     owner.gorka.click. DNS + TLS for all three.
+     JWT_SECRET_OD in production. VITE_API_URL
+     baked into both Tauri binaries. Installer
+     .exe files placed at
+     gorka-website/public/downloads/. Live
+     acceptance per Part IV.7.
+     Requires founder decisions on hosting, DNS
+     records, TLS.
+
+  Then the carried items.
+
+================================================================
+Z.8 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I, II, III, IV, or V.
+  Does not edit prior appendices.
+  Does not start Slice 8.6c.
+  Does not fix the Register page duplicate email.
+
+================================================================
+END OF APPENDIX Z
+================================================================
