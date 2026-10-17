@@ -32,14 +32,14 @@
     "faq": "FAQ",
     "download": "Download",
     "contact": "Contact",
-    "bookDemo": "Book a Demo"
+    "bookDemo": "Start Free"
   },
   "hero": {
     "eyebrow": "MODERN DEBT COLLECTION · BUILT DIFFERENTLY",
     "title": "Debt collection, reimagined.",
     "subtitle": "GORKA is a modern debt collection platform that brings team workflows, communication integrations, and AI-assisted productivity together—with a local-first approach to protecting your debtor data.",
     "subtext": "Get the convenience of modern software, keep operational data under your organization's control, and give your team tools to work smarter. Designed for collection agencies and lenders ready to modernize their operations.",
-    "ctaPrimary": "Book a Demo",
+    "ctaPrimary": "Start Free",
     "ctaSecondary": "See how it works"
   },
   "features": {
@@ -125,44 +125,58 @@
   },
   "pricing": {
     "title": "Pricing plans",
+    "subtitle": "Your subscription. Your chosen services. Clear costs.",
     "tiers": [
       {
         "name": "Free",
         "price": "$0",
-        "description": "Start small. Scale when ready.",
-        "cta": "Get Started",
+        "period": "/ month",
+        "description": "Experience the real product, not a restricted demo.",
+        "cta": "Start Free",
         "features": [
-          "Basic AI tools",
-          "Limited automation",
-          "Basic chatbot integration",
-          "Real-time reporting"
+          "1 admin + 1 agent",
+          "Up to 100 debtors",
+          "Access to available core features",
+          "Self-service onboarding"
         ]
       },
       {
         "name": "Professional",
-        "price": "$1,700",
-        "description": "Full power for growing agencies.",
+        "price": "$1,999",
+        "period": "/ month",
+        "description": "For collection agencies and growing teams.",
         "cta": "Get Started",
         "features": [
-          "Everything in Free",
-          "Advanced analytics",
-          "Premium chatbot",
-          "Cross-platform integrations"
+          "Up to 100 users",
+          "Unlimited debtors",
+          "Full Professional feature set",
+          "Priority support with a defined response commitment",
+          "Simple onboarding, with hands-on assistance available"
         ]
       },
       {
         "name": "Enterprise",
-        "price": "Contact us",
-        "description": "Custom solutions for banks and large agencies.",
+        "price": "$4,999",
+        "period": "/ month",
+        "description": "For larger agencies and organizations with more demanding requirements.",
         "cta": "Contact Sales",
         "features": [
-          "Everything in Professional",
-          "Dedicated growth manager",
-          "Custom reports & dashboards",
-          "Fully customized AI"
+          "More than 100 users",
+          "Unlimited debtors",
+          "Full platform feature set",
+          "Priority support and agreed onboarding assistance",
+          "Enterprise service arrangements, as defined in the offer"
         ]
       }
-    ]
+    ],
+    "costsTitle": "Your subscription. Your chosen services. Clear costs.",
+    "costsIntro": "Your GORKA subscription covers the GORKA platform and the features included in your plan. Third-party usage is billed separately.",
+    "byopTitle": "Bring your own provider (BYOP)",
+    "byopDesc": "Connect your own supported provider account and credentials. You pay the provider directly under your agreement with them.",
+    "managedTitle": "GORKA-managed provider services",
+    "managedDesc": "Where a connector is provided through GORKA's managed service, applicable provider usage charges are passed through at cost, without a GORKA markup.",
+    "meteredDesc": "AI requests, emails, SMS messages, voice calls, and other metered services may incur additional charges depending on the connector and your actual usage.",
+    "reviewDesc": "Before enabling a connector, you can review the applicable provider and billing model."
   },
   "faq": {
     "title": "Questions answered",
@@ -331,7 +345,7 @@
   "finalCta": {
     "title": "Ready to modernize your collection operations?",
     "subtitle": "Discover how GORKA combines modern workflows, local-first data control, and practical AI.",
-    "ctaPrimary": "Book a Demo",
+    "ctaPrimary": "Start Free",
     "ctaSecondary": "See Plans & Pricing"
   },
   "footer": {

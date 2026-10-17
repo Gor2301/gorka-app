@@ -38,7 +38,7 @@ export default function HomePage() {
           </p>
 
           <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/contact" className="px-8 py-3 bg-gorka-violet text-white rounded-lg font-semibold hover:bg-gorka-violet/90 transition shadow-md">
+            <Link href="/register" className="px-8 py-3 bg-gorka-violet text-white rounded-lg font-semibold hover:bg-gorka-violet/90 transition shadow-md">
               {t('ctaPrimary')}
             </Link>
             <a href="#features" className="px-8 py-3 bg-white text-gorka-dark border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition shadow-sm">

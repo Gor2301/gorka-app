@@ -32,14 +32,14 @@
     "faq": "Preguntas",
     "download": "Descargar",
     "contact": "Contacto",
-    "bookDemo": "Reservar una Demo"
+    "bookDemo": "Comenzar Gratis"
   },
   "hero": {
     "eyebrow": "COBRO MODERNO · CONSTRUIDO DE FORMA DIFERENTE",
     "title": "Cobro de deudas, reinventado.",
     "subtitle": "GORKA es una plataforma moderna de cobro de deudas que reúne flujos de trabajo en equipo, integraciones de comunicación y productividad asistida por IA, con un enfoque local-first para proteger los datos de sus deudores.",
     "subtext": "Obtenga la comodidad del software moderno, mantenga los datos operativos bajo el control de su organización y brinde a su equipo herramientas para trabajar de manera más inteligente. Diseñado para agencias de cobro y prestamistas listos para modernizar sus operaciones.",
-    "ctaPrimary": "Reservar una Demo",
+    "ctaPrimary": "Comenzar Gratis",
     "ctaSecondary": "Ver cómo funciona"
   },
   "features": {
@@ -125,44 +125,58 @@
   },
   "pricing": {
     "title": "Planes de precios",
+    "subtitle": "Su suscripción. Sus servicios elegidos. Costos claros.",
     "tiers": [
       {
         "name": "Gratis",
         "price": "$0",
-        "description": "Empieza pequeño. Escala cuando estés listo.",
-        "cta": "Comenzar",
+        "period": "/ mes",
+        "description": "Experimente el producto real, no una demostración restringida.",
+        "cta": "Comenzar Gratis",
         "features": [
-          "Herramientas básicas de IA",
-          "Automatización limitada",
-          "Integración básica de chatbot",
-          "Informes en tiempo real"
+          "1 administrador + 1 agente",
+          "Hasta 100 deudores",
+          "Acceso a las funciones principales disponibles",
+          "Incorporación de autoservicio"
         ]
       },
       {
         "name": "Profesional",
-        "price": "$1,700",
-        "description": "Todo el poder para agencias en crecimiento.",
+        "price": "$1,999",
+        "period": "/ mes",
+        "description": "Para agencias de cobro y equipos en crecimiento.",
         "cta": "Comenzar",
         "features": [
-          "Todo en Gratis",
-          "Análisis avanzado",
-          "Chatbot premium",
-          "Integraciones multiplataforma"
+          "Hasta 100 usuarios",
+          "Deudores ilimitados",
+          "Conjunto completo de funciones Profesionales",
+          "Soporte prioritario con un compromiso de respuesta definido",
+          "Incorporación simple, con asistencia práctica disponible"
         ]
       },
       {
         "name": "Empresarial",
-        "price": "Contáctanos",
-        "description": "Soluciones personalizadas para bancos y grandes agencias.",
+        "price": "$4,999",
+        "period": "/ mes",
+        "description": "Para agencias y organizaciones más grandes con requisitos más exigentes.",
         "cta": "Contactar Ventas",
         "features": [
-          "Todo en Profesional",
-          "Gestor de crecimiento dedicado",
-          "Informes y paneles personalizados",
-          "IA completamente personalizada"
+          "Más de 100 usuarios",
+          "Deudores ilimitados",
+          "Conjunto completo de funciones de la plataforma",
+          "Soporte prioritario y asistencia de incorporación acordada",
+          "Arreglos de servicio empresarial, según se define en la oferta"
         ]
       }
-    ]
+    ],
+    "costsTitle": "Su suscripción. Sus servicios elegidos. Costos claros.",
+    "costsIntro": "Su suscripción a GORKA cubre la plataforma GORKA y las funciones incluidas en su plan. El uso de terceros se factura por separado.",
+    "byopTitle": "Traiga su propio proveedor (BYOP)",
+    "byopDesc": "Conecte su propia cuenta de proveedor compatible y credenciales. Usted paga al proveedor directamente bajo su acuerdo con ellos.",
+    "managedTitle": "Servicios de proveedores gestionados por GORKA",
+    "managedDesc": "Cuando un conector se proporciona a través del servicio gestionado de GORKA, los cargos de uso del proveedor aplicables se transfieren al costo, sin un margen de beneficio de GORKA.",
+    "meteredDesc": "Las solicitudes de IA, correos electrónicos, mensajes SMS, llamadas de voz y otros servicios medidos pueden generar cargos adicionales según el conector y su uso real.",
+    "reviewDesc": "Antes de habilitar un conector, puede revisar el modelo de facturación y proveedor aplicable."
   },
   "faq": {
     "title": "Preguntas respondidas",
@@ -331,7 +345,7 @@
   "finalCta": {
     "title": "¿Listo para modernizar sus operaciones de cobro?",
     "subtitle": "Descubra cómo GORKA combina flujos de trabajo modernos, control de datos local-first y IA práctica.",
-    "ctaPrimary": "Reservar una Demo",
+    "ctaPrimary": "Comenzar Gratis",
     "ctaSecondary": "Ver Planes y Precios"
   },
   "footer": {

@@ -6,17 +6,9 @@ export default function PricingPage() {
   return (
     <main className="min-h-screen">
       <Header />
-      <section className="pt-16 md:pt-20 bg-gorka-cream">
-        <div className="container-gorka text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-gorka-dark">
-            Choose your plan
-          </h1>
-          <p className="text-lg text-gray-600 mt-2">
-            Start free. Scale when you're ready.
-          </p>
-        </div>
-      </section>
-      <Pricing />
+      <div className="pt-16 md:pt-20">
+        <Pricing />
+      </div>
       <Footer />
     </main>
   );

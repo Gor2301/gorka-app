@@ -1,78 +1,86 @@
 "use client";
-
 import { useTranslations } from "next-intl";
-import { Check } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 
 export default function Pricing() {
   const t = useTranslations("pricing");
   const tiers = t.raw("tiers") as Array<{
     name: string;
     price: string;
+    period: string;
     description: string;
     cta: string;
     features: string[];
   }>;
-  
+
   return (
-    <section className="section-padding bg-gorka-cream">
+    <section className="section-padding bg-white">
       <div className="container-gorka">
-        <h2 className="text-3xl md:text-4xl font-bold text-center text-gorka-dark mb-12">
-          {t("title")}
-        </h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {tiers.map((tier, index) => {
-            const isEnterprise = tier.name === "Enterprise";
-            const isProfessional = tier.name === "Professional";
-            
-            return (
-              <div 
-                key={index}
-                className={`bg-white rounded-xl p-6 border ${
-                  isProfessional ? 'border-gorka-violet shadow-lg' : 'border-gray-200'
-                } ${isEnterprise ? 'bg-gorka-dark text-white' : ''}`}
-              >
-                <h3 className={`text-lg font-semibold ${isEnterprise ? 'text-white' : 'text-gorka-dark'}`}>
-                  {tier.name}
-                </h3>
-                <div className="mt-2">
-                  <span className={`text-3xl font-bold ${isEnterprise ? 'text-white' : 'text-gorka-dark'}`}>
-                    {tier.price}
-                  </span>
-                  {tier.price !== "Contact us" && (
-                    <span className={`text-sm ${isEnterprise ? 'text-gray-400' : 'text-gray-500'}`}>
-                      /mo
-                    </span>
-                  )}
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-gorka-dark mb-4">
+            {t("title")}
+          </h2>
+          <p className="text-lg text-gray-600">
+            {t("subtitle")}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
+          {tiers.map((tier, index) => (
+            <div
+              key={index}
+              className="bg-gorka-cream rounded-2xl p-8 border border-gray-100 flex flex-col justify-between"
+            >
+              <div>
+                <h3 className="text-xl font-bold text-gorka-dark mb-2">{tier.name}</h3>
+                <div className="flex items-baseline gap-1 mb-4">
+                  <span className="text-4xl font-extrabold text-gorka-dark">{tier.price}</span>
+                  <span className="text-gray-500 font-medium">{tier.period}</span>
                 </div>
-                <p className={`text-sm mt-1 ${isEnterprise ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {tier.description}
-                </p>
-                
-                <ul className="mt-4 space-y-2">
-                  {tier.features.map((feature, idx) => (
-                    <li key={idx} className={`flex items-start gap-2 text-sm ${
-                      isEnterprise ? 'text-gray-300' : 'text-gray-600'
-                    }`}>
-                      <Check className="w-4 h-4 text-gorka-violet flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-gray-600 mb-6 h-10">{tier.description}</p>
+                <ul className="space-y-3 mb-8">
+                  {tier.features.map((feature, i) => (
+                    <li key={i} className="flex items-start gap-3 text-sm text-gray-700">
+                      <span className="text-[#F01428] mt-0.5">✓</span>
                       {feature}
                     </li>
                   ))}
                 </ul>
-                
-                <Link href={`/en/contact`}>
-                  <button className={`w-full mt-6 px-6 py-2.5 text-sm font-semibold rounded-lg transition ${
-                    isEnterprise 
-                      ? 'bg-white text-gorka-dark hover:bg-gray-100' 
-                      : 'bg-gorka-violet text-white hover:bg-gorka-violet/90'
-                  }`}>
-                    {tier.cta}
-                  </button>
-                </Link>
               </div>
-            );
-          })}
+              <Link
+                href={index === 2 ? "/contact" : "/register"}
+                className={`w-full block text-center py-3 rounded-lg font-semibold transition ${
+                  index === 1
+                    ? "bg-gorka-violet text-white hover:bg-gorka-violet/90 shadow-md"
+                    : "bg-white text-gorka-dark border border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                {tier.cta}
+              </Link>
+            </div>
+          ))}
+        </div>
+
+        {/* Clear Costs Section */}
+        <div className="max-w-4xl mx-auto bg-gorka-cream p-8 md:p-12 rounded-2xl border border-gray-100">
+          <h3 className="text-2xl font-bold text-gorka-dark mb-6">{t("costsTitle")}</h3>
+          
+          <div className="space-y-6 text-gray-700 leading-relaxed">
+            <p>{t("costsIntro")}</p>
+            
+            <div>
+              <h4 className="font-semibold text-gorka-dark mb-2">{t("byopTitle")}</h4>
+              <p>{t("byopDesc")}</p>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gorka-dark mb-2">{t("managedTitle")}</h4>
+              <p>{t("managedDesc")}</p>
+            </div>
+
+            <p>{t("meteredDesc")}</p>
+            <p className="font-medium text-gorka-dark">{t("reviewDesc")}</p>
+          </div>
         </div>
       </div>
     </section>

@@ -10,7 +10,7 @@ export default function FinalCTA() {
         <h2 className="text-3xl md:text-5xl font-bold mb-6">{t("title")}</h2>
         <p className="text-lg text-white/80 mb-10">{t("subtitle")}</p>
         <div className="flex flex-wrap justify-center gap-4">
-          <Link href="/contact" className="px-8 py-3 bg-white text-gorka-violet rounded-lg font-semibold hover:bg-gray-100 transition shadow-md">
+          <Link href="/register" className="px-8 py-3 bg-white text-gorka-violet rounded-lg font-semibold hover:bg-gray-100 transition shadow-md">
             {t("ctaPrimary")}
           </Link>
           <Link href="/pricing" className="px-8 py-3 bg-gorka-violet/50 border border-white/30 text-white rounded-lg font-semibold hover:bg-gorka-violet/80 transition">
