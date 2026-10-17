@@ -1,6 +1,6 @@
 import { Inter } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
-import { getLocale } from 'next-intl/server';
+import { getLocale, getMessages } from 'next-intl/server';
 import './globals.css';
 
 const inter = Inter({
@@ -21,10 +21,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const locale = await getLocale();
+  const messages = await getMessages(); // <-- THIS IS THE FIX
+
   return (
     <html lang={locale} className={inter.variable}>
       <body className="font-sans antialiased bg-gorka-cream text-gorka-dark">
-        <NextIntlClientProvider locale={locale}>
+        <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
         </NextIntlClientProvider>
       </body>

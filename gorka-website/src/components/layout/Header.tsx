@@ -6,7 +6,7 @@ import { useTranslations, useLocale } from 'next-intl';
 export default function Header() {
   const t = useTranslations('nav');
   const tLogin = useTranslations('auth.login');
-  const pathname = usePathname();
+  const pathname = usePathname(); // This returns the path WITHOUT the locale (e.g., "/faq")
   const locale = useLocale();
 
   const navLinks = [
@@ -15,6 +15,12 @@ export default function Header() {
     { key: 'faq', href: '/faq' },
     { key: 'contact', href: '/contact' },
   ] as const;
+
+  // Build the language switch URLs safely
+  const getLocalePath = (targetLocale: string) => {
+    if (pathname === '/') return `/${targetLocale}`;
+    return `/${targetLocale}${pathname}`;
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-gorka-cream/95 backdrop-blur border-b border-gray-200">
@@ -42,23 +48,21 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center gap-4">
-          {/* Language Switcher */}
+          {/* Language Switcher - Hard Reload for absolute safety */}
           <div className="flex items-center gap-1 text-sm font-medium text-gray-500">
-            <Link
-              href={pathname}
-              locale="en"
+            <a
+              href={getLocalePath('en')}
               className={`hover:text-gorka-dark transition ${locale === 'en' ? 'text-gorka-dark font-bold' : ''}`}
             >
               EN
-            </Link>
+            </a>
             <span className="text-gray-300">|</span>
-            <Link
-              href={pathname}
-              locale="es"
+            <a
+              href={getLocalePath('es')}
               className={`hover:text-gorka-dark transition ${locale === 'es' ? 'text-gorka-dark font-bold' : ''}`}
             >
               ES
-            </Link>
+            </a>
           </div>
 
           <Link
