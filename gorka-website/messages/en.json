@@ -93,25 +93,33 @@
     }
   },
   "comparison": {
-    "title": "Why GORKA",
-    "rows": [
-      {
-        "gorka": "Dynamic, automated data organization",
-        "other": "Manual sorting, error-prone"
-      },
-      {
-        "gorka": "Data stays on your infrastructure",
-        "other": "Data uploaded to third-party servers"
-      },
-      {
-        "gorka": "AI-assisted follow-ups",
-        "other": "Manual tracking"
-      },
-      {
-        "gorka": "Built for agencies, scales to banks",
-        "other": "One-size-fits-none"
-      }
-    ]
+    "eyebrow": "A DIFFERENT APPROACH",
+    "title": "A modern alternative to traditional collection platforms.",
+    "intro": "Traditional platforms can offer extensive capabilities, but some organizations face substantial subscription costs, infrastructure requirements, or centralized data architectures. GORKA takes a different approach, combining modern software delivery with local-first data architecture and AI-assisted productivity.",
+    "tableHeaderFeature": "What matters",
+    "tableHeaderGorka": "GORKA",
+    "tableHeaderOther": "Traditional or centralized platforms",
+    "row1Label": "Getting started",
+    "row1Gorka": "Designed for straightforward onboarding and a Windows-based workflow",
+    "row1Other": "Setup varies by vendor and deployment model",
+    "row2Label": "Data architecture",
+    "row2Gorka": "Local operational data with encrypted synchronization for selected records",
+    "row2Other": "Varies; many cloud products use a centralized operational database",
+    "row3Label": "Team collaboration",
+    "row3Gorka": "Client and Agent applications designed to synchronize selected records",
+    "row3Other": "Depends on the product and its architecture",
+    "row4Label": "Communication services",
+    "row4Gorka": "Connector-based support for available providers",
+    "row4Other": "Depends on included integrations and additional services",
+    "row5Label": "AI assistance",
+    "row5Gorka": "Human-reviewed recommendations and email drafting, with a broader roadmap",
+    "row5Other": "Depends on the vendor's AI features and data practices",
+    "row6Label": "Cost",
+    "row6Gorka": "Pricing designed to be accessible to growing teams",
+    "row6Other": "Varies widely by users, modules, deployment, and service level",
+    "conclusionTitle": "The difference is not one feature. It's the combination.",
+    "conclusionDesc": "GORKA is being built for organizations that want modern collection workflows, a local-first approach to data, practical AI assistance, and pricing designed for growing teams.",
+    "cta": "Compare Plans"
   },
   "pricing": {
     "title": "Pricing plans",
@@ -319,8 +327,10 @@
     }
   },
   "finalCta": {
-    "title": "Ready to transform your collections workflow?",
-    "cta": "Book a Free Demo"
+    "title": "Ready to modernize your collection operations?",
+    "subtitle": "Discover how GORKA combines modern workflows, local-first data control, and practical AI.",
+    "ctaPrimary": "Book a Demo",
+    "ctaSecondary": "See Plans & Pricing"
   },
   "footer": {
     "tagline": "AI-powered debt collection for agencies and banks.",
@@ -421,5 +431,51 @@
     "successMessage2": " has been created. We'll get back to you shortly.",
     "error": "Something went wrong. Please try again.",
     "loginRequired": "Please log in to submit a support request."
+  },
+  "dataControl": {
+    "eyebrow": "YOUR DATA, YOUR CONTROL",
+    "title": "Your data shouldn't have to live in someone else's cloud.",
+    "intro": "Traditional cloud software often relies on a central database containing customer records. GORKA takes a different architectural approach.",
+    "body": "Your operational debtor data is maintained locally by GORKA's applications on your organization's devices. Selected records synchronize between authorized devices through encrypted event-based synchronization, while the central Control Plane coordinates essential platform services without being designed to decrypt your debtor records.",
+    "whatThisMeans": "What this means for your business",
+    "point1Title": "Local-first data architecture",
+    "point1Desc": "Your operational debtor records are not designed to reside in a central GORKA debtor database.",
+    "point2Title": "Encrypted collaboration",
+    "point2Desc": "Selected information can synchronize between authorized Client and Agent devices.",
+    "point3Title": "A defined data boundary",
+    "point3Desc": "Your core debtor records are separated architecturally from the central services that support the platform.",
+    "point4Title": "More informed control",
+    "point4Desc": "You can evaluate where data lives, which information synchronizes, and what external services receive before adopting a workflow.",
+    "conclusion": "GORKA combines the convenience of a modern software service with an architecture designed around data control.",
+    "cta": "Discover how GORKA protects your data"
+  },
+  "aiVision": {
+    "eyebrow": "INTELLIGENCE THAT GROWS WITH YOUR BUSINESS",
+    "title": "More than automation. A smarter way to work.",
+    "intro": "Collection teams handle repetitive tasks, scattered information, and constant decisions about what to do next. GORKA's AI Copilot is designed to help reduce that burden—while keeping your people in control.",
+    "todayTitle": "Today: practical AI assistance",
+    "todayDesc": "The current Copilot foundation supports AI-assisted recommendations and email drafting using approved context. Agents review suggestions, verify important facts, and decide what action to take.",
+    "directionTitle": "The direction: intelligence built around your business",
+    "directionDesc": "Our longer-term vision is to develop more capable search, analysis, and decision-support tools grounded in the information and experience of each customer's own business. As the platform evolves, this could include more intelligent ways to find relevant information across connected data sources, identify patterns, and support operational decisions using authentic business data—not generic demonstrations or purchased datasets presented as your own experience.",
+    "privacyTitle": "Privacy remains part of the design.",
+    "privacyDesc": "Any future analytical or machine-learning capabilities must be designed with clear customer control, defined data boundaries, and appropriate safeguards. Using customer data for model training or learning is not an automatic part of the current MVP.",
+    "cta": "Explore the GORKA AI vision"
+  },
+  "whyGorka": {
+    "eyebrow": "WHY GORKA",
+    "title": "Built for the realities of modern debt collection.",
+    "intro": "Your collection operation shouldn't have to choose between convenience, data control, useful technology, and cost. GORKA brings these priorities together in one platform.",
+    "point1Title": "Ready for modern work",
+    "point1Desc": "A SaaS-style experience designed to simplify onboarding, team coordination, and growth—without requiring every customer to build and maintain a heavyweight IT environment.",
+    "point2Title": "Connected by design",
+    "point2Desc": "A connector-based architecture for supported communication and AI providers, giving your team a more unified way to access essential services instead of managing every integration as a separate project.",
+    "point3Title": "Privacy-conscious from the foundation",
+    "point3Desc": "Local-first operational data and encrypted synchronization are architectural decisions, not just another security feature added to a conventional centralized database.",
+    "point4Title": "AI with a practical purpose",
+    "point4Desc": "Start with recommendations and email drafting. Build toward more capable assistance and business intelligence as the product and its safeguards mature.",
+    "point5Title": "Designed with cost in mind",
+    "point5Desc": "Modern collection software should not be out of reach for growing agencies. GORKA aims to deliver meaningful capabilities at a more accessible price point.",
+    "conclusion": "GORKA brings the pieces together: modern delivery, local data control, connected services, and AI-assisted work—designed specifically around collection operations.",
+    "cta": "See Plans & Pricing"
   }
 }

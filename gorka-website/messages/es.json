@@ -93,25 +93,33 @@
     }
   },
   "comparison": {
-    "title": "¿Por qué GORKA?",
-    "rows": [
-      {
-        "gorka": "Organización de datos dinámica y automatizada",
-        "other": "Clasificación manual, propensa a errores"
-      },
-      {
-        "gorka": "Los datos permanecen en tu infraestructura",
-        "other": "Datos subidos a servidores de terceros"
-      },
-      {
-        "gorka": "Seguimientos asistidos por IA",
-        "other": "Seguimiento manual"
-      },
-      {
-        "gorka": "Diseñada para agencias, escala para bancos",
-        "other": "Un tamaño que no sirve para ninguno"
-      }
-    ]
+    "eyebrow": "UN ENFOQUE DIFERENTE",
+    "title": "Una alternativa moderna a las plataformas de cobro tradicionales.",
+    "intro": "Las plataformas tradicionales pueden ofrecer capacidades extensas, pero algunas organizaciones enfrentan costos de suscripción sustanciales, requisitos de infraestructura o arquitecturas de datos centralizadas. GORKA adopta un enfoque diferente, combinando la entrega de software moderna con una arquitectura de datos local-first y productividad asistida por IA.",
+    "tableHeaderFeature": "Lo que importa",
+    "tableHeaderGorka": "GORKA",
+    "tableHeaderOther": "Plataformas tradicionales o centralizadas",
+    "row1Label": "Comenzar",
+    "row1Gorka": "Diseñado para una incorporación sencilla y un flujo de trabajo basado en Windows",
+    "row1Other": "La configuración varía según el proveedor y el modelo de implementación",
+    "row2Label": "Arquitectura de datos",
+    "row2Gorka": "Datos operativos locales con sincronización cifrada para registros seleccionados",
+    "row2Other": "Varía; muchos productos en la nube utilizan una base de datos operativa centralizada",
+    "row3Label": "Colaboración en equipo",
+    "row3Gorka": "Aplicaciones Cliente y Agente diseñadas para sincronizar registros seleccionados",
+    "row3Other": "Depende del producto y su arquitectura",
+    "row4Label": "Servicios de comunicación",
+    "row4Gorka": "Soporte basado en conectores para proveedores disponibles",
+    "row4Other": "Depende de las integraciones incluidas y los servicios adicionales",
+    "row5Label": "Asistencia de IA",
+    "row5Gorka": "Recomendaciones revisadas por humanos y redacción de correos electrónicos, con una hoja de ruta más amplia",
+    "row5Other": "Depende de las características de IA y las prácticas de datos del proveedor",
+    "row6Label": "Costo",
+    "row6Gorka": "Precios diseñados para ser accesibles para equipos en crecimiento",
+    "row6Other": "Varía ampliamente según usuarios, módulos, implementación y nivel de servicio",
+    "conclusionTitle": "La diferencia no es una característica. Es la combinación.",
+    "conclusionDesc": "GORKA está diseñado para organizaciones que desean flujos de trabajo de cobro modernos, un enfoque local-first de los datos, asistencia práctica de IA y precios diseñados para equipos en crecimiento.",
+    "cta": "Comparar Planes"
   },
   "pricing": {
     "title": "Planes de precios",
@@ -319,8 +327,10 @@
     }
   },
   "finalCta": {
-    "title": "¿Listo para transformar tu flujo de trabajo de cobros?",
-    "cta": "Reservar una Demo Gratis"
+    "title": "¿Listo para modernizar sus operaciones de cobro?",
+    "subtitle": "Descubra cómo GORKA combina flujos de trabajo modernos, control de datos local-first y IA práctica.",
+    "ctaPrimary": "Reservar una Demo",
+    "ctaSecondary": "Ver Planes y Precios"
   },
   "footer": {
     "tagline": "Cobro con IA para agencias y bancos.",
@@ -421,5 +431,51 @@
     "successMessage2": " ha sido creado. Te responderemos en breve.",
     "error": "Algo salió mal. Por favor, inténtalo de nuevo.",
     "loginRequired": "Por favor, inicia sesión para enviar una solicitud de soporte."
+  },
+  "dataControl": {
+    "eyebrow": "SUS DATOS, SU CONTROL",
+    "title": "Sus datos no deberían tener que vivir en la nube de otra persona.",
+    "intro": "El software tradicional en la nube a menudo se basa en una base de datos central que contiene los registros de los clientes. GORKA adopta un enfoque arquitectónico diferente.",
+    "body": "Los datos operativos de sus deudores se mantienen localmente mediante las aplicaciones de GORKA en los dispositivos de su organización. Los registros seleccionados se sincronizan entre dispositivos autorizados mediante sincronización cifrada basada en eventos, mientras que el Control Plane central coordina los servicios esenciales de la plataforma sin estar diseñado para descifrar los registros de sus deudores.",
+    "whatThisMeans": "Lo que esto significa para su negocio",
+    "point1Title": "Arquitectura de datos local-first",
+    "point1Desc": "Sus registros operativos de deudores no están diseñados para residir en una base de datos central de deudores de GORKA.",
+    "point2Title": "Colaboración cifrada",
+    "point2Desc": "La información seleccionada puede sincronizarse entre dispositivos Cliente y Agente autorizados.",
+    "point3Title": "Un límite de datos definido",
+    "point3Desc": "Sus registros centrales de deudores están separados arquitectónicamente de los servicios centrales que soportan la plataforma.",
+    "point4Title": "Control más informado",
+    "point4Desc": "Puede evaluar dónde viven los datos, qué información se sincroniza y qué servicios externos reciben antes de adoptar un flujo de trabajo.",
+    "conclusion": "GORKA combina la comodidad de un servicio de software moderno con una arquitectura diseñada en torno al control de datos.",
+    "cta": "Descubra cómo GORKA protege sus datos"
+  },
+  "aiVision": {
+    "eyebrow": "INTELIGENCIA QUE CRECE CON SU NEGOCIO",
+    "title": "Más que automatización. Una forma más inteligente de trabajar.",
+    "intro": "Los equipos de cobro manejan tareas repetitivas, información dispersa y decisiones constantes sobre qué hacer a continuación. El Copilot de IA de GORKA está diseñado para ayudar a reducir esa carga, manteniendo a su equipo en control.",
+    "todayTitle": "Hoy: asistencia práctica de IA",
+    "todayDesc": "La base actual del Copilot admite recomendaciones asistidas por IA y redacción de correos electrónicos utilizando contexto aprobado. Los agentes revisan las sugerencias, verifican hechos importantes y deciden qué acción tomar.",
+    "directionTitle": "La dirección: inteligencia construida alrededor de su negocio",
+    "directionDesc": "Nuestra visión a más largo plazo es desarrollar herramientas de búsqueda, análisis y soporte de decisiones más capaces, basadas en la información y la experiencia del propio negocio de cada cliente. A medida que la plataforma evolucione, esto podría incluir formas más inteligentes de encontrar información relevante en fuentes de datos conectadas, identificar patrones y apoyar decisiones operativas utilizando datos comerciales auténticos, no demostraciones genéricas o conjuntos de datos comprados presentados como su propia experiencia.",
+    "privacyTitle": "La privacidad sigue siendo parte del diseño.",
+    "privacyDesc": "Cualquier capacidad analítica o de aprendizaje automático futura debe diseñarse con control claro del cliente, límites de datos definidos y salvaguardas adecuadas. El uso de datos de clientes para el entrenamiento o aprendizaje de modelos no es una parte automática del MVP actual.",
+    "cta": "Explore la visión de IA de GORKA"
+  },
+  "whyGorka": {
+    "eyebrow": "POR QUÉ GORKA",
+    "title": "Construido para las realidades del cobro moderno.",
+    "intro": "Su operación de cobro no debería tener que elegir entre conveniencia, control de datos, tecnología útil y costo. GORKA reúne estas prioridades en una sola plataforma.",
+    "point1Title": "Listo para el trabajo moderno",
+    "point1Desc": "Una experiencia estilo SaaS diseñada para simplificar la incorporación, la coordinación del equipo y el crecimiento, sin requerir que cada cliente construya y mantenga un entorno de TI pesado.",
+    "point2Title": "Conectado por diseño",
+    "point2Desc": "Una arquitectura basada en conectores para proveedores de comunicación e IA compatibles, que brinda a su equipo una forma más unificada de acceder a servicios esenciales en lugar de administrar cada integración como un proyecto separado.",
+    "point3Title": "Consciente de la privacidad desde la base",
+    "point3Desc": "Los datos operativos local-first y la sincronización cifrada son decisiones arquitectónicas, no solo otra característica de seguridad agregada a una base de datos centralizada convencional.",
+    "point4Title": "IA con un propósito práctico",
+    "point4Desc": "Comience con recomendaciones y redacción de correos electrónicos. Avance hacia una asistencia más capaz e inteligencia comercial a medida que el producto y sus salvaguardas maduren.",
+    "point5Title": "Diseñado pensando en el costo",
+    "point5Desc": "El software de cobro moderno no debería estar fuera del alcance de las agencias en crecimiento. GORKA tiene como objetivo ofrecer capacidades significativas a un precio más accesible.",
+    "conclusion": "GORKA une las piezas: entrega moderna, control de datos local, servicios conectados y trabajo asistido por IA, diseñado específicamente en torno a las operaciones de cobro.",
+    "cta": "Ver Planes y Precios"
   }
 }
