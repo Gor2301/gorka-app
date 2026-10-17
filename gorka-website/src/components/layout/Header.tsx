@@ -16,7 +16,7 @@ export default function Header() {
     { key: 'contact', href: '/contact' },
   ] as const;
 
-  const getLocalePath = (targetLocale) => {
+  const getLocalePath = (targetLocale: string) => {
     if (pathname === '/') return '/' + targetLocale;
     return '/' + targetLocale + pathname;
   };
