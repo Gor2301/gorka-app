@@ -24,7 +24,9 @@ export default async function RootLayout({
   return (
     <html lang={locale} className={inter.variable}>
       <body className="font-sans antialiased bg-gorka-cream text-gorka-dark">
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider locale={locale}>
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );
