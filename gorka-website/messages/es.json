@@ -23,7 +23,18 @@
     "tipTitle": "Consejo para el usuario",
     "tipBody": "Para ampliar las etiquetas de los iconos del escritorio: Configuración → Accesibilidad → Tamaño del texto.",
     "needHelp": "¿Necesita ayuda?",
-    "contactUs": "Contáctenos"
+    "contactUs": "Contáctenos",
+    "pathTitle": "El camino ideal hacia el cobro moderno",
+    "pathStep1Title": "Cree una cuenta",
+    "pathStep1Desc": "Regístrese, verifique su correo electrónico y establezca una contraseña.",
+    "pathStep2Title": "Instale GORKA",
+    "pathStep2Desc": "Descargue la aplicación de Windows e inicie sesión.",
+    "pathStep3Title": "Siga la configuración guiada",
+    "pathStep3Desc": "Habilite la sincronización, configure la organización y complete los pasos requeridos.",
+    "pathStep4Title": "Importe un conjunto de datos de muestra o real",
+    "pathStep4Desc": "Comience con una muestra o un conjunto de datos real para validar los datos y comprender el proceso de importación antes de una migración completa.",
+    "pathStep5Title": "Invite a su equipo y explore",
+    "pathStep5Desc": "Cree cuentas de agente, complete la inscripción y comience a probar los flujos de trabajo."
   },
   "nav": {
     "home": "Inicio",

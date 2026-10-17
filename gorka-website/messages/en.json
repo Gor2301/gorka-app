@@ -23,7 +23,18 @@
     "tipTitle": "User tip",
     "tipBody": "To enlarge desktop icon labels: Settings → Accessibility → Text size.",
     "needHelp": "Need help?",
-    "contactUs": "Contact us"
+    "contactUs": "Contact us",
+    "pathTitle": "The Ideal Path to Modern Collection",
+    "pathStep1Title": "Create an account",
+    "pathStep1Desc": "Register, verify your email, and set a password.",
+    "pathStep2Title": "Install GORKA",
+    "pathStep2Desc": "Download the Windows application and sign in.",
+    "pathStep3Title": "Follow guided setup",
+    "pathStep3Desc": "Enable synchronization, configure the organization, and complete required steps.",
+    "pathStep4Title": "Import a sample or real dataset",
+    "pathStep4Desc": "Start with a sample or real dataset to validate data and understand the import process before a full migration.",
+    "pathStep5Title": "Invite the team and explore",
+    "pathStep5Desc": "Create agent accounts, complete enrollment, and start testing workflows."
   },
   "nav": {
     "home": "Home",

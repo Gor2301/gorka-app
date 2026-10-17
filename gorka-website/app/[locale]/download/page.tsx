@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Link } from '@/i18n/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
+import { UserPlus, Download, Settings, FileSpreadsheet, Users } from 'lucide-react';
 
 const INSTALLERS = {
   client: {
@@ -18,10 +19,18 @@ const INSTALLERS = {
 export default function DownloadPage() {
   const t = useTranslations('download');
 
+  const steps = [
+    { icon: UserPlus, title: t('pathStep1Title'), desc: t('pathStep1Desc') },
+    { icon: Download, title: t('pathStep2Title'), desc: t('pathStep2Desc') },
+    { icon: Settings, title: t('pathStep3Title'), desc: t('pathStep3Desc') },
+    { icon: FileSpreadsheet, title: t('pathStep4Title'), desc: t('pathStep4Desc') },
+    { icon: Users, title: t('pathStep5Title'), desc: t('pathStep5Desc') },
+  ];
+
   return (
     <>
       <Header />
-      <main className="pt-16 md:pt-20">
+      <main className="pt-16 md:pt-20 bg-gorka-cream min-h-screen">
         <div
           style={{
             maxWidth: '860px',
@@ -62,6 +71,33 @@ export default function DownloadPage() {
           >
             <DownloadCard title={t('clientTitle')} url={INSTALLERS.client.url} />
             <DownloadCard title={t('agentTitle')} url={INSTALLERS.agent.url} />
+          </div>
+
+          {/* The Ideal Path Section */}
+          <div className="bg-white rounded-2xl p-8 md:p-10 border border-gray-200 shadow-sm mb-12">
+            <h2 className="text-xl font-bold text-gorka-dark mb-8">
+              {t('pathTitle')}
+            </h2>
+            <div className="space-y-6">
+              {steps.map((step, index) => {
+                const Icon = step.icon;
+                return (
+                  <div key={index} className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full bg-[#F01428]/10 flex items-center justify-center text-[#F01428] shrink-0 mt-0.5">
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gorka-dark text-base">
+                        {index + 1}. {step.title}
+                      </h3>
+                      <p className="text-gray-600 text-sm mt-1 leading-relaxed">
+                        {step.desc}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <h2
