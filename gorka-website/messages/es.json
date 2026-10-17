@@ -35,10 +35,12 @@
     "bookDemo": "Reservar una Demo"
   },
   "hero": {
-    "title": "Plataforma de Cobro con IA",
-    "subtitle": "Diseñada para agencias. Lista para bancos. Automatiza cobros con Copilot de IA, comunicaciones multicanal y seguridad de datos local.",
-    "ctaPrimary": "Empieza Gratis",
-    "ctaSecondary": "Reservar una Demo"
+    "eyebrow": "COBRO MODERNO · CONSTRUIDO DE FORMA DIFERENTE",
+    "title": "Cobro de deudas, reinventado.",
+    "subtitle": "GORKA es una plataforma moderna de cobro de deudas que reúne flujos de trabajo en equipo, integraciones de comunicación y productividad asistida por IA, con un enfoque local-first para proteger los datos de sus deudores.",
+    "subtext": "Obtenga la comodidad del software moderno, mantenga los datos operativos bajo el control de su organización y brinde a su equipo herramientas para trabajar de manera más inteligente. Diseñado para agencias de cobro y prestamistas listos para modernizar sus operaciones.",
+    "ctaPrimary": "Reservar una Demo",
+    "ctaSecondary": "Ver cómo funciona"
   },
   "features": {
     "title": "Diseñada para cobros modernos, creada para cumplimiento",

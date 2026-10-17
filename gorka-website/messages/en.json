@@ -35,10 +35,12 @@
     "bookDemo": "Book a Demo"
   },
   "hero": {
-    "title": "AI-Powered Debt Collection Platform",
-    "subtitle": "Built for agencies. Ready for banks. Automate collections with AI Copilot, multi-channel communications, and local-first data security.",
-    "ctaPrimary": "Get Started Free",
-    "ctaSecondary": "Book a Demo"
+    "eyebrow": "MODERN DEBT COLLECTION · BUILT DIFFERENTLY",
+    "title": "Debt collection, reimagined.",
+    "subtitle": "GORKA is a modern debt collection platform that brings team workflows, communication integrations, and AI-assisted productivity together—with a local-first approach to protecting your debtor data.",
+    "subtext": "Get the convenience of modern software, keep operational data under your organization's control, and give your team tools to work smarter. Designed for collection agencies and lenders ready to modernize their operations.",
+    "ctaPrimary": "Book a Demo",
+    "ctaSecondary": "See how it works"
   },
   "features": {
     "title": "Built for modern collections, designed for compliance",
