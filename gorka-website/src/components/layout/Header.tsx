@@ -1,11 +1,14 @@
 "use client";
 
-import { Link } from '@/i18n/navigation';
-import { useTranslations } from 'next-intl';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import { useTranslations, useLocale } from 'next-intl';
 
 export default function Header() {
   const t = useTranslations('nav');
   const tLogin = useTranslations('auth.login');
+  const pathname = usePathname();
+  const router = useRouter();
+  const locale = useLocale();
 
   const navLinks = [
     { key: 'home', href: '/' },
@@ -39,7 +42,24 @@ export default function Header() {
           </Link>
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          {/* Language Switcher */}
+          <div className="flex items-center gap-1 text-sm font-medium text-gray-500">
+            <button
+              onClick={() => router.replace(pathname, { locale: 'en' })}
+              className={`hover:text-gorka-dark transition ${locale === 'en' ? 'text-gorka-dark font-bold' : ''}`}
+            >
+              EN
+            </button>
+            <span className="text-gray-300">|</span>
+            <button
+              onClick={() => router.replace(pathname, { locale: 'es' })}
+              className={`hover:text-gorka-dark transition ${locale === 'es' ? 'text-gorka-dark font-bold' : ''}`}
+            >
+              ES
+            </button>
+          </div>
+
           <Link
             href="/login"
             className="hidden sm:inline text-sm font-medium text-gorka-dark hover:text-gorka-violet transition"
