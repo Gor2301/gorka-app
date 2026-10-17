@@ -8960,3 +8960,227 @@ X.8 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX X
 ================================================================
+
+
+================================================================
+APPENDIX Y - SLICE 8.6b (PART 2) CLOSE
+(added v3.18, 2026-10-17)
+================================================================
+
+Y.0 - WHY THIS APPENDIX EXISTS
+
+Appendix X closed Slice 8.6b (Part 1) - the FAQ, 5 cards,
+and Spanish locale fix. This session completed Part 2:
+the full homepage content overhaul, replacing all old
+placeholders with the founder's new copy and approved
+imagery.
+
+Prior appendices are not edited.
+
+================================================================
+Y.1 - MACHINE STATE AT CLOSE
+================================================================
+
+MAIN:   HEAD ed014fd. Pushed to origin/main.
+        Clean tree except the five known untracked files.
+
+CLOUD:  at ed014fd. `npm run build` passed successfully
+        (after b420cb7). Dev server verified visually.
+
+Commits this session, oldest first:
+
+  16b7394  website: replace SVG icons with approved
+           feature card images; split layout
+  b420cb7  website: full homepage content overhaul
+           (Hero, Data, AI, Why, Comparison, FinalCTA)
+  ed014fd  website: add missing hero text to en/es json
+
+Safe resume check:
+
+    cd /d C:\Users\kucha\gorka-app
+    git log --oneline -6
+    git status --short
+
+================================================================
+Y.2 - WHAT SHIPPED
+================================================================
+
+Images (public/card-01.jpg through card-05.jpg):
+  - Sourced by founder, vetted for legal compliance
+    (no watermarks, no trademarks, no fake text).
+  - Mapped to cards: 01 (Glass office), 02 (Server
+    room), 03 (Orange network), 04 (Balance scale),
+    05 (Red chess pawn).
+
+Features (sections/Features.tsx):
+  - Layout changed from 200px left rail to a 380px
+    left image column with text on the right.
+  - Inline SVGs removed, replaced with next/image.
+  - Anchor added: id="features" and scroll-mt-20.
+
+Hero (app/[locale]/page.tsx + messages/*.json):
+  - New eyebrow: "MODERN DEBT COLLECTION · BUILT
+    DIFFERENTLY"
+  - Title: "Debt collection, reimagined."
+  - Subtitle + Subtext split into two paragraphs for
+    better typography.
+  - CTAs changed to "Book a Demo" (primary) and
+    "See how it works" (scrolls to #features).
+
+Data Control (sections/DataControl.tsx - NEW):
+  - Replaces TwoColumn.tsx (deleted).
+  - Title: "Your data shouldn't have to live in
+    someone else's cloud."
+  - 4 bullet points (2x2 grid on desktop).
+  - Emphasis on "selected records" and architectural
+    boundaries to match legal positioning.
+
+AI Vision (sections/AICopilot.tsx - NEW):
+  - Title: "More than automation. A smarter way to
+    work."
+  - Split into two cards: "Today" (practical AI) and
+    "The direction" (future intelligence).
+  - Privacy callout box with red left border.
+  - Removes the old "learns your tone" claim.
+
+Why GORKA (sections/WhyGorka.tsx - NEW):
+  - 5 pillars (3-column grid).
+  - Title: "Built for the realities of modern debt
+    collection."
+
+Comparison (sections/Comparison.tsx - REWRITE):
+  - Replaced the old bullet table with a 3-column
+    responsive HTML table.
+  - Dark header row, GORKA column highlighted.
+  - 6 rows: Getting started, Data architecture, Team
+    collaboration, Communication services, AI
+    assistance, Cost.
+
+Final CTA (sections/FinalCTA.tsx - REWRITE):
+  - Title: "Ready to modernize your collection
+    operations?"
+  - Purple background with primary and secondary CTAs.
+
+Messages (messages/en.json, messages/es.json):
+  - Full Spanish translation of all new sections.
+  - hero, dataControl, aiVision, whyGorka,
+    comparison, and finalCta namespaces added.
+
+================================================================
+Y.3 - VERIFICATION
+================================================================
+
+CLOUD at ed014fd:
+  npm run build    PASS (✓ Compiled successfully).
+  Browser check    PASS. Hero, images, Data Control,
+                   AI Vision, Why GORKA, Comparison,
+                   and Final CTA all render.
+
+================================================================
+Y.4 - FINDINGS THIS SESSION
+================================================================
+
+FG-Y1  The Hero text was missing from the JSON batch
+       in the previous command. The page threw a
+       MISSING_MESSAGE error for `hero.eyebrow`.
+       Fixed in ed014fd.
+
+FG-Y2  The founder expressed a strong preference for
+       visual communication (images over text) as a
+       sales tool. Sourced and vetted 5 images.
+
+FG-Y3  Vetting rules applied: no watermarks
+       (dreamstime, Unsplash+, Vecteezy), no fake
+       text/UI, no trademarks (Visa, Mastercard, HSBC),
+       no regulatory claims. 5 images passed.
+
+================================================================
+Y.5 - PROCESS AMENDMENTS
+================================================================
+
+P-NNN  WHEN MULTIPLE NEW FILES ARE CREATED IN ONE
+       BATCH, VERIFY THE `git status` TO ENSURE ALL
+       OF THEM LANDED.
+       FG-Y1 is the evidence.
+
+P-OOO  ONE APPENDIX PER SESSION (restated, P-JJ,
+       P-M, P-V, P-Y, P-DD, P-QQ, P-UU, P-XX, P-CCC,
+       P-GGG). This appendix is new.
+
+================================================================
+Y.6 - OPEN ITEMS
+================================================================
+
+New this session:
+
+  - PRICING PAGE HEADER. Still has hardcoded English
+    "Choose your plan / Start free. Scale when
+    you're ready." needs translation.
+
+  - PRICING TIER DETAILS. The $1,700/mo and feature
+    lists on the Pricing page have not been
+    reviewed for alignment with the new copy.
+
+  - THE "T" WATERMARK. The 5th image in the previous
+    batch had a "T" watermark. Ignored, replaced.
+
+Carried from Appendix X.6:
+
+  - Feature card icons (now replaced with images, but
+    the SVG decision remains recorded).
+  - Hardcoded English page headers (Pricing at
+    minimum, plus contact, support, register,
+    verify-email).
+  - Installer .exe files do not exist (8.6c).
+  - Spanish nav crowding.
+  - Dead config file (i18n.ts root).
+  - Production npm run build needs re-running for
+    the final HEAD (it passed at b420cb7, but the
+    Hero fix is ed014fd).
+  - All carried from Appendix W.7.
+
+================================================================
+Y.7 - QUEUE
+================================================================
+
+DONE
+
+  Slices 1-7. See Appendices F-P.
+  8.2, 8.3, 8.4. Appendix S.
+  8.6.5, 8.7. Appendix T.
+  8.5. Appendix U.
+  8.1. Appendix V.
+  8.6a. Appendix W.
+  8.6b (part 1). Appendix X.
+  8.6b (part 2). This appendix.
+
+IN FLIGHT
+  None.
+
+NEXT - IN ORDER
+
+  1. SLICE 8.6c - Deployment.
+     www.gorka.click, api.gorka.click,
+     owner.gorka.click. DNS + TLS for all three.
+     JWT_SECRET_OD in production. VITE_API_URL
+     baked into both Tauri binaries. Installer
+     .exe files placed at
+     gorka-website/public/downloads/. Live
+     acceptance per Part IV.7.
+     Requires founder decisions on hosting, DNS
+     records, TLS.
+
+  Then the carried items from Y.6.
+
+================================================================
+Y.8 - WHAT THIS APPENDIX DOES NOT DO
+================================================================
+
+  Does not amend Part I, II, III, IV, or V.
+  Does not edit prior appendices.
+  Does not start Slice 8.6c.
+  Does not audit the Pricing page.
+
+================================================================
+END OF APPENDIX Y
+================================================================
