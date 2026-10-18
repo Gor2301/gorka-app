@@ -83,7 +83,7 @@ export default function DownloadPage() {
                 const Icon = step.icon;
                 return (
                   <div key={index} className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-full bg-[#F01428]/10 flex items-center justify-center text-[#F01428] shrink-0 mt-0.5">
+                    <div className="w-10 h-10 rounded-full bg-[#00ff00]/10 flex items-center justify-center text-[#00ff00] shrink-0 mt-0.5">
                       <Icon className="w-5 h-5" />
                     </div>
                     <div>
