@@ -27,13 +27,12 @@ jobs:
           VITE_API_URL: https://api.gorka.click
 
       - name: Build Agent Installer
-        working-directory: src-tauri-agent
         run: |
-          cd ../agent-dashboard
+          cd agent-dashboard
           npm install
           npm run build
           cd ../src-tauri-agent
-          npx tauri build --bundles nsis
+          npx tauri build --bundles nsis --config '{"build":{"beforeBuildCommand":""}}'
         env:
           VITE_API_URL: https://api.gorka.click
 
