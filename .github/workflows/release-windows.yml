@@ -30,9 +30,8 @@ jobs:
         run: |
           cd agent-dashboard
           npm install
-          npm run build
-          cd ..
-          npx tauri build --config src-tauri-agent/tauri.conf.json --bundles nsis
+          cd ../src-tauri-agent
+          npx tauri build --bundles nsis
         env:
           VITE_API_URL: https://api.gorka.click
 
