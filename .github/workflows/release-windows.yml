@@ -32,7 +32,7 @@ jobs:
           npm install
           npm run build
           cd ../src-tauri-agent
-          echo {"build":{"beforeBuildCommand":""}} > tauri.override.json
+          Set-Content -Path tauri.override.json -Value '{"build":{"beforeBuildCommand":""}}'
           npx tauri build --bundles nsis --config tauri.override.json
         env:
           VITE_API_URL: https://api.gorka.click
