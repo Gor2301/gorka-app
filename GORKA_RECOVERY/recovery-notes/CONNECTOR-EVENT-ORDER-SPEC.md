@@ -5653,3 +5653,431 @@ V.10 - WHAT THIS PART DOES NOT DO
 ================================================================
 END OF PART V - SLICE 8.7 MINI SPEC v1.0
 ================================================================
+
+$spec = @'
+
+================================================================
+PART VI - SLICE 8.6c MINI SPEC v1.1 (FROZEN, REVISED)
+================================================================
+
+Title:  Deployment
+Status: FROZEN 2026-10-18. Supersedes v1.0 draft (not committed).
+Depends on: Slices 1-8.6b closed. HEAD d839558.
+Authority: Part IV.5.6, expanded per provider review 2026-10-18.
+
+================================================================
+VI.0 - GOAL
+================================================================
+
+Ship four production surfaces on free tiers at $0/month:
+
+  https://www.gorka.click      website
+  https://api.gorka.click      backend
+  https://owner.gorka.click    Owner Dashboard
+  support@gorka.click          forwards to founder's
+                               existing inbox
+
+Client and Agent installers downloadable from /download,
+each baked with VITE_API_URL=https://api.gorka.click.
+
+No paid plans. No keep-alive cron. No automatic warm-up.
+
+================================================================
+VI.1 - PROVIDER DECISIONS (LOCKED)
+================================================================
+
+  Layer                Provider       Why in one line
+  -------------------  -------------  --------------------
+  DNS + inbound email  Cloudflare     Free; one panel for
+                                      both; unlimited
+                                      forwarding aliases.
+  Outbound email       Resend         Already integrated;
+                                      free 3k/mo, 100/day.
+  Backend              Render         Free 750h; self-waking
+                                      after 15-min sleep.
+  Owner Dashboard      Render static  Free; never sleeps.
+  Website              Netlify        Free permits commercial
+                                      use; Next.js 16
+                                      supported. Vercel's
+                                      Hobby forbids commercial.
+  Database             Supabase       Existing. No migration.
+  Installer builds     GitHub Actions Free Windows runners;
+                                      reproducible .exe.
+
+Rejected: Vercel (non-commercial Hobby), Fly/Koyeb/Railway/
+Heroku (free tier removed or trial-only), SendGrid/Mailgun/
+Postmark (reduced or no free tier).
+
+================================================================
+VI.2 - EMAIL ARCHITECTURE
+================================================================
+
+Inbound: Cloudflare Email Routing.
+  support@gorka.click     -> hello@gorkaenglish.com
+  hello@gorka.click       -> hello@gorkaenglish.com
+  admin@gorka.click       -> hello@gorkaenglish.com
+  noreply@gorka.click     (outbound only, no routing)
+
+Outbound: Resend. Domain gorka.click verified.
+  noreply@gorka.click     verification + transactional
+  GORKA_RESEND_FROM       debtor sends (backend env)
+
+Limitations recorded, not fixed:
+  - Replies from @gorka.click arrive as
+    @gorkaenglish.com. Acceptable at MVP.
+  - admin@gorka.click is not a sole destination for
+    critical recovery notices. Use the real inbox.
+  - Cloudflare forwarding may fail at strict-DMARC
+    senders or Outlook. Test after setup.
+
+================================================================
+VI.3 - DNS RECORD MAP
+================================================================
+
+Zone on Cloudflare. DreamHost remains registrar.
+
+  Name         Type      Target
+  -----------  --------  -------------------------
+  gorka.click  ALIAS     www
+  www          CNAME     Netlify site host
+  api          CNAME     Render web service
+  owner        CNAME     Render static site
+  @            MX        Cloudflare Email Routing
+  (Resend)     TXT/MX    Per Resend verification
+
+Proxy status: DNS only (grey cloud) on all records.
+TLS: managed by each host. No certificate purchase.
+
+================================================================
+VI.4 - PRECONDITION (before Phase A)
+================================================================
+
+  P-1  Register page duplicate "Contact Email" field.
+       Appendix Z FG-Z4. Must be fixed before Trip 3.
+       Small edit; do first.
+
+  P-2  Two reads before any deploy:
+       (a) gorka-website/app/[locale]/download/page.tsx
+           - note exact installer filenames linked.
+       (b) owner-dashboard/services/api.ts
+           - confirm VITE_API_URL needs /api suffix
+             or not.
+
+================================================================
+VI.5 - CODE AND CONFIGURATION CHANGES
+================================================================
+
+VI.5.1 Website
+  1. Netlify env: API_BASE_URL=https://api.gorka.click
+  2. Cold-start message in login/signup. Wording:
+       "Reconnecting to GORKA. This can take a moment
+        on our pilot server. Production will be
+        instant."
+     No numeric promise.
+  3. Installer filenames matched to /download page.
+
+VI.5.2 Backend
+  1. CORS additions:
+       https://www.gorka.click
+       https://owner.gorka.click
+       tauri://localhost
+       http://tauri.localhost
+  2. /api/health-db endpoint: SELECT 1, returns
+     200 or 5xx. For monitoring only; no keep-alive
+     cron is set.
+  3. Cookie review: secure=true in production;
+     sameSite=lax; host-only domain. Verify and
+     record. No change expected.
+
+VI.5.3 Owner Dashboard
+  Render static env: VITE_API_URL per VI.4 P-2(b).
+
+VI.5.4 Client + Agent
+  VITE_API_URL baked at build time in GitHub Actions.
+
+VI.5.5 Email failure contract (auth.ts registration)
+  Current behavior must be read before changing.
+  Target contract:
+    - Account creation and email delivery are
+      separate facts.
+    - If DB commit succeeds, account exists.
+    - If Resend fails, log with error code,
+      recipient, timestamp. Do not surface to user.
+    - HTTP response remains 200 regardless of
+      email outcome. Returning non-2xx creates a
+      duplicate-retry deadlock (409 on re-register).
+    - Recovery: existing /resend-verification
+      button on "check your email" screen.
+    - Operator recovery: log line + PENDING_EMAIL
+      row in Supabase.
+  Acceptance: synthetic Resend failure produces
+  200 + account row + informative log; subsequent
+  resend with valid key delivers and works.
+
+================================================================
+VI.6 - ENVIRONMENT VARIABLES
+================================================================
+
+Render backend:
+  DATABASE_URL           Supabase pooler URL
+  JWT_SECRET             from pilot-creds.local.bat
+  JWT_SECRET_OD          different from JWT_SECRET
+  RESEND_API_KEY         transactional
+  GORKA_RESEND_API_KEY   Tier 1 sends
+  GORKA_RESEND_FROM      noreply@gorka.click
+  NODE_ENV               production
+
+Netlify website:
+  API_BASE_URL           https://api.gorka.click
+
+Render Owner Dashboard:
+  VITE_API_URL           per VI.4 P-2(b)
+
+GitHub Actions:
+  VITE_API_URL           https://api.gorka.click
+
+Secrets live only in host panels. Never in git, chat,
+or tracked files (Appendix D.5).
+
+================================================================
+VI.7 - EXECUTION SEQUENCE
+================================================================
+
+Netlify deploy is step 1, before any other hosting.
+Rationale: cookie-forwarding through six API proxy
+routes is a hypothesis until tested. Deploy to the
+Netlify preview URL and prove it before pointing DNS.
+
+PHASE A - Cloudflare (accounts + DNS zone)
+  A1. Create Cloudflare account. Add gorka.click.
+  A2. DreamHost: replace nameservers with Cloudflare's.
+  A3. Verify: dig gorka.click NS shows Cloudflare.
+  A4. Email Routing: enable. Create three addresses.
+      Verify destination hello@gorkaenglish.com.
+      Send test from external Gmail, confirm arrival.
+      Repeat from Outlook; record result.
+  A5. Resend: add gorka.click. Add SPF/DKIM records
+      in Cloudflare. Verify domain.
+
+PHASE B - Netlify (validation gate)
+  B1. Create Netlify account. Import repo.
+      Base: gorka-website. Next.js preset.
+  B2. Set API_BASE_URL.
+  B3. Deploy. Note preview URL.
+  B4. TEST on preview URL (before DNS cutover):
+      - /register renders
+      - /login renders
+      - /pricing renders
+      - /faq renders
+      - /es/pricing renders in Spanish
+      - language switcher preserves path
+      - Register flow: step 1 -> verification
+        email arrives -> link works -> step 3
+        sets password -> routes to /download
+      If any fail: STOP. Fix or replace host
+      before proceeding.
+
+PHASE C - Render backend
+  C1. Create Render account. New Web Service
+      from GitHub repo.
+  C2. Populate VI.6 backend variables.
+  C3. Deploy. Note onrender.com URL.
+  C4. Add api CNAME in Cloudflare. Wait for TLS.
+  C5. curl -I https://api.gorka.click/api/health-db
+      Expect 200.
+  C6. curl POST /api/auth/login with test user.
+      Confirm DB connection.
+
+PHASE D - Render Owner Dashboard
+  D1. New Render Static Site. Root owner-dashboard.
+  D2. Set VITE_API_URL. Deploy.
+  D3. Add owner CNAME. Wait for TLS.
+  D4. Bootstrap OWNER:
+        npx tsx prisma/seed-owner.ts <email> <pw>
+  D5. Open https://owner.gorka.click.
+      Log in. /organizations renders.
+
+PHASE E - Cut DNS for website
+  E1. Add www CNAME to Netlify host.
+  E2. Add apex ALIAS to www.
+  E3. Wait for TLS on https://www.gorka.click.
+  E4. Re-run B4 checks against production URL.
+  E5. Verify CORS: browser fetch from
+      https://owner.gorka.click to
+      https://api.gorka.click/api/auth/me-od
+      returns 200.
+
+PHASE F - Installers
+  F1. Create .github/workflows/release-windows.yml
+      (or extend existing per RECOVERY-RULES rule 12).
+  F2. Trigger workflow. Both .exe produced with
+      VITE_API_URL baked.
+  F3. Place .exe in gorka-website/public/downloads/
+      with filenames from VI.4 P-2(a).
+  F4. Commit. Netlify redeploys.
+  F5. Verify /download links download the files.
+  F6. Install both on clean Windows. Verify icon
+      (red G), names ("Admin dashboard v.1",
+      "Agent dashboard v.1"), login against
+      api.gorka.click.
+
+PHASE G - Recovery readiness
+  G1. pg_dump export. Encrypt. Store two copies
+      (local + off-machine).
+  G2. Restore into throwaway project. Verify
+      login works against restored DB.
+  G3. Record date, filename, outcome in
+      RECOVERY-RULES.md.
+  G4. Document fallback procedures: redeploy
+      previous Netlify build, restore DB, move
+      backend to Render paid instance if needed.
+
+PHASE H - Live acceptance
+  H1. Run VI.8 acceptance criteria. Record each.
+  H2. Any failure: defect. Fix. Re-run.
+
+================================================================
+VI.8 - ACCEPTANCE CRITERIA
+================================================================
+
+Closed when all pass:
+
+   1. https://www.gorka.click loads with valid TLS.
+   2. /es loads Spanish site.
+   3. Language switcher preserves current path.
+   4. Corporate-email registration completes:
+      step 1 -> verification email (within 60s)
+      -> link -> step 3 password -> /download.
+   5. Free-provider email (gmail.com) rejected
+      with disclosure.
+   6. Verification email arrives from @gorka.click
+      sender; link is single-use.
+   7. Step 3 password works at subsequent login.
+   8. Both /download links deliver a working .exe.
+   9. Both .exe install and launch with red-G
+      icon and correct title bar names.
+  10. Client login + unlock succeed against
+      api.gorka.click (verified via Render log).
+  11. Agent login + unlock succeed.
+  12. support@gorka.click forwards to
+      hello@gorkaenglish.com within 30s.
+  13. https://owner.gorka.click serves OD.
+      OWNER login works. /organizations lists
+      test org with correct counts.
+  14. No response from /api/auth/login or
+      /api/auth/complete-registration contains
+      a redirectUrl key.
+  15. CORS: browser fetch from owner.gorka.click
+      to api.gorka.click succeeds; same fetch
+      from unlisted origin is blocked.
+
+Full end-to-end send test (Surface coverage):
+  a. Verification email: covered by #4.
+  b. Debtor email via Copilot: Analyze -> Accept
+     and Review -> send via resend-email ->
+     email arrives -> Communications card shows
+     message -> Copilot panel shows SENT with
+     resend-email as delivery connector.
+  c. Client operation: enable a connector
+     (Connect or BYOP) -> CONNECTED -> within
+     60s Agent Communication Tools shows it.
+  d. Agent operation: send one message via
+     Communication card -> succeeds -> row
+     appears in Communications.
+
+================================================================
+VI.9 - STAGE POLICY
+================================================================
+
+Stage A - Deployment and verification.
+  Cost: $0. Founder-driven testing only.
+  No paid upgrades. No keep-alive cron.
+  Cold starts accepted; message explains.
+
+Stage B - Controlled pilot (investors and
+          prospective clients).
+  Cost: $0. Same infrastructure.
+  Mock data only.
+
+Stage C - Real customers (not in this slice).
+  Spend decisions made when evidence justifies.
+  Outside VI scope.
+
+MVP runs entirely on free tiers indefinitely.
+
+================================================================
+VI.10 - SAFEGUARDS (ALL STAGES)
+================================================================
+
+S1 Database recovery.
+  Supabase Free has NO automatic backups.
+  Policy:
+    - Manual pg_dump export before Phase G.
+    - Weekly manual export during Stage A/B.
+    - Export immediately before any schema change.
+    - Encryption at rest. Two copies (local +
+      off-machine).
+    - Restore test into throwaway project before
+      pilot starts. Record in RECOVERY-RULES.md.
+  Insufficient for real customer data. Reassess
+  at Stage C.
+
+S2 Email failure distinction.
+  Covered by VI.5.5.
+
+S3 Weekly usage check.
+  Manual review: Netlify credits, Resend
+  daily/monthly, Render hours, Supabase size.
+  Checklist in RECOVERY-RULES.md.
+
+S4 Secrets.
+  Restates D.5. Values in host panels only.
+
+S5 Fallback procedures.
+  Documented before Phase H: redeploy prior
+  Netlify build; restore DB from export; move
+  backend to paid Render instance.
+
+S6 Honest customer promises.
+  No uptime SLA. No response-time commitment.
+  Cold-start message tells the truth.
+
+================================================================
+VI.11 - KNOWN LIMITATIONS (RECORDED, NOT FIXED)
+================================================================
+
+  L1  Cold start: ~30-60s after 15 min idle.
+      Message explains. Not eliminated.
+  L2  Replies from @gorka.click show as
+      @gorkaenglish.com. Acceptable at MVP.
+  L3  Netlify hard-stops at 300 credits/month.
+      Monitor weekly.
+  L4  Resend 100/day shared between
+      verification and debtor sends.
+  L5  Supabase may pause after 7 days inactivity.
+      No keep-alive cron. If it pauses during
+      Stage A, restore from dashboard.
+  L6  No code signing. SmartScreen warning
+      documented on download page.
+  L7  Netlify Next.js compatibility unproven
+      until Phase B tests pass. Deployment
+      order is arranged to catch this first.
+
+================================================================
+VI.12 - WHAT THIS PART DOES NOT DO
+================================================================
+
+  Does not amend Parts I-V.
+  Does not fix register duplicate email (P-1)
+    in the spec text. It is a precondition.
+  Does not fix hardcoded English headers.
+    May ship post-launch.
+  Does not add code signing.
+  Does not provision a mailbox on gorka.click.
+  Does not deploy the database (already live).
+  Does not begin any slice after 8.6c.
+  Does not pay for any provider.
+
+================================================================
+END OF PART VI v1.1
+================================================================

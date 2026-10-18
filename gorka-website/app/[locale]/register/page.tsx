@@ -33,50 +33,50 @@ export default function RegisterPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [emailError, setEmailError] = useState('');
-const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-useEffect(() => {
-  const stepParam = searchParams.get('step');
-  
-  if (stepParam === '3') {
-    setStep(3);
-    setIsLoading(true);
-    
-    const checkCookie = setInterval(() => {
-      if (document.cookie.includes('gorka_registration_session')) {
+  useEffect(() => {
+    const stepParam = searchParams.get('step');
+
+    if (stepParam === '3') {
+      setStep(3);
+      setIsLoading(true);
+
+      const checkCookie = setInterval(() => {
+        if (document.cookie.includes('gorka_registration_session')) {
+          setIsLoading(false);
+          clearInterval(checkCookie);
+        }
+      }, 300);
+
+      setTimeout(() => {
         setIsLoading(false);
         clearInterval(checkCookie);
-      }
-    }, 300);
-    
-    setTimeout(() => {
-      setIsLoading(false);
-      clearInterval(checkCookie);
-    }, 5000);
-  }
-}, [searchParams]);
-  
+      }, 5000);
+    }
+  }, [searchParams]);
+
   // Step 1: Company Information
-const [companyData, setCompanyData] = useState({
-  companyName: '',
-  clientType: 'AGENCY',
-  registrationNumber: '',
-  taxId: '',
-  firstName: '',
-  lastName: '',
-  primaryContact: '',  // ← Keep this for backend compatibility
-  contactEmail: '',
-  contactPhone: '',
-  address: '',
-  website: '',
-});
-  
+  const [companyData, setCompanyData] = useState({
+    companyName: '',
+    clientType: 'AGENCY',
+    registrationNumber: '',
+    taxId: '',
+    firstName: '',
+    lastName: '',
+    primaryContact: '',  // ← Keep this for backend compatibility
+    contactEmail: '',
+    contactPhone: '',
+    address: '',
+    website: '',
+  });
+
   // Step 3: Password & Terms
   const [passwordData, setPasswordData] = useState({
     password: '',
     termsAccepted: false,
   });
-  
+
   const [organizationId, setOrganizationId] = useState('');
   const [verificationToken, setVerificationToken] = useState('');
 
@@ -117,7 +117,6 @@ const [companyData, setCompanyData] = useState({
   };
 
   // Step 2: Verify Email
-  // Step 2: Verify Email
   const handleResendVerification = async () => {
     setStatus('loading');
     setErrorMessage('');
@@ -143,8 +142,6 @@ const [companyData, setCompanyData] = useState({
       setStatus('error');
     }
   };
-
-
 
   // Step 3: Complete Registration
   const handleStep3Submit = async (e: React.FormEvent) => {
@@ -279,46 +276,33 @@ const [companyData, setCompanyData] = useState({
                   />
                 </div>
 
-<div className="grid grid-cols-2 gap-4">
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      First Name *
-    </label>
-    <input
-      type="text"
-      required
-      value={companyData.firstName || ''}
-      onChange={(e) => setCompanyData({ ...companyData, firstName: e.target.value })}
-      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gorka-violet focus:border-transparent outline-none"
-      placeholder="John"
-    />
-  </div>
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      Last Name *
-    </label>
-    <input
-      type="text"
-      required
-      value={companyData.lastName || ''}
-      onChange={(e) => setCompanyData({ ...companyData, lastName: e.target.value })}
-      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gorka-violet focus:border-transparent outline-none"
-      placeholder="Doe"
-    />
-  </div>
-</div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('step1.contactEmail')} *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={companyData.contactEmail}
-                    onChange={(e) => setCompanyData({ ...companyData, contactEmail: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gorka-violet focus:border-transparent outline-none"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      First Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={companyData.firstName || ''}
+                      onChange={(e) => setCompanyData({ ...companyData, firstName: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gorka-violet focus:border-transparent outline-none"
+                      placeholder="John"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Last Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={companyData.lastName || ''}
+                      onChange={(e) => setCompanyData({ ...companyData, lastName: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gorka-violet focus:border-transparent outline-none"
+                      placeholder="Doe"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -388,7 +372,7 @@ const [companyData, setCompanyData] = useState({
                 {t('step2.subtitle')} <strong>{companyData.contactEmail}</strong>
               </p>
               <p className="text-gray-500 mb-6">{t('step2.checkEmail')}</p>
-              
+
               <button
                 onClick={handleResendVerification}
                 disabled={status === 'loading'}
@@ -402,78 +386,76 @@ const [companyData, setCompanyData] = useState({
                   {errorMessage}
                 </div>
               )}
-
-
             </div>
           )}
 
-{/* Step 3: Create Account */}
-{step === 3 && (
-  <>
-    {isLoading ? (
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 text-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gorka-violet mx-auto mb-4"></div>
-        <p className="text-gray-600">Setting up your account...</p>
-      </div>
-    ) : (
-      <form onSubmit={handleStep3Submit} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <h2 className="text-xl font-semibold text-gorka-dark mb-4">{t('step3.title')}</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('step3.password')} *
-            </label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={passwordData.password}
-              onChange={(e) => setPasswordData({ ...passwordData, password: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gorka-violet focus:border-transparent outline-none"
-            />
-            <p className="text-xs text-gray-500 mt-1">{t('step3.passwordHint')}</p>
-          </div>
+          {/* Step 3: Create Account */}
+          {step === 3 && (
+            <>
+              {isLoading ? (
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gorka-violet mx-auto mb-4"></div>
+                  <p className="text-gray-600">Setting up your account...</p>
+                </div>
+              ) : (
+                <form onSubmit={handleStep3Submit} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                  <h2 className="text-xl font-semibold text-gorka-dark mb-4">{t('step3.title')}</h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('step3.password')} *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        value={passwordData.password}
+                        onChange={(e) => setPasswordData({ ...passwordData, password: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gorka-violet focus:border-transparent outline-none"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">{t('step3.passwordHint')}</p>
+                    </div>
 
-          <div className="flex items-start">
-            <input
-              type="checkbox"
-              id="terms"
-              checked={passwordData.termsAccepted}
-              onChange={(e) => setPasswordData({ ...passwordData, termsAccepted: e.target.checked })}
-              className="mt-1 mr-2"
-            />
-            <label htmlFor="terms" className="text-sm text-gray-600">
-              {t('step3.terms')}
-            </label>
-          </div>
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        id="terms"
+                        checked={passwordData.termsAccepted}
+                        onChange={(e) => setPasswordData({ ...passwordData, termsAccepted: e.target.checked })}
+                        className="mt-1 mr-2"
+                      />
+                      <label htmlFor="terms" className="text-sm text-gray-600">
+                        {t('step3.terms')}
+                      </label>
+                    </div>
 
-          {errorMessage && (
-            <div className="p-4 bg-red-50 text-red-700 rounded-lg text-center">
-              {errorMessage}
-            </div>
+                    {errorMessage && (
+                      <div className="p-4 bg-red-50 text-red-700 rounded-lg text-center">
+                        {errorMessage}
+                      </div>
+                    )}
+
+                    {status === 'success' && (
+                      <div className="p-4 bg-green-50 text-green-700 rounded-lg text-center">
+                        {t('success')}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={status === 'loading' || !passwordData.termsAccepted}
+                      className="w-full px-6 py-3 bg-gorka-violet text-white font-semibold rounded-lg hover:bg-gorka-violet/90 transition disabled:opacity-50"
+                    >
+                      {status === 'loading' ? 'Creating...' : t('step3.submit')}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </>
           )}
-
-          {status === 'success' && (
-            <div className="p-4 bg-green-50 text-green-700 rounded-lg text-center">
-              {t('success')}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={status === 'loading' || !passwordData.termsAccepted}
-            className="w-full px-6 py-3 bg-gorka-violet text-white font-semibold rounded-lg hover:bg-gorka-violet/90 transition disabled:opacity-50"
-          >
-            {status === 'loading' ? 'Creating...' : t('step3.submit')}
-          </button>
         </div>
-      </form>
-    )}
-  </>
-)}
-</div>
-</section>
-<Footer />
-</main>
-);
+      </section>
+      <Footer />
+    </main>
+  );
 }
