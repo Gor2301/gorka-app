@@ -71,12 +71,11 @@ app.use(cors({
   origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-od'],
   exposedHeaders: ['Content-Length', 'X-Requested-With'],
 }));
 
 // ✅ Handle preflight requests explicitly
-
 
 app.use(express.json());
 app.use(cookieParser());
