@@ -3,3 +3,9 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+  from = "/"
+  to = "/en"
+  status = 302
+  force = true
