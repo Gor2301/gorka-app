@@ -49,6 +49,7 @@ const PORT = process.env.PORT || 3000;
 const allowedOrigins = [
   // Production
   'https://www.gorka.click',
+  'https://owner.gorka.click',
   'https://platform.gorka.click',
   'https://client.gorka.click',
   'https://gorka.click',
@@ -62,6 +63,7 @@ const allowedOrigins = [
   'http://localhost:3002',
   // Tauri/Electron desktop apps
   'tauri://localhost',
+  'http://tauri.localhost',
   'app://localhost',
 ];
 
