@@ -27,7 +27,12 @@ jobs:
           VITE_API_URL: https://api.gorka.click
 
       - name: Build Agent Installer
-        run: cd agent-dashboard && npm install && npm run build && cd .. && npm run tauri build -- --bin gorka-agent --bundles nsis
+        run: |
+          cd agent-dashboard
+          npm install
+          npm run build
+          cd ..
+          npx tauri build --config src-tauri-agent/tauri.conf.json --bundles nsis
         env:
           VITE_API_URL: https://api.gorka.click
 
@@ -41,4 +46,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gorka-agent-setup
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          path: src-tauri-agent/target/release/bundle/nsis/*.exe
