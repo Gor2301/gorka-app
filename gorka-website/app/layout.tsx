@@ -10,6 +10,7 @@ const inter = Inter({
 });
 
 export const metadata = {
+  metadataBase: new URL('https://www.gorka.click'),
   title: 'GORKA \u2014 AI-Powered Debt Collection Platform',
   description:
     'Built for agencies. Ready for banks. Automate collections with AI Copilot.',
