@@ -152,6 +152,19 @@
         ]
       },
       {
+        "name": "Starter",
+        "price": "$999",
+        "period": "/ mes",
+        "description": "Pequeñas agencias listas para operaciones más amplias.",
+        "cta": "Comenzar",
+        "features": [
+          "Hasta 20 usuarios",
+          "Deudores ilimitados",
+          "Acceso a las funciones principales",
+          "Incorporación de autoservicio"
+        ]
+      },
+      {
         "name": "Profesional",
         "price": "$1,999",
         "period": "/ mes",

@@ -25,7 +25,7 @@ export default function Pricing() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-20">
           {tiers.map((tier, index) => (
             <div
               key={index}
@@ -48,12 +48,12 @@ export default function Pricing() {
                 </ul>
               </div>
               <Link
-                href={index === 2 ? "/contact" : "/register"}
-                className={`w-full block text-center py-3 rounded-lg font-semibold transition ${
-                  index === 1
-                    ? "bg-gorka-violet text-white hover:bg-gorka-violet/90 shadow-md"
-                    : "bg-white text-gorka-dark border border-gray-300 hover:bg-gray-50"
-                }`}
+                href={index === 3 ? "/contact" : "/register"}
+              className={`w-full block text-center py-3 rounded-lg font-semibold transition ${
+              index === 2
+              ? "bg-gorka-violet text-white hover:bg-gorka-violet/90 shadow-md"
+              : "bg-white text-gorka-dark border border-gray-300 hover:bg-gray-50"
+              }`}
               >
                 {tier.cta}
               </Link>

@@ -152,6 +152,19 @@
         ]
       },
       {
+        "name": "Starter",
+        "price": "$999",
+        "period": "/ month",
+        "description": "Small agencies ready for broader operations.",
+        "cta": "Get Started",
+        "features": [
+          "Up to 20 users",
+          "Unlimited debtors",
+          "Access to available core features",
+          "Self-service onboarding"
+        ]
+      },
+      {
         "name": "Professional",
         "price": "$1,999",
         "period": "/ month",
