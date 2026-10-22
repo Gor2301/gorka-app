@@ -9393,3 +9393,244 @@ Z.8 - WHAT THIS APPENDIX DOES NOT DO
 ================================================================
 END OF APPENDIX Z
 ================================================================
+
+================================================================
+APPENDIX AA - SLICE 8.6c CLOSE & PRODUCTION DEPLOYMENT
+(added v3.20, 2026-10-19)
+================================================================
+
+AA.0 - WHY THIS APPENDIX EXISTS
+
+This session completed Slice 8.6c: the full production 
+deployment. The entire infrastructure is live on free tiers.
+This appendix records the exact provider configuration, 
+live endpoints, credentials, code changes made to fix 
+production bugs, and the final state of the CI/CD pipeline.
+
+Prior appendices are not edited. This is the new source 
+of truth for the deployed environment.
+
+AA.1 - MACHINE STATE AT CLOSE
+
+MAIN:   HEAD includes this Appendix AA commit. Pushed.
+        Working tree clean except the known untracked files.
+
+CLOUD:  Not used this session. All work was done via 
+        local Windows cmd and the provider dashboards.
+
+AA.2 - PROVIDER MAP (ALL FREE TIER)
+
+- Domain Registrar: DreamHost (kept, nameservers moved)
+- DNS & Email Routing: Cloudflare (Free)
+- Website Host: Netlify (Free - 300 credits/month)
+- Backend API: Render (Free - 750hrs, sleeps after 15m)
+- Owner Dashboard: Render (Static Site)
+- Database: Supabase (Postgres 6.19.3)
+- Transactional Email: Resend
+- CI/CD Installer Builds: GitHub Actions
+
+AA.3 - LIVE ENDPOINTS & ACCESS
+
+Website: https://www.gorka.click
+Backend API: https://api.gorka.click
+Owner Dashboard: https://owner.gorka.click
+
+Email Routing (Inbound via Cloudflare):
+- support@gorka.click -> hello@gorkaenglish.com
+- hello@gorka.click -> hello@gorkaenglish.com
+- admin@gorka.click -> hello@gorkaenglish.com
+
+Outbound Email (via Resend):
+- noreply@gorka.click
+
+AA.4 - CREDENTIALS & PASSWORDS (PILOT ONLY)
+
+- Supabase DATABASE_URL: (Stored in Render env vars, and pilot-creds.bat)
+- Owner Dashboard Login:
+  Email: hello@gorkaenglish.com
+  Password: Gotobathroom1
+- JWT_SECRET_OD: (Stored in Render env vars, separate from JWT_SECRET)
+
+AA.5 - CODE & CONFIGURATION CHANGES (CRITICAL)
+
+To make the deployment work, the following code/config 
+changes were made and pushed:
+
+1. CORS (src/backend/index.ts):
+   Updated `allowedOrigins` to include 'https://www.gorka.click' 
+   and 'https://owner.gorka.click'.
+   Updated `allowedHeaders` to include 'x-od'.
+
+2. Website Root Redirect (gorka-website/app/page.tsx):
+   Created this file to fix Netlify 404 on root. It simply 
+   contains: `import { redirect } from 'next/navigation'; export default function RootPage() { redirect('/en'); }`
+   (Removed conflicting `_redirects` and `netlify.toml` redirects).
+
+3. Register Page (gorka-website/app/[locale]/register/page.tsx):
+   Removed the duplicate "Contact Email" field (P-1 from Part VI).
+
+4. Database Schema:
+   Ran `npx prisma db push --force-reset` against Supabase 
+   because the old schema was missing `password_hash` and 
+   had legacy test data.
+
+5. Tauri Configs (src-tauri/tauri.conf.json & src-tauri-agent/tauri.conf.json):
+   Added `"mainBinaryName": "gorka-client"` and 
+   `"mainBinaryName": "gorka-agent"` respectively.
+
+6. CI/CD (GitHub Actions):
+   Moved `argon2bench.rs` and `gorka-recover.rs` out of their 
+   `src/bin` folders into `src/scripts` folders. Tauri's bundler 
+   was accidentally packaging these CLI scripts (243 KB) instead 
+   of the GUI app (5.3 MB). Now the installers are 5.5 MB and work.
+   Created `.github/workflows/release-windows.yml`.
+
+7. Installers:
+   Downloaded from GitHub Actions, renamed to 
+   `gorka-client-setup.exe` and `gorka-agent-setup.exe`, 
+   and pushed to `gorka-website/public/downloads/`.
+
+AA.6 - CURRENT STATUS & RESTRICTIONS
+
+- All apps (Client, Agent, Owner Dashboard, Website) are LIVE.
+- Client and Agent installers are built, installed, and open 
+  the GUI successfully. They point to https://api.gorka.click.
+- Netlify Warning: We hit 50% of the 300 free monthly credits 
+  on day one due to many deploys. Must be careful with 
+  excessive pushes to avoid the site pausing.
+- Render Warning: Backend sleeps after 15 mins of inactivity. 
+  First request takes ~60s to wake.
+- Search Engines: The domain is brand new. It will take days 
+  or weeks to appear in Google/Bing. Do not panic.
+- Registration: Not yet tested end-to-end on the live site. 
+  Postponed to the next session.
+
+AA.7 - IMMEDIATE NEXT STEPS FOR NEXT CHAT
+
+1. TEST REGISTRATION (Phase D of Part VI):
+   Go to www.gorka.click/register and complete the flow. 
+   Check if the verification email arrives. Check if the 
+   Resend error handling logs properly if it fails.
+
+2. HARDCODED HEADERS AUDIT (P-2 from Part VI):
+   Audit Contact, Support, Register, Verify-Email pages for 
+   hardcoded English titles that don't translate to Spanish.
+
+3. DATABASE BACKUP (Phase G of Part VI):
+   Run `pg_dump` using the Supabase URL to create the first 
+   offline backup. Document the exact command in RECOVERY-RULES.md.
+
+4. FINAL RESUME-HERE CLEANUP:
+   Review the queue and update the active slice queue. 
+   Deployment (8.6c) is officially closed.
+
+================================================================
+END OF APPENDIX AA
+================================================================
+
+================================================================
+APPENDIX AB - SEO RESOLUTION, INDEXING, AND PRICING UPDATES
+(added v3.21, 2026-10-22)
+================================================================
+
+AB.0 - WHY THIS APPENDIX EXISTS
+
+This session resolved the final, stubborn SEO and indexing issues
+that prevented the live website (www.gorka.click) from appearing
+in Google and Bing. It also finalized the 4-tier pricing model
+and clarified a Supabase notification. The technical foundation
+is now 100% green.
+
+AB.1 - MACHINE STATE AT CLOSE
+
+MAIN:   HEAD [INSERT HASH HERE]. Pushed to origin/main.
+        Working tree clean except known untracked files
+        (CHAT-HANDOFF-DUMP.txt, make-dump.ps1).
+
+CLOUD:  Not used this session. All website changes were
+        deployed directly to Netlify. No Rust or backend
+        code was touched.
+
+AB.2 - SEO RESOLUTION (THE FULL FIX)
+
+The site was completely invisible. We found and fixed five
+cascading issues:
+
+1. Netlify Privacy Wall: The site was set to Private.
+   Changed Visitor Access to Public in Netlify.
+2. Missing Sitemap: No sitemap existed. Created
+   gorka-website/app/sitemap.ts to dynamically generate
+   XML for 14 URLs (7 routes x 2 locales).
+3. Missing robots.txt: Created gorka-website/app/robots.ts
+   to serve plain text and point to the sitemap.
+4. Domain Redirect Mismatch: Netlify primary domain was
+   non-www, but code expected www. Set www.gorka.click
+   as primary in Netlify. Verified 301 redirects.
+5. Missing Canonical Tags: Added
+   metadataBase: new URL('https://www.gorka.click')
+   to app/layout.tsx.
+
+GOOGLE STATUS: 
+- Verified via Cloudflare DNS.
+- Live Test passes (green checkmark).
+- Indexed successfully. Searching site:www.gorka.click
+  now returns the correct page and description.
+
+BING STATUS:
+- Verified via CNAME.
+- Sitemap accepted (Success, 14 URLs discovered).
+- Fixed a "ghost DNS" cache error from 2023/2024 via
+  Bing Support Ticket. URL Inspection now shows
+  "Indexed successfully".
+- Implemented IndexNow:
+  - Generated key: a245fefe9df343fea52bb604f58d5027
+  - Hosted key at public/a245fefe9df343fea52bb604f58d5027.txt
+  - Pinged API successfully (HTTP 200).
+
+AB.3 - PRICING PAGE UPDATES
+
+Restructured the pricing page from 3 tiers to 4 tiers.
+
+1. Added Starter tier ($999/mo) between Free and
+   Professional.
+2. Updated en.json and es.json with the new `tiers`
+   array structure.
+3. Updated Pricing.tsx:
+   - Changed grid to `md:grid-cols-2 lg:grid-cols-4`.
+   - Moved purple highlight to `index === 2`
+     (Professional).
+   - Moved contact routing to `index === 3` (Enterprise).
+4. Added Promo pricing to Starter tier:
+   - Crossed-out $999 (red line).
+   - Green $499.
+   - "LIMITED-TIME OFFER" badge.
+   - Added `oldPrice` and `promoBadge` to JSON and TSX.
+
+AB.4 - SUPABASE NOTIFICATION
+
+Received an email from Supabase regarding Data API grants
+for new tables after October 30.
+CONCLUSION: No action required. GORKA uses Prisma (direct
+Postgres connection) via the Express backend, bypassing
+the Supabase Data API. New tables pushed via `prisma db
+push` will work perfectly.
+
+AB.5 - IMMEDIATE NEXT ACTIONS
+
+With the SEO and infrastructure now fully stable, the ONLY
+remaining blocker is testing the actual product.
+
+NEXT: TEST THE REGISTRATION FLOW.
+1. Go to https://www.gorka.click/register.
+2. Fill out Step 1 with a corporate email (not
+   Gmail/Yahoo/Outlook).
+3. Verify email receipt, Step 3 password, and
+   /download redirect.
+
+After that, test the Desktop Apps against the live
+Render backend.
+
+================================================================
+END OF APPENDIX AB
+================================================================
+
