@@ -153,7 +153,7 @@
       },
       {
         "name": "Starter",
-        "price": "$999",
+        "price": "$499",
         "period": "/ mes",
         "description": "Pequeñas agencias listas para operaciones más amplias.",
         "cta": "Comenzar",
@@ -162,7 +162,9 @@
           "Deudores ilimitados",
           "Acceso a las funciones principales",
           "Incorporación de autoservicio"
-        ]
+        ],
+        "oldPrice": "$999",
+        "promoBadge": "Oferta por tiempo limitado"
       },
       {
         "name": "Profesional",

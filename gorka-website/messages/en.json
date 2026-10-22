@@ -153,7 +153,7 @@
       },
       {
         "name": "Starter",
-        "price": "$999",
+        "price": "$499",
         "period": "/ month",
         "description": "Small agencies ready for broader operations.",
         "cta": "Get Started",
@@ -162,7 +162,9 @@
           "Unlimited debtors",
           "Access to available core features",
           "Self-service onboarding"
-        ]
+        ],
+        "oldPrice": "$999",
+        "promoBadge": "Limited-time offer"
       },
       {
         "name": "Professional",

@@ -7,6 +7,8 @@ export default function Pricing() {
   const tiers = t.raw("tiers") as Array<{
     name: string;
     price: string;
+    oldPrice?: string;
+    promoBadge?: string;
     period: string;
     description: string;
     cta: string;
@@ -33,11 +35,25 @@ export default function Pricing() {
             >
               <div>
                 <h3 className="text-xl font-bold text-gorka-dark mb-2">{tier.name}</h3>
-                <div className="flex items-baseline gap-1 mb-4">
-                  <span className="text-4xl font-extrabold text-gorka-dark">{tier.price}</span>
-                  <span className="text-gray-500 font-medium">{tier.period}</span>
-                </div>
-                <p className="text-sm text-gray-600 mb-6 h-10">{tier.description}</p>
+                        <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                          {tier.oldPrice && (
+                            <span className="text-2xl font-semibold text-gray-400 line-through decoration-[#F01428] decoration-2">
+                              {tier.oldPrice}
+                            </span>
+                          )}
+                          <span className={`text-4xl font-extrabold ${tier.oldPrice ? "text-green-600" : "text-gorka-dark"}`}>
+                            {tier.price}
+                          </span>
+                          <span className="text-gray-500 font-medium">{tier.period}</span>
+                        </div>
+                        <div className="h-8 mb-2 mt-1">
+                          {tier.promoBadge && (
+                            <span className="inline-block bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide">
+                              {tier.promoBadge}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 mb-6">{tier.description}</p>
                 <ul className="space-y-3 mb-8">
                   {tier.features.map((feature, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-gray-700">
